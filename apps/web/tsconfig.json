@@ -1,0 +1,19 @@
+{
+  "extends": "@docversity/config/typescript/nextjs.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "src",
+    "test",
+    "e2e",
+    "*.config.ts"
+  ],
+  "exclude": ["node_modules"]
+}

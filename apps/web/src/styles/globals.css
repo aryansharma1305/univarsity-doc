@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+
+/*
+ * Phase 1: Tailwind is wired up with its defaults only. The Docversity design tokens (colour,
+ * typography, radius, elevation) are introduced in Phase 2 after client sign-off — see
+ * docs/architecture/stitch-migration.md. Do not add ad-hoc brand colours here.
+ */
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+}

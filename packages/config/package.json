@@ -1,0 +1,36 @@
+{
+  "name": "@docversity/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared TypeScript, ESLint and test configuration for the Docversity monorepo.",
+  "type": "module",
+  "exports": {
+    "./typescript/base.json": "./typescript/base.json",
+    "./typescript/node.json": "./typescript/node.json",
+    "./typescript/nestjs.json": "./typescript/nestjs.json",
+    "./typescript/nextjs.json": "./typescript/nextjs.json",
+    "./eslint/base": "./eslint/base.js",
+    "./eslint/node": "./eslint/node.js",
+    "./eslint/nextjs": "./eslint/nextjs.js"
+  },
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@eslint/js": "9.39.5",
+    "@next/eslint-plugin-next": "16.3.8",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "globals": "17.13.0",
+    "typescript-eslint": "8.71.1"
+  },
+  "peerDependencies": {
+    "eslint": "^9.39.0",
+    "typescript": "^6.0.0"
+  },
+  "devDependencies": {
+    "eslint": "9.39.5"
+  }
+}

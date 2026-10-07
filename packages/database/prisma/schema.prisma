@@ -1,0 +1,17 @@
+// Docversity database schema.
+//
+// Phase 1 intentionally defines NO models. Domain models (users, students, programs, examinations,
+// results, certificates, imports, logs, …) are introduced in later phases through reviewed migrations.
+// See docs/database/README.md.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  importFileExtension    = "js"
+  runtime                = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}

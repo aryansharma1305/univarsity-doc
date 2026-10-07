@@ -1,0 +1,32 @@
+{
+  "name": "docversity",
+  "private": true,
+  "description": "DOCVERSITY \u2014 University Academic Verification & Records Portal",
+  "type": "module",
+  "packageManager": "pnpm@12.10.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "turbo run db:generate",
+    "db:check": "pnpm --filter @docversity/database run db:check",
+    "db:migrate": "pnpm --filter @docversity/database run db:migrate",
+    "db:deploy": "pnpm --filter @docversity/database run db:deploy",
+    "db:status": "pnpm --filter @docversity/database run db:status",
+    "queue:check": "pnpm --filter @docversity/worker run queue:check",
+    "clean": "turbo run clean && rm -rf node_modules/.cache"
+  },
+  "devDependencies": {
+    "prettier": "3.9.9",
+    "turbo": "2.11.7",
+    "typescript": "6.0.3"
+  }
+}

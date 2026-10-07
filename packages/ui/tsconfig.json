@@ -1,0 +1,7 @@
+{
+  "extends": "@docversity/config/typescript/nextjs.json",
+  "compilerOptions": {
+    "plugins": []
+  },
+  "include": ["src"]
+}
