@@ -38,10 +38,11 @@
 - **Storage is provider-neutral.** Code depends on an `ObjectStorage` port; MinIO, R2 and AWS S3 differ
   only in configuration (see [ADR-0004](../decisions/ADR-0004-object-storage.md)).
 
-## What exists (Phases 1–2)
+## What exists (Phases 1–3)
 
 | Component                           | Implemented                                                                                                                                                                                                                                                                                                                                    |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth (Phase 3)                      | Staff login with Argon2id, Redis sessions in HttpOnly cookies, CSRF (session HMAC + signed double-submit), login throttling, global Auth/CSRF/Permission guards, code-defined permissions, audit service, correlation IDs, JSON logs, DV001→409. See [authentication](./authentication.md), [authorization](./authorization.md)                |
 | `apps/web`                          | Development status page that renders live results of `GET /health` (server-side fetch)                                                                                                                                                                                                                                                         |
 | `apps/api`                          | `GET /health` with real checks (PostgreSQL `SELECT 1`, Redis `PING`, S3 `HeadBucket`), Swagger at `/api/docs`, env validation, Helmet, CORS allowlist                                                                                                                                                                                          |
 | `apps/worker`                       | BullMQ worker for the `system` queue with one infrastructure job, `health-test`                                                                                                                                                                                                                                                                |

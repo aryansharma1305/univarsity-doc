@@ -22,6 +22,7 @@
     "db:seed": "turbo run build --filter=@docversity/database && pnpm --filter @docversity/database run db:seed",
     "db:check": "pnpm --filter @docversity/database run db:check",
     "db:status": "pnpm --filter @docversity/database run db:status",
+    "admin:create": "turbo run build --filter=@docversity/api && pnpm --filter @docversity/api run admin:create",
     "queue:check": "pnpm --filter @docversity/worker run queue:check",
     "clean": "turbo run clean && rm -rf node_modules/.cache"
   },

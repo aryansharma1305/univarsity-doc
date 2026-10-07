@@ -58,3 +58,6 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Playwright e2e fixtures (random credentials for the disposable e2e database)
+.e2e/

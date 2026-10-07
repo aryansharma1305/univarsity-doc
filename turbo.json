@@ -23,7 +23,23 @@
     "S3_SECRET_KEY",
     "S3_FORCE_PATH_STYLE",
     "WORKER_CONCURRENCY",
-    "PLAYWRIGHT_BROWSERS_PATH"
+    "PLAYWRIGHT_BROWSERS_PATH",
+    "WEB_BEHIND_TRUSTED_PROXY",
+    "TRUST_PROXY",
+    "SESSION_SECRET",
+    "COOKIE_SECURE",
+    "SESSION_IDLE_TIMEOUT_SECONDS",
+    "SESSION_ABSOLUTE_TIMEOUT_SECONDS",
+    "REDIS_KEY_PREFIX",
+    "LOGIN_RATE_LIMIT_WINDOW_SECONDS",
+    "LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP",
+    "LOGIN_MAX_ATTEMPTS_PER_ACCOUNT",
+    "LOGIN_MAX_ATTEMPTS_PER_IP",
+    "PASSWORD_RESET_TOKEN_TTL_SECONDS",
+    "ADMIN_EMAIL",
+    "ADMIN_DISPLAY_NAME",
+    "ADMIN_PASSWORD",
+    "E2E_BASE_DATABASE_URL"
   ],
   "tasks": {
     "db:generate": {
@@ -45,7 +61,7 @@
       "cache": false
     },
     "test:e2e": {
-      "dependsOn": ["build", "@docversity/api#build"],
+      "dependsOn": ["build", "@docversity/api#build", "@docversity/database#build"],
       "cache": false
     },
     "dev": {

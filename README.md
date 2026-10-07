@@ -3,10 +3,10 @@
 University **Academic Verification & Records Portal** — public verification of results, registrations and
 certificates, and an admin system for students, results, imports and certificate issuance.
 
-> **Status: Phase 2 — domain database schema.** The monorepo, infrastructure, health checks, tooling, CI
-> (Phase 1) and the core PostgreSQL/Prisma academic schema with database-enforced integrity rules
-> (Phase 2) are in place. **No product features (UI, auth, APIs, imports, PDFs) exist yet.** See
-> [`docs/architecture/overview.md`](docs/architecture/overview.md) and [`docs/database/`](docs/database/README.md).
+> **Status: Phase 3 — authentication & authorization.** Foundation (Phase 1), the core academic schema
+> (Phase 2), and staff authentication with Redis sessions, CSRF protection, RBAC and the audit foundation
+> (Phase 3) are in place. **No product features (students, results, imports, certificates, public
+> verification) exist yet.** See [`docs/architecture/`](docs/architecture/overview.md).
 
 ## Stack
 
@@ -36,6 +36,7 @@ cp .env.example .env          # development defaults; matches docker-compose.yml
 docker compose up -d --wait   # PostgreSQL, Redis, MinIO (bucket + app user created automatically)
 pnpm db:deploy                # apply database migrations
 pnpm db:seed                  # optional: DEVELOPMENT fixtures only (DEV-REG-0001 …)
+pnpm admin:create             # create your first staff admin (prompts; password hidden)
 pnpm dev                      # web, API and worker with hot reload
 ```
 
@@ -105,5 +106,6 @@ docker/        Compose support files (MinIO bootstrap)
 - [Stitch migration rules](docs/architecture/stitch-migration.md)
 - [Product decisions already agreed](docs/architecture/product-decisions.md)
 - [Frontend animation rules](docs/architecture/frontend-animation.md)
+- [Authentication](docs/architecture/authentication.md) · [Authorization](docs/architecture/authorization.md) · [Auth threat model](docs/security/auth-threat-model.md)
 - [API](docs/api/README.md) · [Database](docs/database/README.md)
 - [Architecture decision records](docs/decisions/)

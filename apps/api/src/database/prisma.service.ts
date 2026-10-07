@@ -15,9 +15,11 @@ export class PrismaService implements OnModuleDestroy {
   readonly client: PrismaClient;
 
   constructor(@Inject(API_CONFIG) config: ApiConfig) {
+    // Connection acquisition for ordinary queries. The health check applies its own (shorter)
+    // HEALTH_CHECK_TIMEOUT_MS deadline on top, so a slow database still reports quickly there.
     this.client = createPrismaClient({
       connectionString: config.DATABASE_URL,
-      connectionTimeoutMillis: config.HEALTH_CHECK_TIMEOUT_MS,
+      connectionTimeoutMillis: 10_000,
     });
   }
 

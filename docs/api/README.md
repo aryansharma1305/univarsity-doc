@@ -65,5 +65,39 @@ The response carries `Cache-Control: no-store`. Failure reasons are logged serve
 - Request bodies, params and responses are Zod schemas in `@docversity/validation`; controllers document
   them with `standardSchema` so OpenAPI stays generated.
 - Errors use Nest's standard HTTP exceptions; internal error details are never returned to clients.
-- Authentication (HTTP-only session cookies, CSRF protection, RBAC) arrives in a later phase — no endpoint
-  in Phase 1 requires or accepts credentials.
+- Every endpoint requires a staff session unless marked `@Public()`; unsafe methods require `X-CSRF-Token`.
+  See [authentication](../architecture/authentication.md) and [authorization](../architecture/authorization.md).
+
+## Authentication endpoints (Phase 3)
+
+| Method & path                       | Auth     | CSRF                   | Purpose                                                       |
+| ----------------------------------- | -------- | ---------------------- | ------------------------------------------------------------- |
+| `GET /api/v1/auth/csrf`             | optional | —                      | CSRF token (session token, or pre-auth token + cookie)        |
+| `POST /api/v1/auth/login`           | —        | pre-auth               | Sign in; sets the session cookie                              |
+| `POST /api/v1/auth/logout`          | optional | session (if signed in) | Sign out                                                      |
+| `GET /api/v1/auth/me`               | required | —                      | Current user `{ id, email, displayName, roles, permissions }` |
+| `GET /api/v1/auth/sessions`         | required | —                      | Own sessions (safe metadata)                                  |
+| `DELETE /api/v1/auth/sessions/:id`  | required | session                | Revoke one own session                                        |
+| `DELETE /api/v1/auth/sessions`      | required | session                | Revoke all other own sessions                                 |
+| `POST /api/v1/auth/password`        | required | session                | Change own password                                           |
+| `POST /api/v1/auth/forgot-password` | —        | pre-auth               | Start reset (503 while email is not configured)               |
+| `POST /api/v1/auth/reset-password`  | —        | pre-auth               | Complete reset with a single-use token                        |
+
+## Error format
+
+Every error (including 404s outside the API prefix) has the shape:
+
+```json
+{
+  "error": {
+    "code": "AUTH_INVALID_CREDENTIALS",
+    "message": "Unable to sign in with those credentials.",
+    "requestId": "…"
+  }
+}
+```
+
+`requestId` equals the `X-Request-Id` response header. Validation errors add
+`details: [{ path, message }]` (never the submitted values). Database integrity guards (`DV001`) map to
+`409 DOMAIN_INTEGRITY_VIOLATION`, unique violations to `409 UNIQUE_CONSTRAINT_VIOLATION`, FK violations to
+`409 REFERENCE_CONSTRAINT_VIOLATION`; SQL, trigger names and stack traces are logged server-side only.

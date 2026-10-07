@@ -2,7 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { afterEach, describe, expect, it } from 'vitest';
 import { healthResponseSchema } from '@docversity/validation';
 import type { ApiConfig } from '../src/config/api-config.js';
-import { CLOSED_PORT_HOST, createTestApp, http, realConfig } from './helpers.js';
+import { CLOSED_PORT_HOST, createTestApp, healthOf, http, realConfig } from './helpers.js';
 
 /**
  * Proves the health endpoint is not faked: each dependency is pointed at something that cannot
@@ -56,12 +56,12 @@ describe('GET /health when a dependency is unavailable', () => {
   it('reports storage error when credentials are wrong (endpoint reachable)', async () => {
     const response = await healthWith({ S3_SECRET_KEY: 'definitely-not-the-secret' });
     expect(response.status).toBe(503);
-    expect(response.body.services.storage).toBe('error');
+    expect(healthOf(response).services.storage).toBe('error');
   });
 
   it('reports storage error when the bucket does not exist', async () => {
     const response = await healthWith({ S3_BUCKET: 'docversity-missing-bucket' });
     expect(response.status).toBe(503);
-    expect(response.body.services.storage).toBe('error');
+    expect(healthOf(response).services.storage).toBe('error');
   });
 });

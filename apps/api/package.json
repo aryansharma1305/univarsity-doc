@@ -11,16 +11,20 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "admin:create": "node dist/cli/create-admin.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1146.0",
     "@docversity/database": "workspace:*",
+    "@docversity/types": "workspace:*",
     "@docversity/validation": "workspace:*",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
     "@nestjs/platform-express": "12.1.2",
     "@nestjs/swagger": "12.0.2",
+    "@node-rs/argon2": "2.2.1",
+    "cookie": "2.0.1",
     "helmet": "8.3.0",
     "ioredis": "6.0.0",
     "reflect-metadata": "0.2.2",
