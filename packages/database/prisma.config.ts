@@ -13,6 +13,9 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
+    // Development fixtures only; the runner refuses production / non-local databases.
+    // Requires a build first (`pnpm db:seed` at the root handles that).
+    seed: 'node dist/seed/run.js',
   },
   datasource: {
     // Not every command needs a database (e.g. `prisma generate`), so a missing URL is only an error

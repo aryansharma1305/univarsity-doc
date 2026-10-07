@@ -3,10 +3,10 @@
 University **Academic Verification & Records Portal** — public verification of results, registrations and
 certificates, and an admin system for students, results, imports and certificate issuance.
 
-> **Status: Phase 1 — project foundation.** The repository contains the monorepo, infrastructure, health
-> checks, tooling, tests and CI. **No product features exist yet.** See
-> [`docs/architecture/overview.md`](docs/architecture/overview.md) and the
-> [roadmap notes](docs/architecture/product-decisions.md).
+> **Status: Phase 2 — domain database schema.** The monorepo, infrastructure, health checks, tooling, CI
+> (Phase 1) and the core PostgreSQL/Prisma academic schema with database-enforced integrity rules
+> (Phase 2) are in place. **No product features (UI, auth, APIs, imports, PDFs) exist yet.** See
+> [`docs/architecture/overview.md`](docs/architecture/overview.md) and [`docs/database/`](docs/database/README.md).
 
 ## Stack
 
@@ -34,6 +34,8 @@ corepack enable pnpm
 pnpm install
 cp .env.example .env          # development defaults; matches docker-compose.yml
 docker compose up -d --wait   # PostgreSQL, Redis, MinIO (bucket + app user created automatically)
+pnpm db:deploy                # apply database migrations
+pnpm db:seed                  # optional: DEVELOPMENT fixtures only (DEV-REG-0001 …)
 pnpm dev                      # web, API and worker with hot reload
 ```
 

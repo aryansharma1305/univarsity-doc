@@ -17,9 +17,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "turbo run db:generate",
-    "db:check": "pnpm --filter @docversity/database run db:check",
     "db:migrate": "pnpm --filter @docversity/database run db:migrate",
     "db:deploy": "pnpm --filter @docversity/database run db:deploy",
+    "db:seed": "turbo run build --filter=@docversity/database && pnpm --filter @docversity/database run db:seed",
+    "db:check": "pnpm --filter @docversity/database run db:check",
     "db:status": "pnpm --filter @docversity/database run db:status",
     "queue:check": "pnpm --filter @docversity/worker run queue:check",
     "clean": "turbo run clean && rm -rf node_modules/.cache"

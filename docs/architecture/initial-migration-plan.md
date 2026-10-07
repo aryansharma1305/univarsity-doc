@@ -11,6 +11,7 @@
 > | Phase 1 production Dockerfiles | Deferred to deployment work — [docker/README.md](../../docker/README.md) |
 > | `/admin/results/import` style routes | One `/admin/imports` subsystem — [product-decisions.md §B](./product-decisions.md#b-imports--one-subsystem) |
 > | Animation guidance (§19 risk 13) | [frontend-animation.md](./frontend-animation.md) |
+> | §13 database models and enums | The implemented Phase 2 schema — [docs/database](../database/README.md), [ADR-0006](../decisions/ADR-0006-database-enforced-integrity.md) |
 >
 > References to `TECHNICAL-AUDIT.md` point to the legacy WordPress audit, which is kept outside this
 > repository (`/Users/gugloo/Docvarsity/TECHNICAL-AUDIT.md`) because it describes a live third-party system.

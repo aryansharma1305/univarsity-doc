@@ -26,7 +26,8 @@
     "db:migrate": "prisma migrate dev",
     "db:status": "prisma migrate status",
     "db:studio": "prisma studio",
-    "db:validate": "prisma validate"
+    "db:validate": "prisma validate",
+    "db:seed": "node dist/seed/run.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",

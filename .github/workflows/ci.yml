@@ -43,7 +43,10 @@ jobs:
       - name: Start PostgreSQL, Redis and MinIO
         run: docker compose up -d --wait
 
-      - name: Database schema drift / migration tooling check
+      - name: Apply database migrations
+        run: pnpm db:deploy
+
+      - name: Database schema drift check (migrations vs schema.prisma)
         run: pnpm db:check
 
       - name: Format check
