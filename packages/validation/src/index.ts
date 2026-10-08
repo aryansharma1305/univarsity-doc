@@ -6,3 +6,4 @@ export * from './auth/auth.schema.js';
 export * from './errors/error-response.schema.js';
 export * from './academic/index.js';
 export * from './imports/index.js';
+export * from './student-accounts/schemas.js';

@@ -26,6 +26,7 @@ export const ERROR_CODES = {
   authUnavailable: 'AUTH_SERVICE_UNAVAILABLE',
   authInvalidResetToken: 'AUTH_INVALID_RESET_TOKEN',
   authPasswordPolicy: 'AUTH_PASSWORD_POLICY',
+  studentActivationFailed: 'STUDENT_ACTIVATION_FAILED',
   passwordResetUnavailable: 'PASSWORD_RESET_UNAVAILABLE',
   csrfInvalid: 'CSRF_INVALID',
   originNotAllowed: 'ORIGIN_NOT_ALLOWED',

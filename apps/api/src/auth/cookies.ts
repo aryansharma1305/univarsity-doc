@@ -13,12 +13,18 @@ import type { ApiConfig } from '../config/api-config.js';
  */
 export interface CookieNames {
   session: string;
+  /** Student portal session (Phase 6) — a different cookie from the staff session. */
+  studentSession: string;
   preAuthCsrf: string;
 }
 
 export function cookieNames(config: Pick<ApiConfig, 'COOKIE_SECURE'>): CookieNames {
   const prefix = config.COOKIE_SECURE ? '__Host-' : '';
-  return { session: `${prefix}dv_session`, preAuthCsrf: `${prefix}dv_csrf` };
+  return {
+    session: `${prefix}dv_session`,
+    studentSession: `${prefix}dv_student`,
+    preAuthCsrf: `${prefix}dv_csrf`,
+  };
 }
 
 /**

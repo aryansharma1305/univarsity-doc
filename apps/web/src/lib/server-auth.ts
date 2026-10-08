@@ -1,5 +1,11 @@
-import { type AuthUser, authUserSchema } from '@docversity/validation';
+import {
+  type AuthUser,
+  authUserSchema,
+  type StudentMe,
+  studentMeSchema,
+} from '@docversity/validation';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import { loadWebEnv } from './env';
 
 const SESSION_COOKIES = ['dv_session', '__Host-dv_session'];
@@ -35,3 +41,33 @@ export async function getSessionState(): Promise<SessionState> {
     return { status: 'unavailable' };
   }
 }
+
+const STUDENT_COOKIES = ['dv_student', '__Host-dv_student'];
+
+export type StudentSessionState =
+  { status: 'authenticated'; me: StudentMe } | { status: 'anonymous' } | { status: 'unavailable' };
+
+/**
+ * The signed-in STUDENT (student portal pages). Only the student cookie matters here; a staff
+ * session is irrelevant to the portal. The API enforces ownership on every request regardless.
+ */
+export const getStudentSessionState = cache(async (): Promise<StudentSessionState> => {
+  const jar = await cookies();
+  if (!STUDENT_COOKIES.some((name) => jar.has(name))) return { status: 'anonymous' };
+  const { API_INTERNAL_URL } = loadWebEnv();
+  try {
+    const response = await fetch(new URL('/api/v1/student/me', API_INTERNAL_URL), {
+      headers: { cookie: jar.toString(), accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (response.status === 401) return { status: 'anonymous' };
+    if (!response.ok) return { status: 'unavailable' };
+    const parsed = studentMeSchema.safeParse(await response.json());
+    return parsed.success
+      ? { status: 'authenticated', me: parsed.data }
+      : { status: 'unavailable' };
+  } catch {
+    return { status: 'unavailable' };
+  }
+});

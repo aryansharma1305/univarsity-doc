@@ -23,3 +23,18 @@ the audit trail.
 
 Out of scope for Phase 3 (planned): MFA, SSO/OAuth, CSP tightening, account lockout notifications,
 admin user-management endpoints.
+
+## Student portal (Phase 6)
+
+| Threat                                                           | Mitigation                                                                                                                                 | Test                                           |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| Claiming someone else's account with a known registration number | Activation needs a single-use code issued to that registration; the number alone is never sufficient                                       | `activation.test.ts`                           |
+| Guessing activation codes                                        | 60-bit codes; per-registration (5) and per-IP (30) throttling; the open code is revoked after 10 wrong guesses; codes expire (30 days)     | `activation.test.ts`                           |
+| Learning which registrations exist / have codes                  | Identical `STUDENT_ACTIVATION_FAILED` / `AUTH_INVALID_CREDENTIALS` answers; unknown accounts still pay Argon2                              | `activation.test.ts`, `login-boundary.test.ts` |
+| Database or log leak revealing codes                             | Only HMAC(SESSION_SECRET) of codes stored; codes never logged/audited; issuing response is `no-store`                                      | `activation.test.ts`, `admin.test.ts`          |
+| Student escalating to staff, or staff acting as a student        | Separate principal, cookie, Redis namespace and guard; staff routes ignore the student cookie and vice versa; students have no permissions | `login-boundary.test.ts`                       |
+| Reading another student's records                                | Student endpoints take no ids; data is derived from the session's student                                                                  | `login-boundary.test.ts`                       |
+| CSRF on student actions                                          | Same session-HMAC / pre-auth double-submit scheme; staff tokens do not validate student sessions                                           | `login-boundary.test.ts`                       |
+| Compromised student account                                      | Staff lock/disable ends all sessions at once; recovery code resets the password and ends sessions                                          | `login-boundary.test.ts`, `activation.test.ts` |
+
+Open: code delivery channel and identity check at hand-over are university procedures (client decision).

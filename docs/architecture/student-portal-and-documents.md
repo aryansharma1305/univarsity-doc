@@ -1,6 +1,7 @@
 # Student portal, profile changes and historic certificates — architecture (proposed)
 
-Status: **design for review** — nothing on this page is implemented yet except where stated. It extends,
+Status: **design** — section 2 (student authentication: accounts, activation codes, sessions) is
+**implemented in Phase 6**; the rest is planned. It extends,
 and does not replace, the existing architecture: one NestJS API, one PostgreSQL database, Redis
 sessions, BullMQ worker, private S3-compatible storage.
 

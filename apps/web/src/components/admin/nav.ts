@@ -5,6 +5,7 @@ import {
   CalendarRangeIcon,
   FileSpreadsheetIcon,
   GraduationCapIcon,
+  KeyRoundIcon,
   LayoutDashboardIcon,
   type LucideIcon,
   UsersIcon,
@@ -15,6 +16,7 @@ export interface AdminNavItem {
     | '/admin'
     | '/admin/students'
     | '/admin/imports'
+    | '/admin/student-accounts'
     | '/admin/programs'
     | '/admin/departments'
     | '/admin/academic-sessions';
@@ -43,6 +45,12 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     permission: PERMISSIONS.importsRead,
   },
   {
+    href: '/admin/student-accounts',
+    label: 'Student Accounts',
+    icon: KeyRoundIcon,
+    permission: PERMISSIONS.studentAccountsRead,
+  },
+  {
     href: '/admin/programs',
     label: 'Programs',
     icon: GraduationCapIcon,
@@ -69,6 +77,7 @@ export const SEGMENT_LABELS: Record<string, string> = {
   departments: 'Departments',
   'academic-sessions': 'Academic Sessions',
   imports: 'Imports',
+  'student-accounts': 'Student Accounts',
   // Context-specific labels: "<parent>/<segment>".
   'students/new': 'New student',
   'imports/new': 'New import',

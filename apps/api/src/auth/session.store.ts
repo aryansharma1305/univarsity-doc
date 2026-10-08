@@ -43,9 +43,11 @@ const REDIS_TIMEOUT_MS = 5_000;
 @Injectable()
 export class SessionStore {
   private readonly logger = new Logger(SessionStore.name);
+  /** Redis key names; the student store uses its own (see StudentSessionStore). */
+  protected readonly keys = { session: 'session', index: 'user-sessions' };
 
   constructor(
-    @Inject(API_CONFIG) private readonly config: ApiConfig,
+    @Inject(API_CONFIG) protected readonly config: ApiConfig,
     private readonly redis: RedisService,
   ) {}
 
@@ -181,11 +183,11 @@ export class SessionStore {
   }
 
   private sessionKey(keyHash: string): string {
-    return `${this.config.REDIS_KEY_PREFIX}session:${keyHash}`;
+    return `${this.config.REDIS_KEY_PREFIX}${this.keys.session}:${keyHash}`;
   }
 
   private userKey(userId: string): string {
-    return `${this.config.REDIS_KEY_PREFIX}user-sessions:${userId}`;
+    return `${this.config.REDIS_KEY_PREFIX}${this.keys.index}:${userId}`;
   }
 
   private async op<T>(operation: (redis: RedisService['client']) => Promise<T>): Promise<T> {

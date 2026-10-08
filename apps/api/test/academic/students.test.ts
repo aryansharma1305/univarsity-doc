@@ -320,12 +320,20 @@ describe('student list and activity', () => {
 
 describe('dashboard', () => {
   it('returns real counts, and activity only for users with audit.read', async () => {
+    // Other test files insert students into the same database concurrently, so the dashboard's
+    // count must lie between the real counts read immediately before and after the request (it is
+    // never a hard-coded or cached number).
+    const activeWhere = { where: { status: 'ACTIVE' as const } };
+    const studentsBefore = await testDb().student.count();
+    const activeBefore = await testDb().studentRegistration.count(activeWhere);
     const forRegistrar = await registrar.get('dashboard').expect(200);
+    const studentsAfter = await testDb().student.count();
+    const activeAfter = await testDb().studentRegistration.count(activeWhere);
     const counts = (forRegistrar.body as { counts: Record<string, number> }).counts;
-    expect(counts.students).toBe(await testDb().student.count());
-    expect(counts.activeRegistrations).toBe(
-      await testDb().studentRegistration.count({ where: { status: 'ACTIVE' } }),
-    );
+    expect(counts.students).toBeGreaterThanOrEqual(studentsBefore);
+    expect(counts.students).toBeLessThanOrEqual(studentsAfter);
+    expect(counts.activeRegistrations).toBeGreaterThanOrEqual(activeBefore);
+    expect(counts.activeRegistrations).toBeLessThanOrEqual(activeAfter);
     expect(
       (forRegistrar.body as { recentActivity: unknown[] }).recentActivity.length,
     ).toBeGreaterThan(0);

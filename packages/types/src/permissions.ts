@@ -38,6 +38,10 @@ export const PERMISSIONS = {
   importsStudentsRun: 'imports.students.run',
   /** Run result imports — reserved for Phase 8 (no endpoint uses it yet). */
   importsResultsRun: 'imports.results.run',
+  /** Student portal accounts: list registrations with their portal state (Phase 6). */
+  studentAccountsRead: 'studentAccounts.read',
+  /** Issue/revoke activation codes, lock/unlock/disable student accounts (Phase 6). */
+  studentAccountsManage: 'studentAccounts.manage',
   auditRead: 'audit.read',
   usersManage: 'users.manage',
   settingsManage: 'settings.manage',
@@ -90,6 +94,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     ...ACADEMIC_RECORDS_WRITE,
     P.importsRead,
     P.importsStudentsRun,
+    P.studentAccountsRead,
+    P.studentAccountsManage,
     P.certificatesGenerate,
     P.auditRead,
   ],

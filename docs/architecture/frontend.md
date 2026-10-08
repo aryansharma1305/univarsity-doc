@@ -78,7 +78,8 @@ The protected layout checks the session server-side (`GET /auth/me`), then rende
 - **Mobile/tablet (< 1024 px):** menu button opens the navigation in a Sheet (focus-trapped, closes on
   navigation); breadcrumbs collapse to the current page.
 - **Navigation:** Dashboard, Students, Programs, Departments, Academic Sessions — each shown only if the
-  user has its read permission. Imports (Phase 5) is listed for users with `imports.read`; Results, Certificates and Templates are **omitted** until built.
+  user has its read permission. Imports (Phase 5) is listed for users with `imports.read` and Student Accounts (Phase 6) for
+  `studentAccounts.read`; Results, Certificates and Templates are **omitted** until built.
 - **Motion:** Framer Motion (`motion/react`) for the page entrance and hero/card fade-in; Radix animations
   for dialogs/sheets. Everything respects `prefers-reduced-motion`. No GSAP in Phase 4.
 

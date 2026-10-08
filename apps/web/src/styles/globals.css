@@ -4,3 +4,19 @@
 
 /* Tailwind must also scan the design-system package for class names. */
 @source '../../../../packages/ui/src';
+
+/* Printing activation codes: only the marked area is printed. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  [data-print-area],
+  [data-print-area] * {
+    visibility: visible;
+  }
+  [data-print-area] {
+    position: absolute;
+    inset: 0;
+    padding: 1rem;
+  }
+}

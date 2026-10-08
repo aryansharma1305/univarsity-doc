@@ -3,7 +3,7 @@ import { currentRequestContext } from './request-context.js';
 
 /** Keys whose values are never written to logs, at any depth. */
 const SENSITIVE_KEY =
-  /password|passwd|secret|token|cookie|authori[sz]ation|^session(_?id)?$|csrf|credential|api[-_]?key|access[-_]?key|database_?url|redis_?url/i;
+  /password|passwd|secret|token|cookie|authori[sz]ation|^session(_?id)?$|csrf|credential|api[-_]?key|access[-_]?key|database_?url|redis_?url|activation[-_]?code/i;
 export const REDACTED = '[REDACTED]';
 
 export function redact(value: unknown, depth = 0): unknown {

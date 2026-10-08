@@ -96,6 +96,10 @@ export const apiEnvSchema = z
     /** Attempts per client IP across all accounts (slows credential stuffing; allows shared NAT). */
     LOGIN_MAX_ATTEMPTS_PER_IP: positiveInt(100_000).default(100),
     PASSWORD_RESET_TOKEN_TTL_SECONDS: positiveInt(86_400).default(1_800),
+    /** Validity of student activation codes (Phase 6). */
+    STUDENT_ACTIVATION_CODE_TTL_DAYS: positiveInt(365).default(30),
+    /** Wrong codes entered for a registration before its open code is revoked. */
+    STUDENT_ACTIVATION_MAX_FAILED_ATTEMPTS: z.coerce.number().int().min(3).max(100).default(10),
 
     ...databaseEnvSchema.shape,
     ...redisEnvSchema.shape,

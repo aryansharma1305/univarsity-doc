@@ -27,6 +27,13 @@ import { SessionStore } from './session.store.js';
     UsersService,
     { provide: PASSWORD_RESET_NOTIFIER, useClass: UnconfiguredPasswordResetNotifier },
   ],
-  exports: [CsrfService, SessionStore, UsersService, PasswordService, IdentifierHasher],
+  exports: [
+    CsrfService,
+    SessionStore,
+    UsersService,
+    PasswordService,
+    IdentifierHasher,
+    RateLimiter,
+  ],
 })
 export class AuthModule {}

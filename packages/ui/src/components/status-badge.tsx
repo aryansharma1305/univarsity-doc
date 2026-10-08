@@ -7,7 +7,8 @@ const TONES: Record<StatusTone, string> = {
   warning: 'bg-warning-soft text-warning-text ring-warning/30',
   danger: 'bg-danger-soft text-danger-text ring-danger/25',
   info: 'bg-info-soft text-navy-900 ring-brand/20',
-  neutral: 'bg-muted text-muted-foreground ring-border-strong',
+  // text-foreground/80 rather than muted-foreground: grey-on-grey was below 4.5:1 (WCAG AA).
+  neutral: 'bg-muted text-foreground/80 ring-border-strong',
 };
 
 const DOTS: Record<StatusTone, string> = {

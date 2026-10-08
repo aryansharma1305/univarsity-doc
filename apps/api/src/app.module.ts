@@ -15,6 +15,9 @@ import { ImportsModule } from './imports/imports.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { StorageModule } from './storage/storage.module.js';
+import { StudentAccountsModule } from './student-accounts/student-accounts.module.js';
+import { StudentAuthGuard } from './student-auth/student-auth.guard.js';
+import { StudentAuthModule } from './student-auth/student-auth.module.js';
 
 @Module({})
 export class AppModule {
@@ -32,12 +35,15 @@ export class AppModule {
         AuthModule,
         AcademicModule,
         ImportsModule,
+        StudentAuthModule,
+        StudentAccountsModule,
         HealthModule,
       ],
       providers: [
         { provide: APP_FILTER, useClass: GlobalExceptionFilter },
-        // Order matters: authenticate → CSRF/origin → permissions.
+        // Order matters: authenticate (staff, then student routes) → CSRF/origin → permissions.
         { provide: APP_GUARD, useClass: AuthGuard },
+        { provide: APP_GUARD, useClass: StudentAuthGuard },
         { provide: APP_GUARD, useClass: CsrfGuard },
         { provide: APP_GUARD, useClass: PermissionsGuard },
       ],

@@ -2,6 +2,7 @@ import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@ne
 import { Reflector } from '@nestjs/core';
 import { Errors } from '../common/app-error.js';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
+import type { StudentRequest } from '../student-auth/student-auth.decorators.js';
 import { CSRF_MODE_KEY, type AuthenticatedRequest, type CsrfMode } from './auth.decorators.js';
 import { cookieNames, readCookie } from './cookies.js';
 import { CSRF_HEADER, CsrfService } from './csrf.service.js';
@@ -32,7 +33,7 @@ export class CsrfGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest & StudentRequest>();
     if (SAFE_METHODS.has(request.method)) return true;
 
     const origin = request.header('origin');
@@ -46,19 +47,21 @@ export class CsrfGuard implements CanActivate {
         context.getClass(),
       ]) ?? 'session';
     const provided = request.header(CSRF_HEADER);
-    const auth = request.auth;
+    // The session of whichever principal this route authenticated: staff OR student (never both —
+    // staff routes ignore the student cookie and student routes ignore the staff cookie).
+    const sessionId = request.auth?.sessionId ?? request.student?.sessionId;
 
     if (mode === 'pre-auth') {
       const cookie = readCookie(request, cookieNames(this.config).preAuthCsrf);
       const valid =
         this.csrf.verifyPreAuthToken(cookie, provided) ||
-        (auth !== undefined && this.csrf.verifySessionToken(auth.sessionId, provided));
+        (sessionId !== undefined && this.csrf.verifySessionToken(sessionId, provided));
       if (!valid) throw Errors.csrf();
       return true;
     }
 
-    if (!auth) return true;
-    if (!this.csrf.verifySessionToken(auth.sessionId, provided)) throw Errors.csrf();
+    if (!sessionId) return true;
+    if (!this.csrf.verifySessionToken(sessionId, provided)) throw Errors.csrf();
     return true;
   }
 }

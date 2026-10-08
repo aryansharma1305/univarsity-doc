@@ -126,3 +126,17 @@ describe('imports (Phase 5)', () => {
     expect(examAdmin.has(PERMISSIONS.importsResultsRun)).toBe(true);
   });
 });
+
+describe('student accounts (Phase 6)', () => {
+  it('lets only SUPER_ADMIN and REGISTRAR see and manage student portal accounts', () => {
+    for (const [role, permissions] of Object.entries(ROLE_PERMISSIONS)) {
+      const allowed = role === ROLE_NAMES.superAdmin || role === ROLE_NAMES.registrar;
+      expect(permissions.includes(PERMISSIONS.studentAccountsRead), role).toBe(allowed);
+      expect(permissions.includes(PERMISSIONS.studentAccountsManage), role).toBe(allowed);
+    }
+  });
+
+  it('defines no permission a student principal could hold (students have no roles)', () => {
+    expect(ALL_PERMISSIONS.some((permission) => permission.startsWith('student.'))).toBe(false);
+  });
+});

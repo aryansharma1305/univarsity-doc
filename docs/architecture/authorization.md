@@ -18,31 +18,34 @@ test fixtures) ensure all six code-defined roles exist as records.
 `registrations.read` · `registrations.write` · `results.read` · `results.write` · `results.publish` ·
 `certificates.read` · `certificates.generate` · `certificates.approve` · `certificates.issue` ·
 `certificates.revoke` · `templates.read` · `templates.write` · `imports.read` ·
-`imports.students.run` · `imports.results.run` · `audit.read` ·
+`imports.students.run` · `imports.results.run` · `studentAccounts.read` · `studentAccounts.manage` ·
+`audit.read` ·
 `users.manage` · `settings.manage`
 
 ## Role mapping (initial proposal — confirm with the client)
 
-| Permission            | SUPER_ADMIN | REGISTRAR | EXAM_ADMIN | CERTIFICATE_ADMIN | APPROVER | VIEWER |
-| --------------------- | :---------: | :-------: | :--------: | :---------------: | :------: | :----: |
-| students.read         |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| students.write        |      ✓      |     ✓     |            |                   |          |        |
-| results.read          |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| results.write         |      ✓      |           |     ✓      |                   |          |        |
-| results.publish       |      ✓      |           |            |                   |    ✓     |        |
-| certificates.read     |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| certificates.generate |      ✓      |     ✓     |            |         ✓         |          |        |
-| certificates.approve  |      ✓      |           |            |                   |    ✓     |        |
-| certificates.issue    |      ✓      |           |            |                   |    ✓     |        |
-| certificates.revoke   |      ✓      |           |            |                   |    ✓     |        |
-| templates.read        |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| templates.write       |      ✓      |           |            |         ✓         |          |        |
-| imports.read          |      ✓      |     ✓     |            |                   |          |        |
-| imports.students.run  |      ✓      |     ✓     |            |                   |          |        |
-| imports.results.run   |      ✓      |           |     ✓      |                   |          |        |
-| audit.read            |      ✓      |     ✓     |            |                   |          |        |
-| users.manage          |      ✓      |           |            |                   |          |        |
-| settings.manage       |      ✓      |           |            |                   |          |        |
+| Permission             | SUPER_ADMIN | REGISTRAR | EXAM_ADMIN | CERTIFICATE_ADMIN | APPROVER | VIEWER |
+| ---------------------- | :---------: | :-------: | :--------: | :---------------: | :------: | :----: |
+| students.read          |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| students.write         |      ✓      |     ✓     |            |                   |          |        |
+| results.read           |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| results.write          |      ✓      |           |     ✓      |                   |          |        |
+| results.publish        |      ✓      |           |            |                   |    ✓     |        |
+| certificates.read      |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| certificates.generate  |      ✓      |     ✓     |            |         ✓         |          |        |
+| certificates.approve   |      ✓      |           |            |                   |    ✓     |        |
+| certificates.issue     |      ✓      |           |            |                   |    ✓     |        |
+| certificates.revoke    |      ✓      |           |            |                   |    ✓     |        |
+| templates.read         |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| templates.write        |      ✓      |           |            |         ✓         |          |        |
+| imports.read           |      ✓      |     ✓     |            |                   |          |        |
+| imports.students.run   |      ✓      |     ✓     |            |                   |          |        |
+| imports.results.run    |      ✓      |           |     ✓      |                   |          |        |
+| studentAccounts.read   |      ✓      |     ✓     |            |                   |          |        |
+| studentAccounts.manage |      ✓      |     ✓     |            |                   |          |        |
+| audit.read             |      ✓      |     ✓     |            |                   |          |        |
+| users.manage           |      ✓      |           |            |                   |          |        |
+| settings.manage        |      ✓      |           |            |                   |          |        |
 
 Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
 
@@ -57,6 +60,9 @@ Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
   write by hand. EXAM_ADMIN does **not** get student imports; `imports.results.run` is reserved for the
   Phase 8 result import and no endpoint uses it yet. Whether VIEWER may read import history is an open
   client decision — it is not granted (import rows contain personal data).
+- **Student accounts (Phase 6):** only SUPER_ADMIN and REGISTRAR see portal states and issue/revoke
+  activation codes. Students themselves have **no** permissions at all — they are a separate principal
+  (see authentication.md).
 - A user's permissions are the union of their roles' permissions. There is no role hierarchy.
 
 ## Guards

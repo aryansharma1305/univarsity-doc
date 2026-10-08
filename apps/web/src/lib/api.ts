@@ -33,30 +33,41 @@ export class ApiError extends Error {
 
 type Query = Record<string, string | number | undefined | null>;
 
-let csrfToken: string | undefined;
+/**
+ * Which session a request belongs to. Staff and students are separate principals with separate
+ * cookies and CSRF tokens (the student portal fetches its token from /student-auth/csrf).
+ */
+export type Principal = 'staff' | 'student';
 
-async function getCsrfToken(refresh = false): Promise<string> {
-  if (!csrfToken || refresh) {
-    const response = await fetch('/api/v1/auth/csrf', {
-      credentials: 'same-origin',
-      cache: 'no-store',
-    });
-    const body = (await response.json()) as { csrfToken?: string };
-    if (!response.ok || !body.csrfToken) {
-      throw new ApiError(
-        response.status,
-        'CSRF_UNAVAILABLE',
-        'Could not start a secure request. Please retry.',
-      );
-    }
-    csrfToken = body.csrfToken;
+const CSRF_PATHS: Record<Principal, string> = {
+  staff: '/api/v1/auth/csrf',
+  student: '/api/v1/student-auth/csrf',
+};
+
+const csrfTokens = new Map<Principal, string>();
+
+async function getCsrfToken(principal: Principal, refresh = false): Promise<string> {
+  const cached = csrfTokens.get(principal);
+  if (cached && !refresh) return cached;
+  const response = await fetch(CSRF_PATHS[principal], {
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
+  const body = (await response.json()) as { csrfToken?: string };
+  if (!response.ok || !body.csrfToken) {
+    throw new ApiError(
+      response.status,
+      'CSRF_UNAVAILABLE',
+      'Could not start a secure request. Please retry.',
+    );
   }
-  return csrfToken;
+  csrfTokens.set(principal, body.csrfToken);
+  return body.csrfToken;
 }
 
 /** Clears cached request state (call after sign-in/out). */
 export function resetApiClient(): void {
-  csrfToken = undefined;
+  csrfTokens.clear();
 }
 
 function buildUrl(path: string, query?: Query): string {
@@ -89,13 +100,14 @@ export async function apiRequest<TSchema extends z.ZodType>(
   method: 'GET' | 'POST' | 'PATCH',
   path: string,
   schema: TSchema,
-  options: { query?: Query; body?: unknown } = {},
+  options: { query?: Query; body?: unknown; principal?: Principal } = {},
 ): Promise<z.infer<TSchema>> {
+  const principal = options.principal ?? 'staff';
   const send = async (refreshCsrf: boolean) => {
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (method !== 'GET') {
       headers['Content-Type'] = 'application/json';
-      headers['X-CSRF-Token'] = await getCsrfToken(refreshCsrf);
+      headers['X-CSRF-Token'] = await getCsrfToken(principal, refreshCsrf);
     }
     return fetch(buildUrl(path, options.query), {
       method,
@@ -147,7 +159,10 @@ export async function apiUpload<TSchema extends z.ZodType>(
       method: 'POST',
       credentials: 'same-origin',
       cache: 'no-store',
-      headers: { Accept: 'application/json', 'X-CSRF-Token': await getCsrfToken(refreshCsrf) },
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-Token': await getCsrfToken('staff', refreshCsrf),
+      },
       body: form,
     });
   let response: Response;
@@ -202,6 +217,16 @@ export async function apiDownload(path: string, fallbackName: string): Promise<v
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+/** A request made with the STUDENT session (student portal pages only). */
+export function studentRequest<TSchema extends z.ZodType>(
+  method: 'GET' | 'POST' | 'PATCH',
+  path: string,
+  schema: TSchema,
+  options: { query?: Query; body?: unknown } = {},
+): Promise<z.infer<TSchema>> {
+  return apiRequest(method, path, schema, { ...options, principal: 'student' });
 }
 
 /** User-facing message for any thrown error. */

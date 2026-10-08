@@ -171,6 +171,13 @@ enum UserStatus {
   DISABLED
 }
 
+/// Student portal account status (Phase 6). LOCKED = temporarily blocked; DISABLED = by staff, with a reason.
+enum StudentAccountStatus {
+  ACTIVE
+  LOCKED
+  DISABLED
+}
+
 // ============================================================================================
 // Organisation & calendar
 // ============================================================================================
@@ -249,6 +256,7 @@ model Student {
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   registrations StudentRegistration[]
+  account       StudentAccount?
 
   @@map("students")
 }
@@ -273,14 +281,15 @@ model StudentRegistration {
   createdAt                    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  student          Student           @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  program          Program           @relation(fields: [programId], references: [id], onDelete: Restrict)
-  department       Department?       @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  academicSession  AcademicSession   @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
+  student          Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  program          Program                 @relation(fields: [programId], references: [id], onDelete: Restrict)
+  department       Department?             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  academicSession  AcademicSession         @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
   results          Result[]
   certificates     Certificate[]
   verificationLogs VerificationLog[]
   importRows       ImportRow[]
+  activationCodes  StudentActivationCode[]
 
   /// Target of the certificates (registration, program) composite FK: a certificate's program
   /// must be the registration's program.
@@ -710,6 +719,58 @@ model ImportRow {
 }
 
 // ============================================================================================
+// Student portal accounts (Phase 6) — a separate principal from staff users
+// ============================================================================================
+
+/// A student's portal account: exactly one per student (person), covering all of their
+/// registrations. Never linked to staff users, roles or permissions. Created only by activation.
+model StudentAccount {
+  id                String               @id @default(uuid(7)) @db.Uuid
+  studentId         String               @unique @map("student_id") @db.Uuid
+  /// Argon2id hash (CHECK). Students always choose their own password.
+  passwordHash      String               @map("password_hash")
+  status            StudentAccountStatus @default(ACTIVE)
+  /// Why staff locked/disabled the account (required when DISABLED).
+  statusReason      String?              @map("status_reason") @db.VarChar(500)
+  activatedAt       DateTime             @default(now()) @map("activated_at") @db.Timestamptz(3)
+  passwordChangedAt DateTime             @default(now()) @map("password_changed_at") @db.Timestamptz(3)
+  lastLoginAt       DateTime?            @map("last_login_at") @db.Timestamptz(3)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@map("student_accounts")
+}
+
+/// A single-use activation code proving ownership of one registration. Only an HMAC of the code is
+/// stored; the plain code is shown once to staff for delivery. At most one OPEN (unused, unrevoked)
+/// code per registration.
+model StudentActivationCode {
+  id                    String    @id @default(uuid(7)) @db.Uuid
+  studentRegistrationId String    @map("student_registration_id") @db.Uuid
+  /// HMAC-SHA256 (hex) of the normalised code — never the code itself.
+  codeHash              String    @unique @map("code_hash") @db.Char(64)
+  issuedByUserId        String?   @map("issued_by_user_id") @db.Uuid
+  issuedAt              DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  expiresAt             DateTime  @map("expires_at") @db.Timestamptz(3)
+  usedAt                DateTime? @map("used_at") @db.Timestamptz(3)
+  revokedAt             DateTime? @map("revoked_at") @db.Timestamptz(3)
+  /// Wrong codes entered for this registration while the code was open; the code is revoked at the limit.
+  failedAttempts        Int       @default(0) @map("failed_attempts") @db.SmallInt
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  registration StudentRegistration @relation(fields: [studentRegistrationId], references: [id], onDelete: Restrict)
+  issuedBy     User?               @relation(fields: [issuedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([studentRegistrationId], map: "student_activation_codes_one_open_per_registration_key", where: raw("((used_at IS NULL) AND (revoked_at IS NULL))"))
+  @@index([studentRegistrationId, issuedAt(sort: Desc)])
+  @@map("student_activation_codes")
+}
+
+// ============================================================================================
 // Users & roles (schema only — authentication is Phase 3)
 // ============================================================================================
 
@@ -725,13 +786,14 @@ model User {
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   roles                 UserRole[]
-  importJobs            ImportJob[]   @relation("ImportJobCreatedBy")
-  importJobsCommitted   ImportJob[]   @relation("ImportJobCommittedBy")
+  importJobs            ImportJob[]             @relation("ImportJobCreatedBy")
+  importJobsCommitted   ImportJob[]             @relation("ImportJobCommittedBy")
+  activationCodesIssued StudentActivationCode[]
   auditLogs             AuditLog[]
-  certificatesGenerated Certificate[] @relation("CertificateGeneratedBy")
-  certificatesApproved  Certificate[] @relation("CertificateApprovedBy")
-  certificatesIssued    Certificate[] @relation("CertificateIssuedBy")
-  certificatesRevoked   Certificate[] @relation("CertificateRevokedBy")
+  certificatesGenerated Certificate[]           @relation("CertificateGeneratedBy")
+  certificatesApproved  Certificate[]           @relation("CertificateApprovedBy")
+  certificatesIssued    Certificate[]           @relation("CertificateIssuedBy")
+  certificatesRevoked   Certificate[]           @relation("CertificateRevokedBy")
 
   @@map("users")
 }

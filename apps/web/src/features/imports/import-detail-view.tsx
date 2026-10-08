@@ -329,6 +329,7 @@ function ReviewPanel({ job, canRun }: { job: ImportJob; canRun: boolean }) {
 
 function CompletedPanel({ job }: { job: ImportJob }) {
   const c = job.counts;
+  const canSeeAccounts = useCan(PERMISSIONS.studentAccountsRead);
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -360,6 +361,13 @@ function CompletedPanel({ job }: { job: ImportJob }) {
             <Button asChild>
               <Link href="/admin/students">View students</Link>
             </Button>
+            {canSeeAccounts && c.imported > 0 && (
+              <Button asChild variant="outline">
+                <Link href={`/admin/student-accounts?import=${job.id}`}>
+                  Student portal activation codes
+                </Link>
+              </Button>
+            )}
             <ReportButton job={job} />
           </div>
         </CardContent>

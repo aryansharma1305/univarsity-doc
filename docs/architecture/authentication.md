@@ -197,3 +197,48 @@ reused; otherwise a UUID). It is returned in `X-Request-Id`, included in every l
 (`error.requestId`) and in audit entries (`correlation_id`). Logs are JSON lines; keys matching
 password/secret/token/cookie/authorization/session-id/csrf/credential/api-key are redacted at any depth,
 and the access log records the path without the query string.
+
+## Student portal authentication (Phase 6)
+
+Students are a **separate principal**. They never become `users`, never hold roles or permissions, and
+cannot reach any staff endpoint. See [ADR-0010](../decisions/ADR-0010-student-authentication.md).
+
+| Aspect        | Staff                                          | Students                                                                                                   |
+| ------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Identity      | `users`                                        | `student_accounts` (one per student, covering all of their registrations)                                  |
+| Sign-in       | `POST /api/v1/auth/login` (email + password)   | `POST /api/v1/student-auth/login` (any of the student's registration numbers + password)                   |
+| First access  | `pnpm admin:create` / staff tooling            | `POST /api/v1/student-auth/activate` — registration number **+ single-use activation code** + new password |
+| Cookie        | `dv_session` / `__Host-dv_session`             | `dv_student` / `__Host-dv_student` (same flags: HttpOnly, SameSite=Lax, Secure in production)              |
+| Redis         | `<prefix>session:*`, `<prefix>user-sessions:*` | `<prefix>student-session:*`, `<prefix>student-sessions:*`                                                  |
+| Guard         | `AuthGuard` (reads only the staff cookie)      | `StudentAuthGuard` (only on `@StudentRoute()` routes, reads only the student cookie)                       |
+| CSRF          | session token from `GET /auth/csrf`            | session token from `GET /student-auth/csrf` (pre-auth double-submit for activate/login)                    |
+| Authorization | code-defined permissions                       | none: every student endpoint derives the student from the session                                          |
+
+Global guard order: `AuthGuard` → `StudentAuthGuard` → `CsrfGuard` → `PermissionsGuard`. Student routes
+are marked `@StudentRoute()`, which makes the staff guard skip them (`AUTH_MODE = none`), so a staff
+session is never accepted there; staff routes never read the student cookie.
+
+### Activation codes
+
+- Issued by staff with `studentAccounts.manage` (`POST /api/v1/student-accounts/activation-codes`) for
+  selected registrations or every registration of an import; printed and delivered by the university.
+- 12 symbols from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (no look-alikes) — 60 bits from the CSPRNG,
+  formatted `XXXX-XXXX-XXXX`; input ignores case, spaces and dashes.
+- Stored only as `HMAC-SHA256(SESSION_SECRET, "student-activation:" + code)`; the plain code is in the
+  issuing response only (`Cache-Control: no-store`) and is never logged or audited.
+- Single use (compare-and-set on `used_at`), expire after `STUDENT_ACTIVATION_CODE_TTL_DAYS` (30), at most
+  one open code per registration (partial unique index); re-issuing revokes the previous code.
+- **The registration number alone is never sufficient.** Every failure (unknown number, wrong/used/
+  expired/revoked code, revoked registration, disabled account) returns the same
+  `400 STUDENT_ACTIVATION_FAILED`. Wrong codes for a registration count against its open code, which is
+  revoked after `STUDENT_ACTIVATION_MAX_FAILED_ATTEMPTS` (10); attempts are also throttled per
+  registration (5) and per IP (30) per window.
+- **Recovery:** a code issued for a student who already has an account sets a new password, re-activates a
+  LOCKED account and ends all of that account's sessions. DISABLED accounts are never recoverable by
+  code (staff must re-activate them first).
+- The password policy is checked before the code is consumed, so a weak password does not burn the code.
+
+### Account status
+
+`ACTIVE`, `LOCKED`, `DISABLED` (reason required). Any change away from ACTIVE ends all of the account's
+sessions immediately; the guard reloads the account on every request.

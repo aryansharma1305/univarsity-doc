@@ -32,6 +32,14 @@ export const AUDIT_ACTIONS = {
   studentImportCancelled: 'STUDENT_IMPORT_CANCELLED',
   studentImportFailed: 'STUDENT_IMPORT_FAILED',
   studentImportRetried: 'STUDENT_IMPORT_RETRIED',
+  studentActivationCodeIssued: 'STUDENT_ACTIVATION_CODE_ISSUED',
+  studentActivationCodeRevoked: 'STUDENT_ACTIVATION_CODE_REVOKED',
+  studentActivationFailed: 'STUDENT_ACTIVATION_FAILED',
+  studentAccountActivated: 'STUDENT_ACCOUNT_ACTIVATED',
+  studentAccountStatusChanged: 'STUDENT_ACCOUNT_STATUS_CHANGED',
+  studentLoginSuccess: 'STUDENT_LOGIN_SUCCESS',
+  studentLoginFailure: 'STUDENT_LOGIN_FAILURE',
+  studentLogout: 'STUDENT_LOGOUT',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
