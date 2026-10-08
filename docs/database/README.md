@@ -125,28 +125,38 @@ Support tables without relations: `number_sequences`, `legacy_mappings`.
 
 ## Tables
 
-| Area         | Table                          | Purpose                                                                                     |
-| ------------ | ------------------------------ | ------------------------------------------------------------------------------------------- |
-| Organisation | `departments`                  | Optional grouping of programs                                                               |
-|              | `programs`                     | Degree/course programs (`code` unique; `level` free text until the hierarchy is confirmed)  |
-|              | `academic_sessions`            | Sessions/batches (`code` unique; dates optional)                                            |
-| Students     | `students`                     | A person (identity only; DOB optional and **not** a lookup factor)                          |
-|              | `student_registrations`        | Enrolment of a person in a program; **registration number** is the primary human identifier |
-| Curriculum   | `subjects`                     | Subject definitions, versioned by `(code, version)`                                         |
-|              | `program_subjects`             | Subject placement per program **curriculum version**, with credits and marks limits         |
-|              | `grading_schemes`              | Versioned grading rules as JSON data                                                        |
-| Results      | `examinations`                 | One examination of a program/session/semester                                               |
-|              | `results`                      | One student's result for one attempt, as an immutable revision                              |
-|              | `result_items`                 | Subject lines of a result                                                                   |
-| Documents    | `certificate_templates`        | Versioned document templates                                                                |
-|              | `program_document_templates`   | Which template a program uses per document type                                             |
-|              | `number_sequences`             | Counters for human-readable certificate numbers                                             |
-|              | `certificates`                 | **The** authoritative credential record                                                     |
-| Imports      | `import_jobs`, `import_rows`   | Spreadsheet import jobs and their staged rows                                               |
-| Access       | `users`, `roles`, `user_roles` | Staff accounts and role records (auth itself is Phase 3)                                    |
-| Logs         | `audit_logs`                   | Append-only audit trail                                                                     |
-|              | `verification_logs`            | Public verification attempts (hashes only)                                                  |
-| Legacy       | `legacy_mappings`              | Legacy identifier → new record (WordPress migration, old QR URLs)                           |
+| Area         | Table                             | Purpose                                                                                     |
+| ------------ | --------------------------------- | ------------------------------------------------------------------------------------------- |
+| Organisation | `departments`                     | Optional grouping of programs                                                               |
+|              | `programs`                        | Degree/course programs (`code` unique; `level` free text until the hierarchy is confirmed)  |
+|              | `academic_sessions`               | Sessions/batches (`code` unique; dates optional)                                            |
+| Students     | `students`                        | A person (identity only; DOB optional and **not** a lookup factor)                          |
+|              | `student_registrations`           | Enrolment of a person in a program; **registration number** is the primary human identifier |
+| Curriculum   | `subjects`                        | Subject definitions, versioned by `(code, version)`                                         |
+|              | `program_subjects`                | Subject placement per program **curriculum version**, with credits and marks limits         |
+|              | `grading_schemes`                 | Versioned grading rules as JSON data                                                        |
+| Results      | `examinations`                    | One examination of a program/session/semester                                               |
+|              | `results`                         | One student's result for one attempt, as an immutable revision                              |
+|              | `result_items`                    | Subject lines of a result                                                                   |
+| Documents    | `certificate_templates`           | Versioned document templates                                                                |
+|              | `program_document_templates`      | Which template a program uses per document type                                             |
+|              | `number_sequences`                | Counters for human-readable certificate numbers                                             |
+|              | `certificates`                    | **The** authoritative credential record                                                     |
+| Imports      | `import_jobs`, `import_rows`      | Spreadsheet import jobs and their staged rows                                               |
+| Students     | `student_profile_change_requests` | Student-submitted corrections and photos awaiting approval (Phase 7)                        |
+| Access       | `users`, `roles`, `user_roles`    | Staff accounts and role records (auth itself is Phase 3)                                    |
+| Logs         | `audit_logs`                      | Append-only audit trail                                                                     |
+|              | `verification_logs`               | Public verification attempts (hashes only)                                                  |
+| Legacy       | `legacy_mappings`                 | Legacy identifier → new record (WordPress migration, old QR URLs)                           |
+
+### Phase 7 migration (`20261010090000_student_profile_change_requests`)
+
+Additive: enum `ProfileChangeRequestStatus` (PENDING, APPROVED, REJECTED, CANCELLED) and table
+`student_profile_change_requests` (student, submitting account, proposed changes and submission snapshot as
+JSONB, note, staged photo key/hash/size/dimensions, the official photo key at submission, reviewer, decision
+times, rejection reason). Partial unique index: one PENDING request per student. CHECKs tie the decision
+columns to the status and require a change or a photo; trigger `profile_change_requests_guard` keeps
+submissions immutable, decisions final and rows undeletable. See [ADR-0011](../decisions/ADR-0011-profile-change-requests.md).
 
 ### Phase 5 migration (`20261008120000_student_imports`)
 
@@ -215,6 +225,7 @@ distinguishable from genuine foreign-key/unique errors (Prisma surfaces it as `P
 | `certificate_templates_guard`                      | Only DRAFT templates can be edited or deleted; ACTIVE → ARCHIVED is the only other change.                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `grading_schemes_guard`                            | Only DRAFT schemes can be edited or deleted; ACTIVE/ARCHIVED rules are frozen (closing `effective_to` and ACTIVE → ARCHIVED are allowed).                                                                                                                                                                                                                                                                                                                                                             |
 | `program_document_templates_guard`                 | Dated overrides for the same program and document type may not overlap (serialised with an advisory lock).                                                                                                                                                                                                                                                                                                                                                                                            |
+| `profile_change_requests_guard`                    | Requests are created PENDING by an account of the same student; submitted data never changes; a decision (APPROVED/REJECTED/CANCELLED) happens once; requests cannot be deleted.                                                                                                                                                                                                                                                                                                                      |
 | `audit_logs_append_only`, `audit_logs_no_truncate` | Audit entries can never be updated, deleted or truncated.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `verification_logs_append_only`                    | Verification entries can never be updated. Deletion stays possible for a future retention policy.                                                                                                                                                                                                                                                                                                                                                                                                     |
 

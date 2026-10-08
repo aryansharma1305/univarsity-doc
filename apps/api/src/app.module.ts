@@ -16,6 +16,7 @@ import { QueueModule } from './queue/queue.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { StudentAccountsModule } from './student-accounts/student-accounts.module.js';
+import { StudentProfileModule } from './student-profile/student-profile.module.js';
 import { StudentAuthGuard } from './student-auth/student-auth.guard.js';
 import { StudentAuthModule } from './student-auth/student-auth.module.js';
 
@@ -37,6 +38,7 @@ export class AppModule {
         ImportsModule,
         StudentAuthModule,
         StudentAccountsModule,
+        StudentProfileModule,
         HealthModule,
       ],
       providers: [

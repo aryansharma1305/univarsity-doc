@@ -1,20 +1,34 @@
-import type { StudentMe } from '@docversity/validation';
+import Link from 'next/link';
+import type { StudentMe, StudentProfileRequest } from '@docversity/validation';
 import {
   BellIcon,
   BookOpenIcon,
+  CheckCircle2Icon,
   ClipboardListIcon,
   FileTextIcon,
+  HistoryIcon,
   LockKeyholeIcon,
+  PencilLineIcon,
   ShieldCheckIcon,
   UserRoundIcon,
 } from 'lucide-react';
 import { RecordStatus } from '@/components/data/status';
 import { formatDate } from '@/lib/format';
 import { DetailList, PageIntro, PortalCard, PortalEmptyState } from './portal-ui';
+import { ProfileRequestCard } from './profile-requests';
+import { ProfileUpdateForm } from './profile-update';
 import { StudentAvatar } from './student-avatar';
 
-export function StudentProfile({ me }: { me: StudentMe }) {
+export function StudentProfile({
+  me,
+  requests,
+}: {
+  me: StudentMe;
+  /** The student's own requests, newest first; null when they could not be loaded. */
+  requests: StudentProfileRequest[] | null;
+}) {
   const { student } = me;
+  const pending = requests?.find((request) => request.status === 'PENDING');
   return (
     <>
       <PageIntro
@@ -26,37 +40,132 @@ export function StudentProfile({ me }: { me: StudentMe }) {
           aria-label="Student identity"
           className="flex flex-col items-center rounded-xl border border-border bg-card p-6 text-center"
         >
-          <StudentAvatar name={student.fullName} size="lg" />
+          <StudentAvatar name={student.fullName} hasPhoto={student.hasPhoto} size="lg" />
           <h2 className="mt-5 text-card-title break-words text-navy-950">{student.fullName}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
             {student.hasPhoto
-              ? 'Photo on record. Display is not available yet.'
+              ? 'Official photo on record.'
               : 'Photo: Not on record. Initials shown instead.'}
           </p>
+          <Link
+            href="/student/profile/requests"
+            className="mt-4 rounded text-sm font-medium text-brand hover:underline"
+          >
+            My update requests
+            {requests && requests.length > 0 ? ` (${String(requests.length)})` : ''}
+          </Link>
         </section>
-        <PortalCard title="Personal details" icon={UserRoundIcon}>
-          <DetailList
-            columns={2}
-            items={[
-              { label: 'Full name', value: student.fullName },
-              {
-                label: 'Date of birth',
-                value: student.dateOfBirth ? formatDate(student.dateOfBirth) : null,
-              },
-              { label: 'Gender', value: student.gender },
-              { label: 'Father’s name', value: student.fatherName },
-              { label: 'Mother’s name', value: student.motherName },
-            ]}
+        <div className="flex min-w-0 flex-col gap-5">
+          <PortalCard title="Personal details" icon={UserRoundIcon}>
+            <DetailList
+              columns={2}
+              items={[
+                { label: 'Full name', value: student.fullName },
+                {
+                  label: 'Date of birth',
+                  value: student.dateOfBirth ? formatDate(student.dateOfBirth) : null,
+                },
+                { label: 'Gender', value: student.gender },
+                { label: 'Father’s name', value: student.fatherName },
+                { label: 'Mother’s name', value: student.motherName },
+                { label: 'Photo', value: student.hasPhoto ? 'On record' : null },
+              ]}
+            />
+            <div className="mt-6 rounded-lg bg-info-soft p-4 text-sm text-navy-950">
+              <p className="font-semibold">Official records are read-only</p>
+              <p className="mt-1 leading-relaxed">
+                You cannot change them directly. Submit missing details, a photo or a correction
+                below; the university reviews every request before your record is updated. Academic
+                details (program, session, registration) are changed only by the registrar’s office.
+              </p>
+            </div>
+          </PortalCard>
+          <PortalCard
+            title="Update my details"
+            icon={PencilLineIcon}
+            action={{ href: '/student/profile/requests', label: 'Request history' }}
+          >
+            {requests === null ? (
+              <p role="alert" className="text-sm text-danger-text">
+                Your update requests could not be loaded right now. Refresh the page to try again.
+              </p>
+            ) : pending ? (
+              <div className="flex flex-col gap-4">
+                <p className="text-sm text-navy-950">
+                  You have a request waiting for review. You can submit another once it is decided,
+                  or cancel it to change what you asked for.
+                </p>
+                <ProfileRequestCard request={pending} />
+              </div>
+            ) : (
+              <ProfileUpdateForm me={me} />
+            )}
+          </PortalCard>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function StudentProfileRequests({
+  requests,
+  submitted = false,
+}: {
+  requests: StudentProfileRequest[] | null;
+  /** Arrived here right after submitting a request. */
+  submitted?: boolean;
+}) {
+  return (
+    <>
+      <PageIntro
+        title="Profile update requests"
+        description="Every change you have asked for and the university’s decision."
+      />
+      {submitted && (
+        <div
+          role="status"
+          className="mb-5 flex items-start gap-3 rounded-lg border border-success/30 bg-success-soft p-4 text-sm"
+        >
+          <CheckCircle2Icon
+            aria-hidden="true"
+            className="mt-0.5 size-5 shrink-0 text-success-text"
           />
-          <div className="mt-6 rounded-lg bg-info-soft p-4 text-sm text-navy-950">
-            <p className="font-semibold">Official records are read-only</p>
-            <p className="mt-1 leading-relaxed">
-              Profile submissions and approvals are not available yet. To add missing information or
-              correct a detail, contact the registrar’s office.
+          <div>
+            <p className="font-semibold text-success-text">Request submitted for approval</p>
+            <p className="mt-1 text-navy-950">
+              The university will review it. Your official profile changes only if it is approved.
             </p>
           </div>
+        </div>
+      )}
+      {requests === null ? (
+        <PortalCard title="Requests" icon={HistoryIcon}>
+          <p role="alert" className="text-sm text-danger-text">
+            Your requests could not be loaded right now. Refresh the page to try again.
+          </p>
         </PortalCard>
-      </div>
+      ) : requests.length === 0 ? (
+        <PortalCard title="Requests" icon={HistoryIcon}>
+          <PortalEmptyState
+            icon={HistoryIcon}
+            title="No requests yet"
+            description="When you submit missing details, a photo or a correction, it will appear here with its decision."
+          >
+            <Link
+              href="/student/profile"
+              className="mt-2 rounded text-sm font-semibold text-brand hover:underline"
+            >
+              Update my details
+            </Link>
+          </PortalEmptyState>
+        </PortalCard>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {requests.map((request) => (
+            <ProfileRequestCard key={request.id} request={request} />
+          ))}
+        </div>
+      )}
     </>
   );
 }

@@ -31,6 +31,7 @@ const registrar = {
   displayName: 'E2E Test Registrar',
 };
 let fixture;
+const profileStudents = [];
 const db = createPrismaClient({ connectionString: databaseUrl });
 try {
   await createAdmin(db, credentials);
@@ -88,6 +89,35 @@ try {
       },
     },
   });
+  // Students with ACTIVE portal accounts for the profile request tests (Phase 7). Each test that
+  // changes a record uses its own student, so the read-only fixture above stays unchanged.
+  for (const [index, name] of ['E2E Profile Student', 'E2E Review Student'].entries()) {
+    const registrationNumber = `E2E-REG-010${index + 1}`;
+    const password = randomBytes(18).toString('base64url');
+    const created = await db.student.create({
+      data: {
+        fullName: name,
+        registrations: {
+          create: {
+            registrationNumber,
+            registrationNumberNormalized: registrationNumber,
+            programId: program.id,
+            departmentId: department.id,
+            academicSessionId: session.id,
+          },
+        },
+        account: {
+          create: { passwordHash: await new PasswordService().hashPassword(password) },
+        },
+      },
+    });
+    profileStudents.push({
+      studentId: created.id,
+      studentName: name,
+      registrationNumber,
+      password,
+    });
+  }
   fixture = {
     studentId: student.id,
     studentName: student.fullName,
@@ -103,7 +133,14 @@ const dir = fileURLToPath(new URL('../.e2e/', import.meta.url));
 mkdirSync(dir, { recursive: true });
 writeFileSync(
   `${dir}credentials.json`,
-  JSON.stringify({ ...credentials, admin: credentials, viewer, registrar, fixture }),
+  JSON.stringify({
+    ...credentials,
+    admin: credentials,
+    viewer,
+    registrar,
+    fixture,
+    profileStudents,
+  }),
   { mode: 0o600 },
 );
 console.log('e2e database and admin fixture ready');

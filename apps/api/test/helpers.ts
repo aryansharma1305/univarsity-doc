@@ -4,6 +4,7 @@ import type { Server } from 'node:http';
 import type { DynamicModule, INestApplication, LogLevel, Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { createPrismaClient, type PrismaClient } from '@docversity/database';
+import type { ObjectStorage } from '@docversity/storage';
 import { type RoleName } from '@docversity/types';
 import {
   authUserSchema,
@@ -24,6 +25,7 @@ import { ensureRoles } from '../src/cli/roles.js';
 import { JsonLogger } from '../src/common/json-logger.js';
 import { type ApiConfig, loadApiConfig } from '../src/config/api-config.js';
 import { loadRootEnv } from '../src/config/load-root-env.js';
+import { OBJECT_STORAGE } from '../src/storage/storage.module.js';
 
 /**
  * Configuration from the environment (root .env locally, workflow env in CI), pointed at the
@@ -47,6 +49,8 @@ export interface TestAppOptions {
   /** Capture structured log lines (enables the JSON logger at debug level). */
   logSink?: (line: string) => void;
   passwordResetNotifier?: PasswordResetNotifier;
+  /** Replaces the S3 object storage (e.g. to simulate a storage outage). */
+  objectStorage?: ObjectStorage;
 }
 
 export async function createTestApp(
@@ -60,6 +64,9 @@ export async function createTestApp(
     builder = builder
       .overrideProvider(PASSWORD_RESET_NOTIFIER)
       .useValue(options.passwordResetNotifier);
+  }
+  if (options.objectStorage) {
+    builder = builder.overrideProvider(OBJECT_STORAGE).useValue(options.objectStorage);
   }
   const moduleRef = await builder.compile();
   const levels: LogLevel[] = ['fatal', 'error', 'warn', 'log', 'debug'];

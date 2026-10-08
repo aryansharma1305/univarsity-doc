@@ -42,6 +42,10 @@ export const PERMISSIONS = {
   studentAccountsRead: 'studentAccounts.read',
   /** Issue/revoke activation codes, lock/unlock/disable student accounts (Phase 6). */
   studentAccountsManage: 'studentAccounts.manage',
+  /** Student profile change requests: list, compare and view staged photos (Phase 7). */
+  studentProfileRequestsRead: 'studentProfileRequests.read',
+  /** Approve or reject student profile change requests (Phase 7). */
+  studentProfileRequestsReview: 'studentProfileRequests.review',
   auditRead: 'audit.read',
   usersManage: 'users.manage',
   settingsManage: 'settings.manage',
@@ -96,6 +100,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.importsStudentsRun,
     P.studentAccountsRead,
     P.studentAccountsManage,
+    P.studentProfileRequestsRead,
+    P.studentProfileRequestsReview,
     P.certificatesGenerate,
     P.auditRead,
   ],

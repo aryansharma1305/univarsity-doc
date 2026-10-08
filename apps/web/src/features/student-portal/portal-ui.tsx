@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@docversity/ui';
-import type { StudentNavHref } from './nav';
+import type { StudentNavHref, StudentSubpageHref } from './nav';
 
 /** Card used across the student portal: icon + title header, optional action link. */
 export function PortalCard({
@@ -15,7 +15,7 @@ export function PortalCard({
 }: {
   title: string;
   icon?: LucideIcon;
-  action?: { href: StudentNavHref; label: string };
+  action?: { href: StudentNavHref | StudentSubpageHref; label: string };
   children: ReactNode;
   className?: string;
   headingLevel?: 2 | 3;

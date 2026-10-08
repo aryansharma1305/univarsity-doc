@@ -3,6 +3,8 @@ import {
   authUserSchema,
   type StudentMe,
   studentMeSchema,
+  type StudentProfileRequest,
+  studentProfileRequestListSchema,
 } from '@docversity/validation';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
@@ -71,3 +73,27 @@ export const getStudentSessionState = cache(async (): Promise<StudentSessionStat
     return { status: 'unavailable' };
   }
 });
+
+/**
+ * The signed-in student's own profile change requests (server-rendered portal pages), or `null`
+ * when the API cannot answer. Ownership is enforced by the API from the student session.
+ */
+export const getStudentProfileRequests = cache(
+  async (): Promise<StudentProfileRequest[] | null> => {
+    const jar = await cookies();
+    if (!STUDENT_COOKIES.some((name) => jar.has(name))) return null;
+    const { API_INTERNAL_URL } = loadWebEnv();
+    try {
+      const response = await fetch(new URL('/api/v1/student/profile-requests', API_INTERNAL_URL), {
+        headers: { cookie: jar.toString(), accept: 'application/json' },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(3_000),
+      });
+      if (!response.ok) return null;
+      const parsed = studentProfileRequestListSchema.safeParse(await response.json());
+      return parsed.success ? parsed.data.data : null;
+    } catch {
+      return null;
+    }
+  },
+);
