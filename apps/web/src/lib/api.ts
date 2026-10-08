@@ -133,6 +133,77 @@ export async function apiRequest<TSchema extends z.ZodType>(
   return parsed.data;
 }
 
+/**
+ * Uploads a file (multipart/form-data) with the session's CSRF token. The browser sets the
+ * multipart boundary itself, so no Content-Type is sent explicitly.
+ */
+export async function apiUpload<TSchema extends z.ZodType>(
+  path: string,
+  form: FormData,
+  schema: TSchema,
+): Promise<z.infer<TSchema>> {
+  const send = async (refreshCsrf: boolean) =>
+    fetch(buildUrl(path), {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { Accept: 'application/json', 'X-CSRF-Token': await getCsrfToken(refreshCsrf) },
+      body: form,
+    });
+  let response: Response;
+  try {
+    response = await send(false);
+    if (response.status === 403) {
+      const error = await toApiError(response.clone());
+      if (error.code === 'CSRF_INVALID') response = await send(true);
+    }
+  } catch {
+    throw new ApiError(
+      0,
+      'NETWORK_ERROR',
+      'Could not reach the server. Check your connection and try again.',
+    );
+  }
+  if (!response.ok) throw await toApiError(response);
+  const parsed = schema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new ApiError(
+      response.status,
+      'UNEXPECTED_RESPONSE',
+      'The server returned an unexpected response.',
+    );
+  }
+  return parsed.data;
+}
+
+/**
+ * Downloads a private file (template, error report) through the authenticated API and hands it to
+ * the browser as a file. Nothing is cached; the object URL is revoked right away.
+ */
+export async function apiDownload(path: string, fallbackName: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), { credentials: 'same-origin', cache: 'no-store' });
+  } catch {
+    throw new ApiError(
+      0,
+      'NETWORK_ERROR',
+      'Could not reach the server. Check your connection and try again.',
+    );
+  }
+  if (!response.ok) throw await toApiError(response);
+  const disposition = response.headers.get('content-disposition') ?? '';
+  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** User-facing message for any thrown error. */
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;

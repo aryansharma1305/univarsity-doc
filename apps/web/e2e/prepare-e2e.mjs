@@ -25,6 +25,11 @@ const viewer = {
   password: randomBytes(24).toString('base64url'),
   displayName: 'E2E Test Viewer',
 };
+const registrar = {
+  email: `e2e.registrar.${randomUUID().slice(0, 8)}@example.test`,
+  password: randomBytes(24).toString('base64url'),
+  displayName: 'E2E Test Registrar',
+};
 let fixture;
 const db = createPrismaClient({ connectionString: databaseUrl });
 try {
@@ -39,6 +44,17 @@ try {
       displayName: viewer.displayName,
       passwordHash: await new PasswordService().hashPassword(viewer.password),
       roles: { create: { roleId: viewerRole.id } },
+    },
+  });
+
+  // A REGISTRAR (student imports, Phase 5).
+  const registrarRole = await db.role.findUniqueOrThrow({ where: { name: 'REGISTRAR' } });
+  await db.user.create({
+    data: {
+      email: registrar.email,
+      displayName: registrar.displayName,
+      passwordHash: await new PasswordService().hashPassword(registrar.password),
+      roles: { create: { roleId: registrarRole.id } },
     },
   });
 
@@ -76,6 +92,8 @@ try {
     studentId: student.id,
     studentName: student.fullName,
     registrationNumber: 'E2E-REG-0001',
+    programCode: program.code,
+    sessionCode: session.code,
   };
 } finally {
   await db.$disconnect();
@@ -85,7 +103,7 @@ const dir = fileURLToPath(new URL('../.e2e/', import.meta.url));
 mkdirSync(dir, { recursive: true });
 writeFileSync(
   `${dir}credentials.json`,
-  JSON.stringify({ ...credentials, admin: credentials, viewer, fixture }),
+  JSON.stringify({ ...credentials, admin: credentials, viewer, registrar, fixture }),
   { mode: 0o600 },
 );
 console.log('e2e database and admin fixture ready');

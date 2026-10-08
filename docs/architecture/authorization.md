@@ -17,7 +17,8 @@ test fixtures) ensure all six code-defined roles exist as records.
 `academicSessions.read` · `academicSessions.write` · `students.read` · `students.write` ·
 `registrations.read` · `registrations.write` · `results.read` · `results.write` · `results.publish` ·
 `certificates.read` · `certificates.generate` · `certificates.approve` · `certificates.issue` ·
-`certificates.revoke` · `templates.read` · `templates.write` · `imports.run` · `audit.read` ·
+`certificates.revoke` · `templates.read` · `templates.write` · `imports.read` ·
+`imports.students.run` · `imports.results.run` · `audit.read` ·
 `users.manage` · `settings.manage`
 
 ## Role mapping (initial proposal — confirm with the client)
@@ -36,7 +37,9 @@ test fixtures) ensure all six code-defined roles exist as records.
 | certificates.revoke   |      ✓      |           |            |                   |    ✓     |        |
 | templates.read        |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
 | templates.write       |      ✓      |           |            |         ✓         |          |        |
-| imports.run           |      ✓      |     ✓     |     ✓      |                   |          |        |
+| imports.read          |      ✓      |     ✓     |            |                   |          |        |
+| imports.students.run  |      ✓      |     ✓     |            |                   |          |        |
+| imports.results.run   |      ✓      |           |     ✓      |                   |          |        |
 | audit.read            |      ✓      |     ✓     |            |                   |          |        |
 | users.manage          |      ✓      |           |            |                   |          |        |
 | settings.manage       |      ✓      |           |            |                   |          |        |
@@ -48,6 +51,12 @@ Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
 - **VIEWER is read-only.**
 - **Only SUPER_ADMIN manages users and settings.**
 - **Academic masters and student records (Phase 4):** every role reads; only SUPER_ADMIN and REGISTRAR change them.
+- **Imports (Phase 5):** `imports.run` was split per import type. Only SUPER_ADMIN and REGISTRAR run student
+  imports and read import history (`imports.students.run`, `imports.read`); committing additionally
+  requires `students.write` + `registrations.write`, so an import can never write what its user could not
+  write by hand. EXAM_ADMIN does **not** get student imports; `imports.results.run` is reserved for the
+  Phase 8 result import and no endpoint uses it yet. Whether VIEWER may read import history is an open
+  client decision — it is not granted (import rows contain personal data).
 - A user's permissions are the union of their roles' permissions. There is no role hierarchy.
 
 ## Guards

@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import Link from 'next/link';
-import { PlusIcon } from 'lucide-react';
+import { FileSpreadsheetIcon, PlusIcon } from 'lucide-react';
 import { PERMISSIONS } from '@docversity/types';
 import { Button } from '@docversity/ui/components/button';
 import type { StudentListItem, StudentStatus } from '@docversity/validation';
@@ -47,6 +47,7 @@ export function StudentsView() {
   const canEdit = useCan(PERMISSIONS.studentsWrite);
   const canWriteRegistrations = useCan(PERMISSIONS.registrationsWrite);
   const canCreate = canEdit && canWriteRegistrations;
+  const canImport = useCan(PERMISSIONS.importsStudentsRun);
   const { values, page, update } = useListParams(['program', 'session', 'status'] as const);
   const query = useStudents({
     page,
@@ -114,13 +115,25 @@ export function StudentsView() {
         title="Students"
         description="Students and their registrations."
         actions={
-          canCreate && (
-            <Button asChild>
-              <Link href="/admin/students/new">
-                <PlusIcon aria-hidden="true" />
-                Add student
-              </Link>
-            </Button>
+          (canCreate || canImport) && (
+            <>
+              {canImport && (
+                <Button asChild variant="outline">
+                  <Link href="/admin/imports/new">
+                    <FileSpreadsheetIcon aria-hidden="true" />
+                    Import students
+                  </Link>
+                </Button>
+              )}
+              {canCreate && (
+                <Button asChild>
+                  <Link href="/admin/students/new">
+                    <PlusIcon aria-hidden="true" />
+                    Add student
+                  </Link>
+                </Button>
+              )}
+            </>
           )
         }
       />

@@ -1,4 +1,5 @@
 import type { Prisma } from '@docversity/database';
+import { checkRegistrationRelations } from '@docversity/validation';
 import { invalidRelation } from '../common/conflicts.js';
 
 export interface RelationInput {
@@ -14,9 +15,16 @@ export interface ResolvedRelations {
   departmentId: string | null;
 }
 
+const FIELD_PATHS = {
+  program: 'programId',
+  academicSession: 'academicSessionId',
+  department: 'departmentId',
+} as const;
+
 /**
  * Validates and resolves a registration's program / session / department server-side — IDs from
- * the client are never trusted as-is:
+ * the client are never trusted as-is. The rules themselves (`checkRegistrationRelations`) are shared
+ * with student imports, so manual entry and Excel imports enforce exactly the same invariants:
  * - the program must exist and be ACTIVE (when it is being assigned);
  * - the session must exist and not be ARCHIVED (when it is being assigned);
  * - if the program belongs to a department, the registration's department must be that department
@@ -29,44 +37,40 @@ export async function resolveRegistrationRelations(
 ): Promise<ResolvedRelations> {
   const program = await tx.program.findUnique({
     where: { id: input.programId },
-    include: { department: true },
+    select: {
+      id: true,
+      code: true,
+      status: true,
+      department: { select: { id: true, code: true, status: true } },
+    },
   });
   if (!program) throw invalidRelation('programId', 'Choose an existing program.');
   if (assigning.program && program.status !== 'ACTIVE') {
     throw invalidRelation('programId', 'This program is inactive. Choose an active program.');
   }
 
-  const session = await tx.academicSession.findUnique({ where: { id: input.academicSessionId } });
+  const session = await tx.academicSession.findUnique({
+    where: { id: input.academicSessionId },
+    select: { id: true, code: true, status: true },
+  });
   if (!session) throw invalidRelation('academicSessionId', 'Choose an existing academic session.');
-  if (assigning.session && session.status === 'ARCHIVED') {
-    throw invalidRelation(
-      'academicSessionId',
-      'This academic session is archived. Choose another session.',
-    );
-  }
 
-  let departmentId: string | null;
-  if (program.department) {
-    if (input.departmentId && input.departmentId !== program.department.id) {
-      throw invalidRelation(
-        'departmentId',
-        `Program ${program.code} belongs to department ${program.department.code}. Choose that department or leave it empty.`,
-      );
-    }
-    departmentId = program.department.id;
-  } else if (input.departmentId) {
-    const department = await tx.department.findUnique({ where: { id: input.departmentId } });
-    if (!department) throw invalidRelation('departmentId', 'Choose an existing department.');
-    if (assigning.department && department.status !== 'ACTIVE') {
-      throw invalidRelation(
-        'departmentId',
-        'This department is inactive. Choose an active department.',
-      );
-    }
-    departmentId = department.id;
-  } else {
-    departmentId = null;
-  }
+  const department =
+    !program.department && input.departmentId
+      ? await tx.department.findUnique({
+          where: { id: input.departmentId },
+          select: { id: true, code: true, status: true },
+        })
+      : null;
 
-  return { programId: program.id, academicSessionId: session.id, departmentId };
+  const result = checkRegistrationRelations(
+    { program, session, departmentId: input.departmentId, department },
+    assigning,
+  );
+  if (!result.ok) throw invalidRelation(FIELD_PATHS[result.issue.field], result.issue.message);
+  return {
+    programId: result.programId,
+    academicSessionId: result.academicSessionId,
+    departmentId: result.departmentId,
+  };
 }

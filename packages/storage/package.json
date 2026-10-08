@@ -1,0 +1,35 @@
+{
+  "name": "@docversity/storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Provider-neutral private object storage port and its S3-compatible implementation (MinIO, R2, S3).",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1146.0",
+    "@docversity/validation": "workspace:*"
+  },
+  "devDependencies": {
+    "@docversity/config": "workspace:*",
+    "@types/node": "22.20.5",
+    "eslint": "9.39.5",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}

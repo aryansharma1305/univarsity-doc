@@ -1,10 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { ObjectStorage } from '@docversity/storage';
 import type { HealthResponse, HealthServiceName, ServiceStatus } from '@docversity/validation';
 import { withTimeout } from '../common/with-timeout.js';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { RedisService } from '../redis/redis.service.js';
-import { OBJECT_STORAGE, type ObjectStorage } from '../storage/object-storage.js';
+import { OBJECT_STORAGE } from '../storage/storage.module.js';
 
 type DependencyName = Exclude<HealthServiceName, 'api'>;
 

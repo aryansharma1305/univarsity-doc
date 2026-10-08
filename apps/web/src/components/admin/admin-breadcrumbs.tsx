@@ -21,6 +21,7 @@ export function AdminBreadcrumbs() {
   const crumbs = segments.map((segment, index) => ({
     href: `/${segments.slice(0, index + 1).join('/')}`,
     label:
+      SEGMENT_LABELS[`${segments[index - 1] ?? ''}/${segment}`] ??
       SEGMENT_LABELS[segment] ??
       (index === segments.length - 1 && customLabel ? customLabel : 'Details'),
   }));

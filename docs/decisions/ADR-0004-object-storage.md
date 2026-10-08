@@ -12,8 +12,9 @@ local development must not depend on a cloud account.
 
 ## Decision
 
-- All code talks to storage through an **`ObjectStorage` port** (`apps/api/src/storage/object-storage.ts`);
-  the only implementation is `S3ObjectStorage` built on the AWS SDK v3 S3 client.
+- All code talks to storage through an **`ObjectStorage` port** (`packages/storage`, shared by the API and
+  the worker since Phase 5 — see [ADR-0009](./ADR-0009-import-engine.md)); the only implementation is
+  `S3ObjectStorage` built on the AWS SDK v3 S3 client.
 - Providers differ **only in configuration**:
 
   | Variable                                      | MinIO (local)            | Cloudflare R2                                | AWS S3              |
@@ -44,5 +45,7 @@ reproducibility. Chainguard's free tier publishes only the `latest` tag, so upda
 
 - Switching MinIO → R2/S3 is a configuration change; no business service changes.
 - Provider-specific features (R2 custom domains, S3 Object Lock) are not used unless an ADR adopts them.
-- Object operations (put/get/presign/delete) are added to the port when the first feature needs them;
-  Phase 1 exposes only `ping()`.
+- Object operations are added to the port when a feature needs them. Phase 1 exposed only `ping()`;
+  Phase 5 added private `putObject` / `getObject` (with a size cap) / `deleteObject` and generated
+  object keys (`objectKeys`). Downloads are streamed by the API after a permission check rather than
+  through presigned URLs, so no object URL ever leaves the server.

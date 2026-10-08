@@ -17,3 +17,18 @@ the client answers.
 | 10  | **Registration number normalisation** (is case significant? are internal spaces/slashes significant?)                                                               | Uniqueness uses `upper(registration_number)` only (trimmed, case-insensitive)                                                                                                                    | Stricter normalisation would be a reviewed migration of `registration_number_normalized`                       |
 | 11  | **How many certificates of one type a registration may hold** (e.g. duplicate transcript copies)                                                                    | Not constrained; reissues use supersession                                                                                                                                                       | Possibly a partial unique "one ISSUED provisional per registration"                                            |
 | 12  | **Curriculum version per student** (which regulation a registration follows)                                                                                        | Results reference exact `program_subjects` rows (which carry `curriculum_version`)                                                                                                               | Possibly `student_registrations.curriculum_version`                                                            |
+
+## Added 2026-10-08 (student imports, portal, historic certificates)
+
+| #   | Decision needed                                                                                                | Why it matters                           |
+| --- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| 11  | Meaning of "Inactive" in the registration workbook (SUSPENDED? REVOKED? a new status?)                         | Rows are rejected until it is translated |
+| 12  | Academic session(s) for the "Registration 2025" students (one intake or three by admission date?)              | The workbook has no session column       |
+| 13  | Keep **Registration Date**, **Nationality**, **Course Type**? (no fields today)                                | New columns would need a migration       |
+| 14  | Are the two 8-digit registration numbers correct or missing a leading zero?                                    | Identity of those students               |
+| 15  | Should national ID numbers ever be stored (e.g. hashed for activation/duplicate checks)? Today: never imported | Privacy law, activation design           |
+| 16  | Activation-code delivery (printed letter, SMS, email), expiry, re-issue policy                                 | Phase 6                                  |
+| 17  | Which personal fields students may request to change, and who approves                                         | Phase 7                                  |
+| 18  | Accepted formats/size for historic certificate scans; who may mark them reviewed; is maker–checker required    | Phase 10                                 |
+| 19  | Retention for source workbooks, error reports and historic scans                                               | Storage cleanup job                      |
+| 20  | Whether VIEWER may read import history                                                                         | Imports contain personal data            |

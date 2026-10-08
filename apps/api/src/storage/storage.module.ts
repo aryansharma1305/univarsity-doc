@@ -1,7 +1,9 @@
 import { Global, Module } from '@nestjs/common';
+import { S3ObjectStorage } from '@docversity/storage';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
-import { OBJECT_STORAGE } from './object-storage.js';
-import { S3ObjectStorage } from './s3-object-storage.js';
+
+/** Injection token for the shared ObjectStorage port (`@docversity/storage`). */
+export const OBJECT_STORAGE = Symbol('OBJECT_STORAGE');
 
 @Global()
 @Module({
@@ -10,7 +12,7 @@ import { S3ObjectStorage } from './s3-object-storage.js';
       provide: OBJECT_STORAGE,
       inject: [API_CONFIG],
       useFactory: (config: ApiConfig) =>
-        new S3ObjectStorage({ config, timeoutMs: config.HEALTH_CHECK_TIMEOUT_MS }),
+        new S3ObjectStorage({ config, connectTimeoutMs: config.HEALTH_CHECK_TIMEOUT_MS }),
     },
   ],
   exports: [OBJECT_STORAGE],

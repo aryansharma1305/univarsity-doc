@@ -12,7 +12,14 @@ export interface Account {
 export interface E2EFixtures {
   admin: Account;
   viewer: Account;
-  fixture: { studentId: string; studentName: string; registrationNumber: string };
+  registrar: Account;
+  fixture: {
+    studentId: string;
+    studentName: string;
+    registrationNumber: string;
+    programCode: string;
+    sessionCode: string;
+  };
 }
 
 /** Written by prepare-e2e.mjs: random credentials + fixture IDs for the disposable e2e database. */

@@ -2,10 +2,12 @@ import {
   databaseEnvSchema,
   envBoolean,
   httpUrl,
+  importLimitsEnvSchema,
   logLevelSchema,
   nodeEnvSchema,
   parseEnv,
   port,
+  queueEnvSchema,
   redisEnvSchema,
   storageEnvSchema,
 } from '@docversity/validation';
@@ -98,6 +100,8 @@ export const apiEnvSchema = z
     ...databaseEnvSchema.shape,
     ...redisEnvSchema.shape,
     ...storageEnvSchema.shape,
+    ...queueEnvSchema.shape,
+    ...importLimitsEnvSchema.shape,
   })
   .superRefine((env, ctx) => {
     if (env.SESSION_ABSOLUTE_TIMEOUT_SECONDS < env.SESSION_IDLE_TIMEOUT_SECONDS) {

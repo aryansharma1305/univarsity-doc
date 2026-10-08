@@ -35,6 +35,7 @@
     "@axe-core/playwright": "4.13.0",
     "@docversity/config": "workspace:*",
     "@docversity/database": "workspace:*",
+    "@docversity/imports": "workspace:*",
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@testing-library/jest-dom": "7.0.1",

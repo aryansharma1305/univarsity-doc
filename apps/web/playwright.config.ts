@@ -6,13 +6,16 @@ import { defineConfig, devices } from '@playwright/test';
  * Browser tests run against PRODUCTION builds of the web app and API on dedicated ports (3100/4100),
  * so they never collide with `pnpm dev` (3000/4000), and against a disposable `<dev db>_e2e`
  * database created before the API starts. PostgreSQL, Redis and MinIO must be running
- * (`docker compose up -d --wait`). The root `pnpm test:e2e` builds everything first.
+ * (`docker compose up -d --wait`). The root `pnpm test:e2e` builds everything first. The worker
+ * runs too (imports), on its own BullMQ prefix.
  */
 const rootEnv = fileURLToPath(new URL('../../.env', import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
 const WEB_PORT = 3100;
 const API_PORT = 4100;
+/** BullMQ prefix shared by the e2e API (producer) and e2e worker (consumer) — never the dev one. */
+const QUEUE_PREFIX = 'dve2eq';
 const isCI = Boolean(process.env.CI);
 
 const baseDatabaseUrl = process.env.DATABASE_URL ?? '';
@@ -48,10 +51,19 @@ export default defineConfig({
         CORS_ORIGINS: `http://127.0.0.1:${WEB_PORT}`,
         SWAGGER_ENABLED: 'false',
         REDIS_KEY_PREFIX: 'dve2e:',
+        QUEUE_PREFIX,
         LOG_LEVEL: 'warn',
       },
       reuseExistingServer: false,
       timeout: 120_000,
+    },
+    {
+      // The background worker (imports). Started after the API, whose command prepares the database.
+      command: 'node ../worker/dist/main.js',
+      wait: { stdout: /queue "imports" ready/ },
+      env: { DATABASE_URL: e2eDatabaseUrl, QUEUE_PREFIX, LOG_LEVEL: 'warn' },
+      reuseExistingServer: false,
+      timeout: 60_000,
     },
     {
       command: `pnpm exec next start --port ${WEB_PORT} --hostname 127.0.0.1`,

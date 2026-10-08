@@ -3,6 +3,7 @@ import { PERMISSIONS } from '@docversity/types';
 import {
   BuildingIcon,
   CalendarRangeIcon,
+  FileSpreadsheetIcon,
   GraduationCapIcon,
   LayoutDashboardIcon,
   type LucideIcon,
@@ -13,6 +14,7 @@ export interface AdminNavItem {
   href:
     | '/admin'
     | '/admin/students'
+    | '/admin/imports'
     | '/admin/programs'
     | '/admin/departments'
     | '/admin/academic-sessions';
@@ -23,8 +25,8 @@ export interface AdminNavItem {
 }
 
 /**
- * Admin navigation. Only features that exist are listed — results, certificates, imports and
- * templates are omitted until they are built (no fake navigation).
+ * Admin navigation. Only features that exist are listed — results, certificates and templates are
+ * omitted until they are built (no fake navigation).
  */
 export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboardIcon },
@@ -33,6 +35,12 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     label: 'Students',
     icon: UsersIcon,
     permission: PERMISSIONS.studentsRead,
+  },
+  {
+    href: '/admin/imports',
+    label: 'Imports',
+    icon: FileSpreadsheetIcon,
+    permission: PERMISSIONS.importsRead,
   },
   {
     href: '/admin/programs',
@@ -60,7 +68,10 @@ export const SEGMENT_LABELS: Record<string, string> = {
   programs: 'Programs',
   departments: 'Departments',
   'academic-sessions': 'Academic Sessions',
-  new: 'New student',
+  imports: 'Imports',
+  // Context-specific labels: "<parent>/<segment>".
+  'students/new': 'New student',
+  'imports/new': 'New import',
 };
 
 export function isNavActive(pathname: string, href: string): boolean {

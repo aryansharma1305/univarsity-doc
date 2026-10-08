@@ -15,6 +15,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@docversity/database": "workspace:*",
+    "@docversity/imports": "workspace:*",
+    "@docversity/storage": "workspace:*",
     "@docversity/types": "workspace:*",
     "@docversity/validation": "workspace:*",
     "bullmq": "6.3.11",

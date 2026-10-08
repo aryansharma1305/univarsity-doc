@@ -86,9 +86,11 @@ Stop infrastructure with `docker compose down` (keeps data) or `docker compose d
 apps/
   web/         Next.js app (public portal + admin, later)
   api/         NestJS REST API
-  worker/      BullMQ worker (imports, PDF rendering, … later)
+  worker/      BullMQ worker (student imports; PDF rendering later)
 packages/
   database/    Prisma schema, migrations, client factory
+  imports/     Spreadsheet import engine (ExcelJS): parse, map, validate, commit, templates, reports
+  storage/     Private object storage port + S3-compatible implementation (MinIO / R2 / S3)
   validation/  Zod schemas (env, API contracts, job payloads)
   types/       Shared TS constants/types (queue names)
   ui/          Design tokens + UI primitives (empty until Phase 2)

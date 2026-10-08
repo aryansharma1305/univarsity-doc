@@ -8,8 +8,10 @@ packages/database/
 ├── prisma/
 │   ├── schema.prisma                         domain schema (models, enums, keys, indexes)
 │   └── migrations/
-│       └── 20261007191730_core_academic_schema/
-│           └── migration.sql                 generated DDL + hand-written CHECKs and triggers
+│       ├── 20261007191730_core_academic_schema/
+│       │   └── migration.sql                 generated DDL + hand-written CHECKs and triggers (frozen)
+│       └── 20261008120000_student_imports/
+│           └── migration.sql                 Phase 5: import job/row columns + CHECKs
 ├── prisma.config.ts                          schema/migrations paths, DATABASE_URL, seed command
 ├── src/
 │   ├── client.ts                             createPrismaClient(), checkDatabaseConnection()
@@ -145,6 +147,17 @@ Support tables without relations: `number_sequences`, `legacy_mappings`.
 | Logs         | `audit_logs`                   | Append-only audit trail                                                                     |
 |              | `verification_logs`            | Public verification attempts (hashes only)                                                  |
 | Legacy       | `legacy_mappings`              | Legacy identifier → new record (WordPress migration, old QR URLs)                           |
+
+### Phase 5 migration (`20261008120000_student_imports`)
+
+The frozen Phase 2 migration is untouched. The new migration adds what the import worker needs to run the
+persisted wizard: on `import_jobs` — progress (0–100), `active_run_id` (worker-run ownership), discovered
+`sheets`, `worksheet_name`, file size and SHA-256, create/update/unchanged and created/updated counts,
+`apply_updates`, a JSON `failure` (`{stage, code, message, retryable}`), the error-report key, the
+committing user and timestamps; on `import_rows` — `action` (new enum `ImportRowAction`: CREATE, UPDATE,
+SKIP) and `registration_id` (`ON DELETE SET NULL`). New CHECKs: non-negative counts, progress range,
+SHA-256 format, `status = 'FAILED'` ⇔ failure present, `status = 'ERROR'` ⇔ no action, IMPORTED rows
+reference a registration. See [imports architecture](../architecture/imports.md).
 
 ## Important constraints
 

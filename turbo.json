@@ -61,7 +61,13 @@
       "cache": false
     },
     "test:e2e": {
-      "dependsOn": ["build", "@docversity/api#build", "@docversity/database#build"],
+      "dependsOn": [
+        "build",
+        "@docversity/api#build",
+        "@docversity/worker#build",
+        "@docversity/database#build",
+        "@docversity/imports#build"
+      ],
       "cache": false
     },
     "dev": {

@@ -32,7 +32,12 @@ export const PERMISSIONS = {
   certificatesRevoke: 'certificates.revoke',
   templatesRead: 'templates.read',
   templatesWrite: 'templates.write',
-  importsRun: 'imports.run',
+  /** Import history, rows and error reports. */
+  importsRead: 'imports.read',
+  /** Run student / registration imports (Phase 5). */
+  importsStudentsRun: 'imports.students.run',
+  /** Run result imports — reserved for Phase 8 (no endpoint uses it yet). */
+  importsResultsRun: 'imports.results.run',
   auditRead: 'audit.read',
   usersManage: 'users.manage',
   settingsManage: 'settings.manage',
@@ -83,12 +88,16 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
   REGISTRAR: [
     ...READ_ONLY,
     ...ACADEMIC_RECORDS_WRITE,
-    P.importsRun,
+    P.importsRead,
+    P.importsStudentsRun,
     P.certificatesGenerate,
     P.auditRead,
   ],
-  /** Prepares results and runs result imports; cannot publish (maker–checker). */
-  EXAM_ADMIN: [...READ_ONLY, P.resultsWrite, P.importsRun],
+  /**
+   * Prepares results and will run result imports (Phase 8); cannot publish (maker–checker).
+   * Student imports are deliberately NOT granted.
+   */
+  EXAM_ADMIN: [...READ_ONLY, P.resultsWrite, P.importsResultsRun],
   /** Prepares certificates and maintains templates; cannot approve/issue (maker–checker). */
   CERTIFICATE_ADMIN: [...READ_ONLY, P.certificatesGenerate, P.templatesWrite],
   /** The "checker": publishes results and approves/issues/revokes certificates; edits nothing. */

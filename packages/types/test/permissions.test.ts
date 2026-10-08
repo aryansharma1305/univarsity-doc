@@ -36,7 +36,8 @@ describe('role → permission mapping', () => {
       PERMISSIONS.resultsWrite,
       PERMISSIONS.certificatesGenerate,
       PERMISSIONS.studentsWrite,
-      PERMISSIONS.importsRun,
+      PERMISSIONS.importsStudentsRun,
+      PERMISSIONS.importsResultsRun,
       PERMISSIONS.templatesWrite,
       PERMISSIONS.usersManage,
     ]) {
@@ -107,5 +108,21 @@ describe('academic records (Phase 4)', () => {
       expect(canWrite, role).toBe(expected);
       expect(canWriteAny, role).toBe(expected);
     }
+  });
+});
+
+describe('imports (Phase 5)', () => {
+  it('lets only SUPER_ADMIN and REGISTRAR run student imports and read import history', () => {
+    for (const [role, permissions] of Object.entries(ROLE_PERMISSIONS)) {
+      const allowed = role === ROLE_NAMES.superAdmin || role === ROLE_NAMES.registrar;
+      expect(permissions.includes(PERMISSIONS.importsStudentsRun), role).toBe(allowed);
+      expect(permissions.includes(PERMISSIONS.importsRead), role).toBe(allowed);
+    }
+  });
+
+  it('does not give EXAM_ADMIN student imports (result imports only, Phase 8)', () => {
+    const examAdmin = permissionsForRoles([ROLE_NAMES.examAdmin]);
+    expect(examAdmin.has(PERMISSIONS.importsStudentsRun)).toBe(false);
+    expect(examAdmin.has(PERMISSIONS.importsResultsRun)).toBe(true);
   });
 });

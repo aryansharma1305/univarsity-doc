@@ -11,6 +11,8 @@ it is never written or maintained by hand.
 Swagger is served only when `SWAGGER_ENABLED=true` (default `false`; `.env.example` enables it for local
 development). Keep it disabled in production unless access is restricted.
 
+Feature references: [academic masters](./academic-masters.md) · [imports](./imports.md).
+
 ## How the OpenAPI schema is produced (single source of truth)
 
 Request/response contracts are **Zod schemas in `@docversity/validation`**. NestJS Swagger 12 reads Zod's

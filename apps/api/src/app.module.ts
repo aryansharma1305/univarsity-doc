@@ -11,6 +11,8 @@ import type { ApiConfig } from './config/api-config.js';
 import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
+import { ImportsModule } from './imports/imports.module.js';
+import { QueueModule } from './queue/queue.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { StorageModule } from './storage/storage.module.js';
 
@@ -25,9 +27,11 @@ export class AppModule {
         DatabaseModule,
         RedisModule,
         StorageModule,
+        QueueModule,
         AuditModule,
         AuthModule,
         AcademicModule,
+        ImportsModule,
         HealthModule,
       ],
       providers: [

@@ -143,6 +143,13 @@ enum ImportRowStatus {
   SKIPPED
 }
 
+/// What committing an importable row does (Phase 5).
+enum ImportRowAction {
+  CREATE
+  UPDATE
+  SKIP
+}
+
 enum VerificationType {
   REGISTRATION
   RESULT
@@ -273,6 +280,7 @@ model StudentRegistration {
   results          Result[]
   certificates     Certificate[]
   verificationLogs VerificationLog[]
+  importRows       ImportRow[]
 
   /// Target of the certificates (registration, program) composite FK: a certificate's program
   /// must be the registration's program.
@@ -610,53 +618,94 @@ model Certificate {
 // Imports
 // ============================================================================================
 
-/// One spreadsheet import (students or results). Parsing/validation/processing come later.
+/// One spreadsheet import (students or results). The worker parses, validates and commits it
+/// (Phase 5: students); every step is persisted so the wizard survives reloads and restarts.
 model ImportJob {
-  id               String       @id @default(uuid(7)) @db.Uuid
-  type             ImportType
-  originalFilename String       @map("original_filename") @db.VarChar(255)
-  storageKey       String?      @map("storage_key") @db.VarChar(512)
-  status           ImportStatus @default(UPLOADED)
-  totalRows        Int          @default(0) @map("total_rows")
-  validRows        Int          @default(0) @map("valid_rows")
-  warningRows      Int          @default(0) @map("warning_rows")
-  errorRows        Int          @default(0) @map("error_rows")
-  importedRows     Int          @default(0) @map("imported_rows")
-  skippedRows      Int          @default(0) @map("skipped_rows")
-  /// Confirmed column → field mapping.
-  mapping          Json?
-  createdByUserId  String?      @map("created_by_user_id") @db.Uuid
-  startedAt        DateTime?    @map("started_at") @db.Timestamptz(3)
-  completedAt      DateTime?    @map("completed_at") @db.Timestamptz(3)
-  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                    String       @id @default(uuid(7)) @db.Uuid
+  type                  ImportType
+  /// Original filename — display metadata only, never used as a storage path.
+  originalFilename      String       @map("original_filename") @db.VarChar(255)
+  /// Generated private object key of the uploaded workbook.
+  storageKey            String?      @map("storage_key") @db.VarChar(512)
+  fileSizeBytes         Int?         @map("file_size_bytes")
+  /// Lower-case hex SHA-256 of the uploaded bytes (duplicate-upload hint, integrity evidence).
+  fileSha256            String?      @map("file_sha256") @db.Char(64)
+  status                ImportStatus @default(UPLOADED)
+  /// Persisted progress (0–100) of the running worker step; the UI never fakes progress.
+  progress              Int          @default(0) @db.SmallInt
+  /// Identifies the worker run allowed to write; a stale or duplicate job with another id is ignored.
+  activeRunId           String?      @map("active_run_id") @db.Uuid
+  /// Worksheets found when the workbook was read: name, row/column counts, headers, suggestions.
+  sheets                Json?
+  /// The worksheet chosen for validation.
+  worksheetName         String?      @map("worksheet_name") @db.VarChar(31)
+  totalRows             Int          @default(0) @map("total_rows")
+  validRows             Int          @default(0) @map("valid_rows")
+  warningRows           Int          @default(0) @map("warning_rows")
+  errorRows             Int          @default(0) @map("error_rows")
+  /// Validation classification of importable rows.
+  createRows            Int          @default(0) @map("create_rows")
+  updateRows            Int          @default(0) @map("update_rows")
+  unchangedRows         Int          @default(0) @map("unchanged_rows")
+  importedRows          Int          @default(0) @map("imported_rows")
+  skippedRows           Int          @default(0) @map("skipped_rows")
+  /// Commit results.
+  createdRecords        Int          @default(0) @map("created_records")
+  updatedRecords        Int          @default(0) @map("updated_records")
+  /// Confirmed column → field mapping (plus parsing options such as the text date format).
+  mapping               Json?
+  /// Whether the commit was explicitly approved to apply updates to existing records.
+  applyUpdates          Boolean      @default(false) @map("apply_updates")
+  /// Safe failure summary { stage, code, message, retryable } — never a stack trace.
+  failure               Json?
+  errorReportStorageKey String?      @map("error_report_storage_key") @db.VarChar(512)
+  errorReportCreatedAt  DateTime?    @map("error_report_created_at") @db.Timestamptz(3)
+  createdByUserId       String?      @map("created_by_user_id") @db.Uuid
+  committedByUserId     String?      @map("committed_by_user_id") @db.Uuid
+  startedAt             DateTime?    @map("started_at") @db.Timestamptz(3)
+  validatedAt           DateTime?    @map("validated_at") @db.Timestamptz(3)
+  completedAt           DateTime?    @map("completed_at") @db.Timestamptz(3)
+  cancelledAt           DateTime?    @map("cancelled_at") @db.Timestamptz(3)
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  createdBy User?       @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
-  rows      ImportRow[]
+  createdBy   User?       @relation("ImportJobCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  committedBy User?       @relation("ImportJobCommittedBy", fields: [committedByUserId], references: [id], onDelete: Restrict)
+  rows        ImportRow[]
 
   @@index([type, status, createdAt(sort: Desc)])
   @@index([createdByUserId])
+  @@index([committedByUserId])
+  @@index([createdAt(sort: Desc)])
   @@map("import_jobs")
 }
 
 /// One spreadsheet row of an import job (staging data — rows belong to their job).
 model ImportRow {
-  id             String          @id @default(uuid(7)) @db.Uuid
-  importJobId    String          @map("import_job_id") @db.Uuid
+  id             String           @id @default(uuid(7)) @db.Uuid
+  importJobId    String           @map("import_job_id") @db.Uuid
   /// 1-based spreadsheet row number as the user sees it.
-  rowNumber      Int             @map("row_number")
+  rowNumber      Int              @map("row_number")
   status         ImportRowStatus
-  rawData        Json            @map("raw_data")
-  normalizedData Json?           @map("normalized_data")
+  /// What committing the row does. NULL exactly when the row has errors (CHECK).
+  action         ImportRowAction?
+  /// The existing registration (UPDATE/SKIP) or the one created by the commit (CREATE).
+  registrationId String?          @map("registration_id") @db.Uuid
+  /// The source cells exactly as read (never modified).
+  rawData        Json             @map("raw_data")
+  normalizedData Json?            @map("normalized_data")
   errors         Json?
   warnings       Json?
-  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  importJob ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+  importJob    ImportJob            @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+  registration StudentRegistration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
 
   @@unique([importJobId, rowNumber])
   @@index([importJobId, status])
+  @@index([importJobId, action])
+  @@index([registrationId])
   @@map("import_rows")
 }
 
@@ -676,7 +725,8 @@ model User {
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   roles                 UserRole[]
-  importJobs            ImportJob[]
+  importJobs            ImportJob[]   @relation("ImportJobCreatedBy")
+  importJobsCommitted   ImportJob[]   @relation("ImportJobCommittedBy")
   auditLogs             AuditLog[]
   certificatesGenerated Certificate[] @relation("CertificateGeneratedBy")
   certificatesApproved  Certificate[] @relation("CertificateApprovedBy")

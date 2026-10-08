@@ -26,8 +26,8 @@ deadline.unref();
 loadRootEnv();
 const env = loadWorkerEnv();
 const connection = bullmqConnection(env.REDIS_URL);
-const queue = new Queue(QUEUE_NAMES.system, { connection });
-const events = new QueueEvents(QUEUE_NAMES.system, { connection });
+const queue = new Queue(QUEUE_NAMES.system, { connection, prefix: env.QUEUE_PREFIX });
+const events = new QueueEvents(QUEUE_NAMES.system, { connection, prefix: env.QUEUE_PREFIX });
 
 try {
   await events.waitUntilReady();

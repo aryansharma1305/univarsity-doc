@@ -35,6 +35,7 @@ export function realConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
     ...loadApiConfig(),
     DATABASE_URL: inject('apiTestDatabaseUrl'),
     REDIS_KEY_PREFIX: `dvtest:${randomUUID().slice(0, 8)}:`,
+    QUEUE_PREFIX: `dvtq-${randomUUID().slice(0, 8)}`,
     SWAGGER_ENABLED: true,
     HEALTH_CHECK_TIMEOUT_MS: 2_000,
     ...overrides,
@@ -184,6 +185,8 @@ export async function staff(app: INestApplication, roles: RoleName[]) {
   const csrf = await signIn(agent, user);
   return {
     user,
+    agent,
+    csrf,
     get: (path: string) => agent.get(`/api/v1/${path}`),
     post: (path: string, body?: object) =>
       agent.post(`/api/v1/${path}`).set('X-CSRF-Token', csrf).send(body),

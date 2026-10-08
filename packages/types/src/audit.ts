@@ -23,6 +23,15 @@ export const AUDIT_ACTIONS = {
   registrationCreated: 'REGISTRATION_CREATED',
   registrationUpdated: 'REGISTRATION_UPDATED',
   registrationStatusChanged: 'REGISTRATION_STATUS_CHANGED',
+  studentImportCreated: 'STUDENT_IMPORT_CREATED',
+  studentImportUploaded: 'STUDENT_IMPORT_UPLOADED',
+  studentImportMappingSaved: 'STUDENT_IMPORT_MAPPING_SAVED',
+  studentImportValidated: 'STUDENT_IMPORT_VALIDATED',
+  studentImportCommitRequested: 'STUDENT_IMPORT_COMMIT_REQUESTED',
+  studentImportCommitted: 'STUDENT_IMPORT_COMMITTED',
+  studentImportCancelled: 'STUDENT_IMPORT_CANCELLED',
+  studentImportFailed: 'STUDENT_IMPORT_FAILED',
+  studentImportRetried: 'STUDENT_IMPORT_RETRIED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -43,4 +52,18 @@ export const ACADEMIC_AUDIT_ACTIONS: readonly AuditAction[] = [
   'REGISTRATION_CREATED',
   'REGISTRATION_UPDATED',
   'REGISTRATION_STATUS_CHANGED',
+  'STUDENT_IMPORT_COMMITTED',
+];
+
+/** Audit actions about import jobs (metadata holds the import ID and counts — never row content). */
+export const IMPORT_AUDIT_ACTIONS: readonly AuditAction[] = [
+  'STUDENT_IMPORT_CREATED',
+  'STUDENT_IMPORT_UPLOADED',
+  'STUDENT_IMPORT_MAPPING_SAVED',
+  'STUDENT_IMPORT_VALIDATED',
+  'STUDENT_IMPORT_COMMIT_REQUESTED',
+  'STUDENT_IMPORT_COMMITTED',
+  'STUDENT_IMPORT_CANCELLED',
+  'STUDENT_IMPORT_FAILED',
+  'STUDENT_IMPORT_RETRIED',
 ];

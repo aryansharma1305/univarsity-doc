@@ -39,6 +39,19 @@ function fields(metadata: Record<string, unknown>): string {
   return labels.length > 0 ? ` (${labels.join(', ')})` : '';
 }
 
+function viaImport(metadata: Record<string, unknown>): string {
+  return metadata.source === 'import' ? ' by import' : '';
+}
+
+function count(metadata: Record<string, unknown>, key: string): number {
+  const value = metadata[key];
+  return typeof value === 'number' ? value : 0;
+}
+
+function plural(value: number, word: string): string {
+  return `${value.toLocaleString('en-US')} ${word}${value === 1 ? '' : 's'}`;
+}
+
 function status(metadata: Record<string, unknown>): string {
   const from = str(metadata.from)?.toLowerCase();
   const to = str(metadata.to)?.toLowerCase();
@@ -66,11 +79,12 @@ export function summarizeAudit(row: AuditRow): ActivityItem {
     ACADEMIC_SESSION_CREATED: `Academic session ${code ?? ''} created`,
     ACADEMIC_SESSION_UPDATED: `Academic session ${code ?? ''} updated${fields(meta)}`,
     ACADEMIC_SESSION_STATUS_CHANGED: `Academic session ${code ?? ''} status changed${status(meta)}`,
-    STUDENT_CREATED: 'Student record created',
-    STUDENT_UPDATED: `Personal details updated${fields(meta)}`,
-    REGISTRATION_CREATED: `Registration ${registration ?? ''} created`,
-    REGISTRATION_UPDATED: `Registration ${registration ?? ''} updated${fields(meta)}`,
+    STUDENT_CREATED: `Student record created${viaImport(meta)}`,
+    STUDENT_UPDATED: `Personal details updated${viaImport(meta)}${fields(meta)}`,
+    REGISTRATION_CREATED: `Registration ${registration ?? ''} created${viaImport(meta)}`,
+    REGISTRATION_UPDATED: `Registration ${registration ?? ''} updated${viaImport(meta)}${fields(meta)}`,
     REGISTRATION_STATUS_CHANGED: `Registration ${registration ?? ''} status changed${status(meta)}`,
+    STUDENT_IMPORT_COMMITTED: `Student import completed: ${plural(count(meta, 'createdRecords'), 'record')} created, ${plural(count(meta, 'updatedRecords'), 'record')} updated`,
   };
   return {
     id: row.id,

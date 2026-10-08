@@ -4,3 +4,4 @@ export * from './programs.js';
 export * from './academic-sessions.js';
 export * from './students.js';
 export * from './dashboard.js';
+export * from './registration-rules.js';

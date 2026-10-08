@@ -1,13 +1,28 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { logLevelSchema, nodeEnvSchema, parseEnv, redisEnvSchema } from '@docversity/validation';
+import {
+  databaseEnvSchema,
+  importLimitsEnvSchema,
+  logLevelSchema,
+  nodeEnvSchema,
+  parseEnv,
+  queueEnvSchema,
+  redisEnvSchema,
+  storageEnvSchema,
+} from '@docversity/validation';
 import { z } from 'zod';
 
 export const workerEnvSchema = z.object({
   NODE_ENV: nodeEnvSchema,
   LOG_LEVEL: logLevelSchema,
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(2),
+  /** Import steps processed in parallel (each is memory-heavy: a whole workbook is parsed). */
+  IMPORT_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(1),
   ...redisEnvSchema.shape,
+  ...queueEnvSchema.shape,
+  ...databaseEnvSchema.shape,
+  ...storageEnvSchema.shape,
+  ...importLimitsEnvSchema.shape,
 });
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
