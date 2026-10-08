@@ -166,6 +166,38 @@ describe('courses (programs)', () => {
       durationSemesters: 4,
     });
   });
+
+  it('preserves large legacy durations on unrelated edits, including unchanged null structure fields', async () => {
+    const legacy = await testDb().program.create({
+      data: {
+        code: uniqueCode('LEG-LARGE'),
+        name: 'Synthetic legacy long course',
+        durationSemesters: 41,
+      },
+    });
+    for (const body of [
+      { name: 'Synthetic legacy course renamed' },
+      { status: 'INACTIVE', academicStructure: null, periodCount: null },
+    ]) {
+      const response = await registrar.patch(`programs/${legacy.id}`, body).expect(200);
+      expect(programSchema.parse(response.body)).toMatchObject({
+        durationSemesters: 41,
+        academicStructure: null,
+        periodCount: null,
+      });
+    }
+    const converted = await registrar
+      .patch(`programs/${legacy.id}`, {
+        academicStructure: 'YEAR_WISE',
+        periodCount: 3,
+      })
+      .expect(200);
+    expect(programSchema.parse(converted.body)).toMatchObject({
+      durationSemesters: null,
+      academicStructure: 'YEAR_WISE',
+      periodCount: 3,
+    });
+  });
 });
 
 describe('subject catalogue', () => {

@@ -123,6 +123,7 @@ export class ProgramsService {
   async update(id: string, input: UpdateProgram, actorUserId: string): Promise<Program> {
     try {
       return await this.prisma.client.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM programs WHERE id = ${id}::uuid FOR UPDATE`;
         const before = await tx.program.findUnique({ where: { id } });
         if (!before) throw Errors.notFound();
         if (input.departmentId && input.departmentId !== before.departmentId) {
@@ -158,13 +159,19 @@ export class ProgramsService {
         };
         const mergedIssues = programStructureIssues(merged);
         if (mergedIssues.length > 0) throw Errors.validation(mergedIssues);
+        const structureChanged =
+          _legacy !== undefined ||
+          merged.academicStructure !== before.academicStructure ||
+          merged.periodCount !== before.periodCount;
         const row = await tx.program.update({
           where: { id },
           data: {
             ...rest,
             academicStructure: merged.academicStructure,
             periodCount: merged.periodCount,
-            durationSemesters: legacySemesters(merged.academicStructure, merged.periodCount),
+            durationSemesters: structureChanged
+              ? legacySemesters(merged.academicStructure, merged.periodCount)
+              : before.durationSemesters,
           },
           include,
         });

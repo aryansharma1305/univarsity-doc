@@ -1,3 +1,4 @@
+import { periodNumbers, periodDisplayLabel } from './curriculum-periods.js';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@docversity/database';
 import { AUDIT_ACTIONS } from '@docversity/types';
@@ -137,11 +138,10 @@ function toDetail(row: DetailRow): CurriculumDetail {
   return {
     ...toSummary(row),
     program: row.program,
-    periods: Array.from({ length: row.numberOfPeriods }, (_, index) => {
-      const number = index + 1;
+    periods: periodNumbers(row.numberOfPeriods, row.subjects).map((number) => {
       return {
         number,
-        label: periodLabel(row.structureType, number),
+        label: periodDisplayLabel(row.structureType, number, row.numberOfPeriods),
         subjects: row.subjects.filter((s) => s.semesterNumber === number).map(toAssignment),
       };
     }),
@@ -476,6 +476,16 @@ export class CurriculaService {
           HttpStatus.CONFLICT,
           ERROR_CODES.conflict,
           'Add at least one subject before activating this curriculum.',
+        );
+      }
+      const outside = await tx.programSubject.count({
+        where: { curriculumId: id, semesterNumber: { gt: curriculum.numberOfPeriods } },
+      });
+      if (outside > 0) {
+        throw new AppError(
+          HttpStatus.CONFLICT,
+          ERROR_CODES.conflict,
+          'Subjects exist outside the declared periods. Review the legacy structure before activating this curriculum.',
         );
       }
       await this.assertNoOverlap(tx, curriculum, {
@@ -975,18 +985,24 @@ export class CurriculaService {
                 structureType: curriculum.structureType,
                 numberOfPeriods: curriculum.numberOfPeriods,
                 status: curriculum.status,
-                periods: Array.from({ length: curriculum.numberOfPeriods }, (_, index) => ({
-                  number: index + 1,
-                  label: periodLabel(curriculum.structureType, index + 1),
-                  subjects: curriculum.subjects
-                    .filter((line) => line.semesterNumber === index + 1)
-                    .map((line) => ({
-                      code: line.subject.code,
-                      name: line.subject.name,
-                      classification: line.classification,
-                      credits: num(line.credits),
-                    })),
-                })),
+                periods: periodNumbers(curriculum.numberOfPeriods, curriculum.subjects).map(
+                  (number) => ({
+                    number,
+                    label: periodDisplayLabel(
+                      curriculum.structureType,
+                      number,
+                      curriculum.numberOfPeriods,
+                    ),
+                    subjects: curriculum.subjects
+                      .filter((line) => line.semesterNumber === number)
+                      .map((line) => ({
+                        code: line.subject.code,
+                        name: line.subject.name,
+                        classification: line.classification,
+                        credits: num(line.credits),
+                      })),
+                  }),
+                ),
               }
             : null,
         };

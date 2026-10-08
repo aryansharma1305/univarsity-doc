@@ -54,3 +54,5 @@ All mutations audit IDs, codes, changed field names and counts in the same trans
 marks values, secrets and submitted personal data are not copied into audit metadata.
 Existing API error conventions apply: validation 400, permission 403, conflict 409 (including database
 `DV001` integrity guards), missing record 404. Server details are never returned.
+
+Legacy compatibility: unrelated course edits preserve existing duration, including values above current input bounds. Curriculum reads include original placements outside the declared periods with an explicit legacy label. Activation rejects those placements through API and additive database guards until the university authorizes a consistent structure; historic rows and student/result references are never silently rewritten.

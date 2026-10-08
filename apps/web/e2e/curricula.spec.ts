@@ -438,3 +438,87 @@ test('staff explicitly assign a curriculum and the student sees only their own c
   await capture(own, 'student-assigned-curriculum-mobile');
   await context.close();
 });
+
+test('move and reorder year subjects, supersede a version and retain the archived student syllabus', async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(180_000);
+  await signIn(page, fixtures().registrar);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(shared.yearCurriculumUrl);
+  await page.getByRole('button', { name: 'Add subject' }).click();
+  const assignment = page.getByRole('dialog', { name: 'Add subject' });
+  await assignment.getByRole('textbox', { name: 'Subject' }).fill('E2E Patient Care');
+  await assignment.getByRole('button', { name: /E2E Patient Care/ }).click();
+  await assignment.getByRole('button', { name: 'Add subject', exact: true }).click();
+  await expect(assignment).toBeHidden();
+  await page.getByRole('button', { name: `Move ${shared.physicsCode} down`, exact: true }).click();
+  await expect(
+    page.getByRole('table', { name: 'Subjects in Year 1' }).getByRole('row').nth(1),
+  ).toContainText('E2E Patient Care');
+  await page.getByRole('button', { name: `Edit ${shared.physicsCode}`, exact: true }).click();
+  const edit = page.getByRole('dialog', { name: `Edit ${shared.physicsCode}` });
+  await choose(page, edit, 'Year', 'Year 2');
+  await edit.getByRole('button', { name: 'Save changes' }).click();
+  await expect(edit).toBeHidden();
+  await expect(page.getByRole('table', { name: 'Subjects in Year 1' })).not.toContainText(
+    'E2E Ultrasound Physics',
+  );
+  await page.getByRole('tab', { name: /Year 2/ }).click();
+  await expect(page.getByRole('table', { name: 'Subjects in Year 2' })).toContainText(
+    'E2E Ultrasound Physics',
+  );
+
+  await page.goto(shared.semesterCurriculumUrl);
+  await page.getByRole('button', { name: 'Set end date' }).click();
+  const end = page.getByRole('dialog', { name: 'Set the end date' });
+  await end.getByLabel('Effective to').fill('2026-12-31');
+  await end.getByRole('button', { name: 'Save end date' }).click();
+  await expect(end).toBeHidden();
+  const courseUrl = shared.semesterCurriculumUrl.split('/curricula/')[0];
+  if (!courseUrl) throw new Error('Synthetic course URL missing');
+  await page.goto(courseUrl);
+  await page.getByRole('button', { name: 'New version' }).click();
+  const version = page.getByRole('dialog', { name: 'New curriculum version' });
+  await version.getByLabel('Version code').fill('2027');
+  await version.getByRole('textbox', { name: /^Name/ }).fill('2027 syllabus');
+  await version.getByLabel('Effective from').fill('2027-01-01');
+  await choose(page, version, 'Copy subjects from', /2026 — 2026 syllabus/);
+  await version.getByRole('button', { name: 'Create draft' }).click();
+  await expect(page).toHaveURL(/\/curricula\/[0-9a-f-]+$/);
+  await expect(page.getByRole('table', { name: 'Subjects in Semester 1' })).toContainText(
+    'E2E Ultrasound Physics',
+  );
+  await page.getByRole('button', { name: 'Activate curriculum', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Activate version 2027?' })
+    .getByRole('button', { name: 'Activate curriculum' })
+    .click();
+  await expect(page.getByRole('button', { name: 'Add subject' })).toHaveCount(0);
+  await page.goto(shared.semesterCurriculumUrl);
+  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  const archive = page.getByRole('dialog', { name: 'Archive version 2026?' });
+  await expect(archive).toContainText('1');
+  await archive.getByRole('button', { name: 'Archive curriculum' }).click();
+  await expect(archive).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Add subject' })).toHaveCount(0);
+  await capture(page, 'curriculum-superseded-archived-desktop');
+  const account = fixtures().profileStudents[0];
+  if (!account) throw new Error('Synthetic student account missing');
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const own = await context.newPage();
+  await own.goto('/student/login');
+  await own.getByLabel('Registration number').fill(account.registrationNumber);
+  await own.getByLabel('Password').fill(account.password);
+  await own.getByRole('button', { name: 'Sign in' }).click();
+  await expect(own).toHaveURL(/\/student$/);
+  await own.goto('/student/course');
+  await expect(own.getByText('2026 syllabus', { exact: false })).toBeVisible();
+  await expect(own.getByText('E2E Ultrasound Physics')).toBeVisible();
+  await expect(own.getByText('2027 syllabus', { exact: false })).toHaveCount(0);
+  await expectNoHorizontalOverflow(own);
+  await expectNoSeriousA11yViolations(own);
+  await capture(own, 'student-historical-curriculum-mobile');
+  await context.close();
+});

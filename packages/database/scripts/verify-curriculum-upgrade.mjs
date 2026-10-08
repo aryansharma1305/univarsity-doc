@@ -85,6 +85,20 @@ try {
   const oldLine = (await db.query('SELECT * FROM program_subjects WHERE id=$1', [assignment]))
     .rows[0];
   const oldResult = (await db.query('SELECT * FROM results WHERE id=$1', [result])).rows[0];
+  const oldItem = (await db.query('SELECT * FROM result_items WHERE id=$1', [item])).rows[0];
+  const [largeProgram, largeSubject, largeAssignment] = Array.from({ length: 3 }, randomUUID);
+  await db.query(
+    `INSERT INTO programs(id,code,name,duration_semesters,updated_at) VALUES($1,'SYN-LARGE','Synthetic legacy 41-period course',41,NOW())`,
+    [largeProgram],
+  );
+  await db.query(
+    `INSERT INTO subjects(id,code,name,updated_at) VALUES($1,'SYN-LARGE-SUB','Synthetic legacy period 41 subject',NOW())`,
+    [largeSubject],
+  );
+  await db.query(
+    `INSERT INTO program_subjects(id,program_id,subject_id,semester_number,curriculum_version,credits,updated_at) VALUES($1,$2,$3,41,'LEGACY-41',3,NOW())`,
+    [largeAssignment, largeProgram, largeSubject],
+  );
   for (const n of migrations.filter((n) => n >= '20261011090000'))
     await db.query(readFileSync(join(dir, n, 'migration.sql'), 'utf8'));
   const reg = (await db.query('SELECT * FROM student_registrations WHERE id=$1', [registration]))
@@ -104,6 +118,38 @@ try {
   assert.deepEqual(
     (await db.query('SELECT * FROM results WHERE id=$1', [result])).rows[0],
     oldResult,
+  );
+  assert.deepEqual(
+    (await db.query('SELECT * FROM result_items WHERE id=$1', [item])).rows[0],
+    oldItem,
+  );
+  const largeCourse = (
+    await db.query(
+      'SELECT duration_semesters, academic_structure, period_count FROM programs WHERE id=$1',
+      [largeProgram],
+    )
+  ).rows[0];
+  assert.deepEqual(largeCourse, {
+    duration_semesters: 41,
+    academic_structure: null,
+    period_count: null,
+  });
+  const largeLine = (
+    await db.query('SELECT semester_number, curriculum_id FROM program_subjects WHERE id=$1', [
+      largeAssignment,
+    ])
+  ).rows[0];
+  assert.equal(largeLine.semester_number, 41);
+  await assert.rejects(
+    db.query("UPDATE program_curricula SET status='ACTIVE', activated_at=NOW() WHERE id=$1", [
+      largeLine.curriculum_id,
+    ]),
+    /outside declared periods/,
+  );
+  assert.equal(
+    (await db.query('SELECT status FROM program_curricula WHERE id=$1', [largeLine.curriculum_id]))
+      .rows[0].status,
+    'DRAFT',
   );
   assert.equal(
     (
