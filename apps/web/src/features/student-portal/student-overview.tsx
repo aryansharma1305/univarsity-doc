@@ -8,40 +8,52 @@ import {
   FileTextIcon,
   HistoryIcon,
   LifeBuoyIcon,
+  ShieldCheckIcon,
   UserRoundIcon,
 } from 'lucide-react';
 import { RecordStatus, STATUS_LABELS } from '@/components/data/status';
-import { formatDate } from '@/lib/format';
+import { cn } from '@docversity/ui';
+import { formatDate, formatDateTime } from '@/lib/format';
 import { primaryRegistration, type StudentNavHref } from './nav';
-import { DetailList, PortalCard, PortalEmptyState } from './portal-ui';
+import { DetailList, PortalCard, PortalEmptyState, SoonBadge } from './portal-ui';
 import { StudentAvatar } from './student-avatar';
 
 const ACTIONS = [
   {
     href: '/student/profile',
     label: 'My Profile',
+    available: true,
     detail: 'Personal information',
     icon: UserRoundIcon,
   },
   {
     href: '/student/results',
     label: 'My Results',
+    available: false,
     detail: 'Not available yet',
     icon: ClipboardListIcon,
   },
   {
     href: '/student/documents',
     label: 'My Documents',
+    available: false,
     detail: 'Not available yet',
     icon: FileTextIcon,
   },
   {
     href: '/student/course',
     label: 'Course Details',
+    available: true,
     detail: 'Your registrations',
     icon: BookOpenIcon,
   },
-] satisfies { href: StudentNavHref; label: string; detail: string; icon: typeof UserRoundIcon }[];
+] satisfies {
+  href: StudentNavHref;
+  label: string;
+  available: boolean;
+  detail: string;
+  icon: typeof UserRoundIcon;
+}[];
 
 export function StudentOverview({ me }: { me: StudentMe }) {
   const { student, registrations } = me;
@@ -107,20 +119,44 @@ export function StudentOverview({ me }: { me: StudentMe }) {
         </dl>
       </section>
       <nav aria-label="Quick actions" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        {ACTIONS.map(({ href, label, detail, icon: Icon }) => (
+        {ACTIONS.map(({ href, label, available, detail, icon: Icon }) => (
           <Link
             key={href}
             href={href}
-            className="group flex items-center gap-3 rounded-xl bg-navy-900 p-4 text-white transition-colors hover:bg-brand sm:p-5"
+            className={cn(
+              'group flex items-center gap-3 rounded-xl p-4 transition-colors sm:p-5',
+              available
+                ? 'bg-navy-900 text-white hover:bg-brand'
+                : 'border border-dashed border-border-strong bg-card text-navy-950 hover:bg-secondary',
+            )}
           >
-            <Icon aria-hidden="true" className="size-6 shrink-0 text-white/90" />
+            <Icon
+              aria-hidden="true"
+              className={cn(
+                'size-6 shrink-0',
+                available ? 'text-white/90' : 'text-muted-foreground',
+              )}
+            />
             <span className="min-w-0">
-              <span className="block text-sm font-semibold">{label}</span>
-              <span className="mt-1 block text-xs text-white/80">{detail}</span>
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold">
+                {label}
+                {!available && <SoonBadge />}
+              </span>
+              <span
+                className={cn(
+                  'mt-1 block text-xs',
+                  available ? 'text-white/80' : 'text-muted-foreground',
+                )}
+              >
+                {detail}
+              </span>
             </span>
             <ArrowRightIcon
               aria-hidden="true"
-              className="ml-auto hidden size-4 shrink-0 sm:block"
+              className={cn(
+                'ml-auto hidden size-4 shrink-0 sm:block',
+                !available && 'text-muted-foreground',
+              )}
             />
           </Link>
         ))}
@@ -220,11 +256,30 @@ export function StudentOverview({ me }: { me: StudentMe }) {
         </div>
         <div className="flex flex-col gap-5">
           <PortalCard title="Recent activity" icon={HistoryIcon}>
-            <PortalEmptyState
-              icon={BellIcon}
-              title="No activity available"
-              description="Your recent student activity will appear here when this service is available."
-            />
+            {me.account.activatedAt ? (
+              // The only student-visible event recorded today: the account activation itself.
+              <ol aria-label="Recent activity" className="flex flex-col gap-4">
+                <li className="flex gap-3">
+                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-success-soft text-success-text">
+                    <ShieldCheckIcon aria-hidden="true" className="size-4" />
+                  </span>
+                  <div className="min-w-0 text-sm">
+                    <p className="font-medium text-navy-950">Student account activated</p>
+                    <p className="mt-0.5 text-muted-foreground">
+                      <time dateTime={me.account.activatedAt}>
+                        {formatDateTime(me.account.activatedAt)}
+                      </time>
+                    </p>
+                  </div>
+                </li>
+              </ol>
+            ) : (
+              <PortalEmptyState
+                icon={BellIcon}
+                title="No activity available"
+                description="Your recent student activity will appear here when this service is available."
+              />
+            )}
           </PortalCard>
           <PortalCard title="Need help?" icon={LifeBuoyIcon}>
             <p className="text-sm leading-relaxed text-muted-foreground">

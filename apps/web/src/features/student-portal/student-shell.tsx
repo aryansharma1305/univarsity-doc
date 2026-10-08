@@ -33,13 +33,13 @@ function StudentNavigation({ onNavigate }: { onNavigate?: () => void }) {
           onClick={onNavigate}
           aria-current={isStudentNavActive(pathname, href) ? 'page' : undefined}
           className={cn(
-            'flex min-h-12 items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
+            'flex min-h-12 items-center gap-2.5 rounded-lg px-3 py-3 text-sm font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
             isStudentNavActive(pathname, href) && 'bg-brand text-white hover:bg-brand',
           )}
         >
           <Icon aria-hidden="true" className="size-5 shrink-0" />
-          <span className="min-w-0 flex-1">{label}</span>
-          {!available && <SoonBadge />}
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {!available && <SoonBadge onDark />}
         </Link>
       ))}
     </nav>
@@ -68,7 +68,7 @@ export function StudentShell({ name, children }: { name: string; children: React
       });
   };
   return (
-    <div className="min-h-screen bg-background lg:pl-64">
+    <div className="min-h-screen bg-background lg:pl-72">
       <a
         href="#student-main"
         className="sr-only z-50 focus:not-sr-only focus:fixed focus:m-2 focus:rounded focus:bg-card focus:p-3"
@@ -77,7 +77,7 @@ export function StudentShell({ name, children }: { name: string; children: React
       </a>
       <aside
         aria-label="Student navigation"
-        className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-navy-950 text-white lg:flex"
+        className="fixed inset-y-0 left-0 hidden w-72 flex-col bg-navy-950 text-white lg:flex"
       >
         <Link
           href="/student"

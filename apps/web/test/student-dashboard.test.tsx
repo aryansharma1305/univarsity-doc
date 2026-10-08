@@ -52,8 +52,23 @@ describe('student dashboard and read-only pages', () => {
     expect(screen.getByRole('navigation', { name: 'Quick actions' })).toBeInTheDocument();
     expect(screen.getByText('Results are not available yet')).toBeInTheDocument();
     expect(screen.getByText('Documents are not available yet')).toBeInTheDocument();
-    expect(screen.getByText('No activity available')).toBeInTheDocument();
+    // Recent activity lists exactly one real event: the stored activation timestamp.
+    const activity = screen.getByRole('list', { name: 'Recent activity' });
+    expect(activity.querySelectorAll('li')).toHaveLength(1);
+    expect(activity).toHaveTextContent('Student account activated');
+    expect(activity.querySelector('time')).toHaveAttribute('datetime', me.account.activatedAt);
+    expect(screen.queryByText('No activity available')).not.toBeInTheDocument();
+    // Planned quick actions carry a "Soon" label; working ones do not.
+    expect(screen.getByRole('link', { name: /My Results.*Soon/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /My Documents.*Soon/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /My Profile/ })).not.toHaveTextContent('Soon');
     expect(screen.queryByText(/65%|Rahul|WhatsApp|SGPA|CGPA/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the honest empty state when no activation timestamp is stored', () => {
+    render(<StudentOverview me={{ ...me, account: { ...me.account, activatedAt: '' } }} />);
+    expect(screen.getByText('No activity available')).toBeInTheDocument();
+    expect(screen.queryByText('Student account activated')).not.toBeInTheDocument();
   });
 
   it('handles no registrations and reports unavailable photos without fetching storage', () => {

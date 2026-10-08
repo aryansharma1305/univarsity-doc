@@ -72,6 +72,15 @@ test('a student activates with a university code, sees only their own record, si
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: fixture.registrationNumber })).toBeVisible();
   await expect(page.getByText('Not on record').first()).toBeVisible();
+  // Recent activity shows only the real activation event; planned modules are marked "Soon".
+  await expect(
+    page.getByRole('list', { name: 'Recent activity' }).getByText('Student account activated'),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Quick actions' })
+      .getByRole('link', { name: /My Results.*Soon/ }),
+  ).toBeVisible();
   await expectNoSeriousA11yViolations(page);
   await capture(page, 'student-home-desktop');
 

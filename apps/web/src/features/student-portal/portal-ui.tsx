@@ -97,9 +97,17 @@ export function PortalEmptyState({
   );
 }
 
-export function SoonBadge() {
+/** Compact "Soon" marker for planned modules. `onDark` is for the navy sidebar. */
+export function SoonBadge({ onDark = false }: { onDark?: boolean }) {
   return (
-    <span className="rounded-full bg-navy-950 px-2 py-0.5 text-[0.6875rem] font-semibold tracking-wide text-white uppercase">
+    <span
+      className={cn(
+        'shrink-0 rounded-full px-1.5 py-px text-[0.625rem] leading-4 font-semibold tracking-wide uppercase',
+        onDark
+          ? 'bg-white/10 text-white ring-1 ring-white/25'
+          : 'bg-warning-soft text-warning-text',
+      )}
+    >
       Soon
     </span>
   );

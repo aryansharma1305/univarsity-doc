@@ -13,7 +13,7 @@ The quality target is a dense, readable university workspace with accessible nav
 - Public home/header: Student Login, Activate Student Account and Staff Login; desktop/mobile access;
   explicit unavailability on public verification service cards and navigation.
 - `/student`: navy sidebar, student identity bar, overview, four quick links, profile/academic cards,
-  every real registration, results/documents unavailable states, activity unavailable state and help.
+  every real registration, results/documents unavailable states, recent activity and help.
 - `/student/profile`: read-only personal information; explicit missing DOB/photo; initials fallback.
 - `/student/course`: every registration's program, department, session, references and real dates.
 - `/student/settings`: account status, activation date and existing recovery instructions.
@@ -24,7 +24,7 @@ The quality target is a dense, readable university workspace with accessible nav
 initials; `StudentOverview` and the read-only student pages use only authenticated API fields.
 
 The API returns `hasPhoto`, not a photo URL/download endpoint. A stored photo is reported as on record
-with display unavailable; there is no arbitrary storage request. Results/documents/notifications/activity
+with display unavailable; there is no arbitrary storage request. Results/documents/notifications
 endpoints do not exist, so no counts, grades, PDFs, schedules, progress, staff audit feed, WhatsApp or fee
 payment controls are fabricated. The account screen does not promise working password editing.
 
@@ -76,6 +76,18 @@ activity/help rail, student-facing activity copy, sidebar badge contrast and aca
 Its final disposition was `ship` for that correction list. A separate documentation review confirmed
 incumbent theme/type consistency. Existing architecture summary drift (two shells, older public access
 copy) remains a context limitation; the implementation and this delivery note describe the student shell.
+
+## Review polish (before merge)
+
+- Quick actions: working actions (My Profile, Course Details) stay solid navy; planned ones (My Results,
+  My Documents) are white dashed tiles with a "Soon" label. Both still open their honest status pages.
+- Sidebar: a compact "Soon" badge and an 18rem sidebar (matching the mobile drawer) keep every label on
+  one line at 1024/1280/1440px and in the 390px drawer; no truncation.
+- Recent activity shows exactly one real event, "Student account activated", from `account.activatedAt`
+  (already returned by `GET /student/me`). Without a timestamp the existing empty state is shown. No other
+  events are listed and no staff audit data is used.
+- axe caught two contrast failures during this pass (muted tile caption, badge on the active blue row);
+  both were fixed, not suppressed.
 
 ## Phase boundary
 
