@@ -28,7 +28,8 @@ test('VIEWER can read students but sees no create/edit actions', async ({ page }
 
   for (const [link, button] of [
     ['Departments', 'Add department'],
-    ['Programs', 'Add program'],
+    ['Course Management', 'Create course'],
+    ['Subject Catalogue', 'Add subject'],
     ['Academic Sessions', 'Add session'],
   ] as const) {
     await openSection(page, link);

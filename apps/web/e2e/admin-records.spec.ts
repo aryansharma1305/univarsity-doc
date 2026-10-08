@@ -46,17 +46,19 @@ test('SUPER_ADMIN creates a department, program, session and student, then finds
   ).toBeVisible();
   await departmentDialog.getByRole('button', { name: 'Cancel' }).click();
 
-  // Program in that department
-  await openSection(page, 'Programs');
-  await page.getByRole('button', { name: 'Add program' }).first().click();
+  // Course (program) in that department
+  await openSection(page, 'Course Management');
+  await page.getByRole('button', { name: 'Create course' }).first().click();
   const programDialog = page.getByRole('dialog');
-  await programDialog.getByLabel('Code').fill(program);
-  await programDialog.getByLabel('Name').fill('Playwright Program');
-  await programDialog.getByLabel('Duration (semesters)').fill('6');
-  await programDialog.getByLabel('Department').click();
+  await programDialog.getByLabel('Course code').fill(program);
+  await programDialog.getByLabel('Course name').fill('Playwright Program');
+  await programDialog.getByLabel('Academic structure').click();
+  await page.getByRole('option', { name: 'Semester-wise' }).click();
+  await programDialog.getByLabel('Number of semesters').fill('6');
+  await programDialog.getByLabel('Department / school').click();
   await page.getByRole('option', { name: new RegExp(department) }).click();
-  await programDialog.getByRole('button', { name: 'Add program' }).click();
-  await expect(page.getByText(`Program ${program} created`)).toBeVisible();
+  await programDialog.getByRole('button', { name: 'Create course' }).click();
+  await expect(page.getByText(`Course ${program} created`)).toBeVisible();
 
   // Academic session
   await openSection(page, 'Academic Sessions');

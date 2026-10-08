@@ -32,6 +32,7 @@ export const registrationInclude = {
   program: { select: { id: true, code: true, name: true } },
   department: { select: { id: true, code: true, name: true } },
   academicSession: { select: { id: true, code: true, name: true } },
+  curriculum: { select: { id: true, versionCode: true, name: true, status: true } },
 } as const;
 
 export type RegistrationRow = Prisma.StudentRegistrationGetPayload<{
@@ -51,6 +52,7 @@ export function toRegistration(row: RegistrationRow): Registration {
     admissionDate: toDateOnly(row.admissionDate),
     completionDate: toDateOnly(row.completionDate),
     status: row.status,
+    curriculum: row.curriculum,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -184,6 +186,13 @@ export class RegistrationsService {
 
         const programChanged =
           input.programId !== undefined && input.programId !== before.programId;
+        if (programChanged && before.curriculumId !== null) {
+          // The curriculum belongs to the current program; never re-point it silently.
+          throw invalidRelation(
+            'programId',
+            'This registration follows a curriculum of its current program, so its program cannot be changed here.',
+          );
+        }
         const sessionChanged =
           input.academicSessionId !== undefined &&
           input.academicSessionId !== before.academicSessionId;

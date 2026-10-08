@@ -178,6 +178,32 @@ enum StudentAccountStatus {
   DISABLED
 }
 
+/// How a program's (or curriculum's) academic periods are organised (Phase 7B).
+enum AcademicStructure {
+  SEMESTER_WISE
+  YEAR_WISE
+}
+
+enum DurationUnit {
+  MONTHS
+  YEARS
+}
+
+/// Curriculum version lifecycle (Phase 7B). Only DRAFT versions can be edited; ACTIVE ones can be
+/// assigned to registrations; ARCHIVED ones stay readable for historical records.
+enum CurriculumStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+/// Theory / practical classification of a subject (catalogue default) or of its assignment.
+enum SubjectCategory {
+  THEORY
+  PRACTICAL
+  COMBINED
+}
+
 /// Lifecycle of a student's profile change request (Phase 7). Only PENDING requests change state.
 enum ProfileChangeRequestStatus {
   PENDING
@@ -205,21 +231,31 @@ model Department {
 }
 
 model Program {
-  id                String           @id @default(uuid(7)) @db.Uuid
-  code              String           @unique @db.VarChar(32)
-  name              String           @db.VarChar(200)
+  id                String             @id @default(uuid(7)) @db.Uuid
+  code              String             @unique @db.VarChar(32)
+  name              String             @db.VarChar(200)
   /// Free text until the university's course hierarchy is confirmed (e.g. "UG", "PG", "Diploma").
-  level             String?          @db.VarChar(64)
-  durationSemesters Int?             @map("duration_semesters") @db.SmallInt
+  level             String?            @db.VarChar(64)
+  /// Legacy (Phase 2). Kept in sync by the API: the period count for SEMESTER_WISE programs, else null.
+  durationSemesters Int?               @map("duration_semesters") @db.SmallInt
+  description       String?            @db.VarChar(1000)
+  /// Duration as the university states it (e.g. 1 YEARS, 18 MONTHS); validated separately from periods.
+  durationValue     Int?               @map("duration_value") @db.SmallInt
+  durationUnit      DurationUnit?      @map("duration_unit")
+  /// Default structure for new curriculum versions. Null for legacy programs without one.
+  academicStructure AcademicStructure? @map("academic_structure")
+  /// Number of semesters (SEMESTER_WISE) or years (YEAR_WISE).
+  periodCount       Int?               @map("period_count") @db.SmallInt
   /// Optional: not every university structure groups programs under departments.
-  departmentId      String?          @map("department_id") @db.Uuid
-  status            MasterDataStatus @default(ACTIVE)
-  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  departmentId      String?            @map("department_id") @db.Uuid
+  status            MasterDataStatus   @default(ACTIVE)
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   department        Department?               @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   registrations     StudentRegistration[]
   curriculum        ProgramSubject[]
+  curricula         ProgramCurriculum[]
   gradingSchemes    GradingScheme[]
   examinations      Examination[]
   documentTemplates ProgramDocumentTemplate[]
@@ -287,10 +323,14 @@ model StudentRegistration {
   admissionDate                DateTime?     @map("admission_date") @db.Date
   completionDate               DateTime?     @map("completion_date") @db.Date
   status                       StudentStatus @default(ACTIVE)
+  /// Curriculum version this registration follows (Phase 7B). Set only by an explicit staff action;
+  /// a trigger keeps it within the registration's program and limits new assignments to ACTIVE versions.
+  curriculumId                 String?       @map("curriculum_id") @db.Uuid
   createdAt                    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   student          Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  curriculum       ProgramCurriculum?      @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
   program          Program                 @relation(fields: [programId], references: [id], onDelete: Restrict)
   department       Department?             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
   academicSession  AcademicSession         @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
@@ -308,6 +348,7 @@ model StudentRegistration {
   @@index([programId, academicSessionId])
   @@index([academicSessionId])
   @@index([departmentId])
+  @@index([curriculumId])
   @@map("student_registrations")
 }
 
@@ -315,13 +356,51 @@ model StudentRegistration {
 // Curriculum & grading
 // ============================================================================================
 
-/// A subject definition. The same code can exist in several versions when the syllabus changes,
-/// so uniqueness is (code, version), not code alone.
+/// A curriculum (syllabus) version of a program (Phase 7B): its periods and subject assignments.
+/// Lifecycle DRAFT → ACTIVE → ARCHIVED (or DRAFT → ARCHIVED), enforced by a trigger; only DRAFT
+/// versions are editable. ACTIVE versions of one program may not have overlapping effective periods.
+model ProgramCurriculum {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  programId         String            @map("program_id") @db.Uuid
+  /// Short label, unique within the program (e.g. "2026").
+  versionCode       String            @map("version_code") @db.VarChar(32)
+  name              String            @db.VarChar(200)
+  description       String?           @db.VarChar(1000)
+  structureType     AcademicStructure @map("structure_type")
+  numberOfPeriods   Int               @map("number_of_periods") @db.SmallInt
+  effectiveFrom     DateTime?         @map("effective_from") @db.Date
+  effectiveTo       DateTime?         @map("effective_to") @db.Date
+  status            CurriculumStatus  @default(DRAFT)
+  activatedAt       DateTime?         @map("activated_at") @db.Timestamptz(3)
+  activatedByUserId String?           @map("activated_by_user_id") @db.Uuid
+  archivedAt        DateTime?         @map("archived_at") @db.Timestamptz(3)
+  archivedByUserId  String?           @map("archived_by_user_id") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  program       Program               @relation(fields: [programId], references: [id], onDelete: Restrict)
+  activatedBy   User?                 @relation("CurriculumActivatedBy", fields: [activatedByUserId], references: [id], onDelete: Restrict)
+  archivedBy    User?                 @relation("CurriculumArchivedBy", fields: [archivedByUserId], references: [id], onDelete: Restrict)
+  subjects      ProgramSubject[]
+  registrations StudentRegistration[]
+
+  @@unique([programId, versionCode])
+  /// Target of the program_subjects (curriculum, program) composite FK.
+  @@unique([id, programId])
+  @@index([programId, status])
+  @@map("program_curricula")
+}
+
+/// A reusable subject definition; the existing (code, version) key is preserved.
+/// Catalogue identity is frozen once referenced by active curricula or historical results.
 model Subject {
   id             String           @id @default(uuid(7)) @db.Uuid
   code           String           @db.VarChar(32)
   version        Int              @default(1) @db.SmallInt
   name           String           @db.VarChar(200)
+  description    String?          @db.VarChar(1000)
+  /// Catalogue default; an assignment may classify the subject differently in a curriculum.
+  category       SubjectCategory?
   defaultCredits Decimal?         @map("default_credits") @db.Decimal(5, 2)
   status         MasterDataStatus @default(ACTIVE)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -335,27 +414,39 @@ model Subject {
 
 /// A subject's place in a program's curriculum for one curriculum version (e.g. a regulation
 /// year). Result items point here, so historic results keep the exact credits/marks they used.
+/// A subject's placement and assessment configuration in one curriculum version (Phase 2 table;
+/// Phase 7B links it to `program_curricula`). `semester_number` holds the ACADEMIC PERIOD number —
+/// a semester or a year, depending on the curriculum's structure.
 model ProgramSubject {
-  id                     String   @id @default(uuid(7)) @db.Uuid
-  programId              String   @map("program_id") @db.Uuid
-  subjectId              String   @map("subject_id") @db.Uuid
-  semesterNumber         Int      @map("semester_number") @db.SmallInt
-  curriculumVersion      String   @map("curriculum_version") @db.VarChar(32)
-  credits                Decimal  @db.Decimal(5, 2)
-  maxMarks               Decimal? @map("max_marks") @db.Decimal(7, 2)
-  passMarks              Decimal? @map("pass_marks") @db.Decimal(7, 2)
+  id                     String           @id @default(uuid(7)) @db.Uuid
+  programId              String           @map("program_id") @db.Uuid
+  curriculumId           String           @map("curriculum_id") @db.Uuid
+  subjectId              String           @map("subject_id") @db.Uuid
+  semesterNumber         Int              @map("semester_number") @db.SmallInt
+  /// Order within the period (ascending).
+  displayOrder           Int              @default(0) @map("display_order") @db.SmallInt
+  /// Mirrors program_curricula.version_code (set by a trigger); kept for the Phase 2 unique key.
+  curriculumVersion      String           @map("curriculum_version") @db.VarChar(32)
+  classification         SubjectCategory?
+  credits                Decimal?         @db.Decimal(5, 2)
+  maxMarks               Decimal?         @map("max_marks") @db.Decimal(7, 2)
+  passMarks              Decimal?         @map("pass_marks") @db.Decimal(7, 2)
   /// Assessment components (e.g. internal/external/practical maxima). Shape is defined by the
   /// grading rules once confirmed; not interpreted by the database.
-  componentConfiguration Json?    @map("component_configuration")
-  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  componentConfiguration Json?            @map("component_configuration")
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  program     Program      @relation(fields: [programId], references: [id], onDelete: Restrict)
-  subject     Subject      @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  program     Program           @relation(fields: [programId], references: [id], onDelete: Restrict)
+  /// Composite FK: the curriculum always belongs to the same program.
+  curriculum  ProgramCurriculum @relation(fields: [curriculumId, programId], references: [id, programId], onDelete: Restrict)
+  subject     Subject           @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   resultItems ResultItem[]
 
   /// A subject appears at most once per curriculum version of a program.
   @@unique([programId, curriculumVersion, subjectId])
+  @@unique([curriculumId, subjectId])
+  @@index([curriculumId, semesterNumber, displayOrder])
   @@index([programId, curriculumVersion, semesterNumber])
   @@index([subjectId])
   @@map("program_subjects")
@@ -843,6 +934,8 @@ model User {
   importJobsCommitted     ImportJob[]                   @relation("ImportJobCommittedBy")
   activationCodesIssued   StudentActivationCode[]
   profileRequestsReviewed StudentProfileChangeRequest[]
+  curriculaActivated      ProgramCurriculum[]           @relation("CurriculumActivatedBy")
+  curriculaArchived       ProgramCurriculum[]           @relation("CurriculumArchivedBy")
   auditLogs               AuditLog[]
   certificatesGenerated   Certificate[]                 @relation("CertificateGeneratedBy")
   certificatesApproved    Certificate[]                 @relation("CertificateApprovedBy")

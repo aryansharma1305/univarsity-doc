@@ -51,6 +51,10 @@ export function uniqueCode(prefix: string): string {
 
 /** Runs axe and fails on serious/critical WCAG A/AA violations. */
 export async function expectNoSeriousA11yViolations(page: Page): Promise<void> {
+  // Measure the settled page: mid-fade text (page transitions, closing dialogs) has lower contrast.
+  await page.waitForFunction(() =>
+    document.getAnimations().every((animation) => animation.playState !== 'running'),
+  );
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();

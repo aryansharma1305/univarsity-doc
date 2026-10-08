@@ -33,6 +33,8 @@ export const ERROR_CODES = {
   forbidden: 'FORBIDDEN',
   notFound: 'NOT_FOUND',
   conflict: 'CONFLICT',
+  curriculumNotEditable: 'CURRICULUM_NOT_EDITABLE',
+  curriculumOverlap: 'CURRICULUM_OVERLAP',
   profileRequestPending: 'PROFILE_REQUEST_PENDING',
   profileRequestNotPending: 'PROFILE_REQUEST_NOT_PENDING',
   profileRequestStale: 'PROFILE_REQUEST_STALE',

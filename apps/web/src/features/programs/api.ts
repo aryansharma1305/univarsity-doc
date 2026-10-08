@@ -11,11 +11,13 @@ import { apiRequest } from '@/lib/api';
 export const programKeys = {
   all: ['programs'] as const,
   list: (q: Partial<ProgramQuery>) => ['programs', 'list', q] as const,
+  detail: (id: string) => ['programs', 'detail', id] as const,
 };
 
 export const programsApi = {
   list: (query: Partial<ProgramQuery>) =>
     apiRequest('GET', 'programs', programListSchema, { query }),
+  get: (id: string) => apiRequest('GET', `programs/${id}`, programSchema),
   create: (body: CreateProgram) => apiRequest('POST', 'programs', programSchema, { body }),
   update: (id: string, body: UpdateProgram) =>
     apiRequest('PATCH', `programs/${id}`, programSchema, { body }),
@@ -27,6 +29,10 @@ export function usePrograms(query: Partial<ProgramQuery>) {
     queryFn: () => programsApi.list(query),
     placeholderData: keepPreviousData,
   });
+}
+
+export function useProgram(id: string) {
+  return useQuery({ queryKey: programKeys.detail(id), queryFn: () => programsApi.get(id) });
 }
 
 /** Programs for select boxes (active only by default). */

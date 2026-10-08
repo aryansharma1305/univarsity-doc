@@ -11,18 +11,20 @@ records, a student portal, and (planned) public verification of results, registr
 One PostgreSQL database serves admin, student and public features — never duplicate student or
 certificate data.
 
-| Phase | Scope                                                                                       | Status (git tag)                         |
-| ----- | ------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`                  |
-| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`               |
-| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`                   |
-| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`            |
-| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`             |
-| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`            |
-| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)                        |
-| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | Review `feature/phase-7-student-profile` |
+| Phase | Scope                                                                                       | Status (git tag)              |
+| ----- | ------------------------------------------------------------------------------------------- | ----------------------------- |
+| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`       |
+| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`    |
+| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`        |
+| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters` |
+| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`  |
+| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts` |
+| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)             |
+| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | ✅ merged (PR #2)             |
 
-**Not built yet** (do not describe as working): subjects/curriculum/examinations/grading, results entry/import/publication, certificate generation
+| 7B | Course management, curriculum versions, subject catalogue and explicit student assignment | Review `feature/course-curriculum-management` |
+
+**Not built yet** (do not describe as working): examinations/grading, results entry/import/publication, certificate generation
 (PDF/QR), historic certificate upload, public verification (the `/verify/*` and `/results` pages are honest
 "not available yet" placeholders), legacy WordPress migration, retention cleanup jobs, email delivery
 (password reset refuses with 503 when no notifier is configured). Plan: [docs/roadmap.md](docs/roadmap.md).
@@ -46,7 +48,7 @@ packages/ui       shadcn/ui-based components + theme tokens (consumed as source 
 packages/config   Shared TS and ESLint configs
 packages/documents Placeholder (official document layouts later)
 references/stitch Unmodified design export — visual reference only, never production code
-docs/             Architecture, API, database, security docs, ADR-0001…0011
+docs/             Architecture, API, database, security docs, ADR-0001…0012
 ```
 
 Packages are compiled to `dist/` and consumed via their `exports`; Turborepo builds dependencies first.
@@ -142,7 +144,9 @@ totalPages } }`. Unknown query parameters are rejected.
   `packages/database/prisma/schema.prisma`; docs: [docs/database/README.md](docs/database/README.md).
 - Migrations: `20261007191730_core_academic_schema` (Phase 2, **frozen**),
   `20261008120000_student_imports` (Phase 5), `20261009090000_student_accounts` (Phase 6),
-  `20261010090000_student_profile_change_requests` (Phase 7).
+  `20261010090000_student_profile_change_requests` (Phase 7),
+  `20261011090000_course_curriculum_management`, `20261011093000_curriculum_history_guards`,
+  `20261011094000_preserve_assignment_delete_restrict` (Phase 7B).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -187,6 +191,18 @@ only requested fields change. Photos are decoded and re-encoded server-side (`sh
 stored privately; served with `no-store` after an ownership/permission check. Details:
 [docs/api/profile-requests.md](docs/api/profile-requests.md), ADR-0011.
 
+## 10b. Course and curriculum management (Phase 7B)
+
+`/admin/programs` is Course Management; each course opens a version list and a semester/year editor.
+`/admin/subjects` maintains the reusable catalogue. Draft versions can be edited/copied; activation
+freezes their definition and subject placements. Active windows cannot overlap; archiving keeps history.
+Staff explicitly assign an active version to registrations (never guessed from dates). Registrations
+with results cannot be assigned or moved. Catalogue identity used in active/archived versions or results
+is frozen; retiring a subject preserves its history. Students see only their own assigned version at
+`/student/course`, with honest unassigned states. Existing `Program`, `Subject`, `ProgramSubject` and
+`ResultItem` foundations remain authoritative. See [docs/api/curricula.md](docs/api/curricula.md),
+[docs/development/phase-7b-course-curriculum.md](docs/development/phase-7b-course-curriculum.md), ADR-0012.
+
 ## 11. Student import workflow (Phase 5)
 
 `/admin/imports` → download template → upload `.xlsx` → worker reads the workbook → choose worksheet and
@@ -222,7 +238,7 @@ staff, `/student-auth/csrf` for students). Downloads are streamed after a permis
 ## 14. Development workflow and Git
 
 - Work happens in **phases**; each phase stops for review. Do not start the next phase without approval.
-- Branch: `main`. Conventional commits (`feat:`, `fix:`, `chore:`, `fix(ci):`), one commit per phase
+- Work on the phase feature branch; PRs target `main`. Conventional commits (`feat:`, `fix:`, `chore:`, `fix(ci):`), one commit per phase
   plus fixes, marked with a lightweight tag `phase-<n>-<name>` on the verified commit. AI-assisted commits end with a
   `Co-Authored-By:` trailer.
 - Before committing: all quality gates green (uncached), `git diff` reviewed for secrets and real data,

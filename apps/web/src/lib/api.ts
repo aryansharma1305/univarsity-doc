@@ -97,7 +97,7 @@ async function toApiError(response: Response): Promise<ApiError> {
 }
 
 export async function apiRequest<TSchema extends z.ZodType>(
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   schema: TSchema,
   options: { query?: Query; body?: unknown; principal?: Principal } = {},

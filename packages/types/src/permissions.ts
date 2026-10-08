@@ -22,6 +22,19 @@ export const PERMISSIONS = {
   studentsWrite: 'students.write',
   registrationsRead: 'registrations.read',
   registrationsWrite: 'registrations.write',
+  /** Subject catalogue (Phase 7B). */
+  subjectsRead: 'subjects.read',
+  subjectsWrite: 'subjects.write',
+  /** Curriculum versions and their subject assignments (Phase 7B). */
+  curriculaRead: 'curricula.read',
+  /** Create/edit DRAFT curriculum versions and their subject assignments. */
+  curriculaWrite: 'curricula.write',
+  /** Activate a DRAFT curriculum version (makes it assignable and read-only). */
+  curriculaActivate: 'curricula.activate',
+  /** Archive a curriculum version (no new assignments; history stays readable). */
+  curriculaArchive: 'curricula.archive',
+  /** Assign registrations to an ACTIVE curriculum version of their program. */
+  studentCurriculaAssign: 'studentCurricula.assign',
   resultsRead: 'results.read',
   resultsWrite: 'results.write',
   resultsPublish: 'results.publish',
@@ -75,6 +88,8 @@ const READ_ONLY: readonly Permission[] = [
   P.academicSessionsRead,
   P.studentsRead,
   P.registrationsRead,
+  P.subjectsRead,
+  P.curriculaRead,
   P.resultsRead,
   P.certificatesRead,
   P.templatesRead,
@@ -102,6 +117,11 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.studentAccountsManage,
     P.studentProfileRequestsRead,
     P.studentProfileRequestsReview,
+    P.subjectsWrite,
+    P.curriculaWrite,
+    P.curriculaActivate,
+    P.curriculaArchive,
+    P.studentCurriculaAssign,
     P.certificatesGenerate,
     P.auditRead,
   ],

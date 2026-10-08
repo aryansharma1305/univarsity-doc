@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { TableSkeleton } from '@/components/data/states';
 import { ProgramsView } from '@/features/programs/programs-view';
 
-export const metadata: Metadata = { title: 'Programs' };
+export const metadata: Metadata = { title: 'Course Management' };
 
 export default function Page() {
   return (

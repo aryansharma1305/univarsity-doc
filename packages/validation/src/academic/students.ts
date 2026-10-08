@@ -11,6 +11,7 @@ import {
   refSchema,
   studentStatusSchema,
 } from './common.js';
+import { curriculumRefSchema } from './curricula.js';
 
 // ------------------------------------------------------------------------------------------
 // Registrations
@@ -101,6 +102,8 @@ export const registrationSchema = z
     admissionDate: z.iso.date().nullable(),
     completionDate: z.iso.date().nullable(),
     status: studentStatusSchema,
+    /** Curriculum version this registration follows (Phase 7B); null until staff assign one. */
+    curriculum: curriculumRefSchema.nullable(),
     createdAt: z.iso.datetime(),
     updatedAt: z.iso.datetime(),
   })

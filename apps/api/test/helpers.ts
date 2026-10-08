@@ -199,6 +199,7 @@ export async function staff(app: INestApplication, roles: RoleName[]) {
       agent.post(`/api/v1/${path}`).set('X-CSRF-Token', csrf).send(body),
     patch: (path: string, body?: object) =>
       agent.patch(`/api/v1/${path}`).set('X-CSRF-Token', csrf).send(body),
+    del: (path: string) => agent.delete(`/api/v1/${path}`).set('X-CSRF-Token', csrf),
   };
 }
 

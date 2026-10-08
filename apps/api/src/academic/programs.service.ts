@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@docversity/database';
 import { AUDIT_ACTIONS } from '@docversity/types';
-import type {
-  CreateProgram,
-  Program,
-  ProgramList,
-  ProgramQuery,
-  UpdateProgram,
+import {
+  type CreateProgram,
+  type Program,
+  type ProgramList,
+  type ProgramQuery,
+  programStructureIssues,
+  type UpdateProgram,
 } from '@docversity/validation';
 import { AuditService } from '../audit/audit.service.js';
 import { Errors } from '../common/app-error.js';
@@ -20,7 +21,7 @@ const CODE_CONFLICT = {
 
 const include = {
   department: { select: { id: true, code: true, name: true } },
-  _count: { select: { registrations: true } },
+  _count: { select: { registrations: true, curricula: true } },
 } as const;
 
 type ProgramRow = Prisma.ProgramGetPayload<{ include: typeof include }>;
@@ -31,10 +32,16 @@ function toProgram(row: ProgramRow): Program {
     code: row.code,
     name: row.name,
     level: row.level,
+    description: row.description,
+    durationValue: row.durationValue,
+    durationUnit: row.durationUnit,
+    academicStructure: row.academicStructure,
+    periodCount: row.periodCount,
     durationSemesters: row.durationSemesters,
     department: row.department,
     status: row.status,
     registrationCount: row._count.registrations,
+    curriculumCount: row._count.curricula,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -87,7 +94,10 @@ export class ProgramsService {
             code: input.code,
             name: input.name,
             level: input.level ?? null,
-            durationSemesters: input.durationSemesters ?? null,
+            description: input.description ?? null,
+            durationValue: input.durationValue ?? null,
+            durationUnit: input.durationUnit ?? null,
+            ...structureOf(input),
             departmentId: input.departmentId ?? null,
             status: input.status,
           },
@@ -118,12 +128,55 @@ export class ProgramsService {
         if (input.departmentId && input.departmentId !== before.departmentId) {
           await assertActiveDepartment(tx, input.departmentId);
         }
-        const row = await tx.program.update({ where: { id }, data: input, include });
+        if (
+          input.durationSemesters !== undefined &&
+          (input.academicStructure !== undefined || input.periodCount !== undefined)
+        ) {
+          throw Errors.validation([
+            {
+              path: 'durationSemesters',
+              message: 'Use academicStructure and periodCount instead of durationSemesters.',
+            },
+          ]);
+        }
+        const { durationSemesters: _legacy, academicStructure, periodCount, ...rest } = input;
+        // Merge with the stored values; the deprecated input replaces the whole structure.
+        const next =
+          _legacy !== undefined
+            ? structureOf({ durationSemesters: _legacy })
+            : {
+                academicStructure:
+                  academicStructure !== undefined ? academicStructure : before.academicStructure,
+                periodCount: periodCount !== undefined ? periodCount : before.periodCount,
+              };
+        const merged = {
+          durationValue:
+            rest.durationValue !== undefined ? rest.durationValue : before.durationValue,
+          durationUnit: rest.durationUnit !== undefined ? rest.durationUnit : before.durationUnit,
+          academicStructure: next.academicStructure,
+          periodCount: next.periodCount,
+        };
+        const mergedIssues = programStructureIssues(merged);
+        if (mergedIssues.length > 0) throw Errors.validation(mergedIssues);
+        const row = await tx.program.update({
+          where: { id },
+          data: {
+            ...rest,
+            academicStructure: merged.academicStructure,
+            periodCount: merged.periodCount,
+            durationSemesters: legacySemesters(merged.academicStructure, merged.periodCount),
+          },
+          include,
+        });
         const changed = changedFields(before, row, [
           'code',
           'name',
           'level',
-          'durationSemesters',
+          'description',
+          'durationValue',
+          'durationUnit',
+          'academicStructure',
+          'periodCount',
           'departmentId',
         ]);
         if (changed.length > 0) {
@@ -156,6 +209,36 @@ export class ProgramsService {
       rethrowAsFieldConflict(error, CODE_CONFLICT);
     }
   }
+}
+
+/** Structure columns from the request, mapping the deprecated `durationSemesters` input. */
+function structureOf(input: {
+  durationSemesters?: number | null;
+  academicStructure?: 'SEMESTER_WISE' | 'YEAR_WISE' | null;
+  periodCount?: number | null;
+}) {
+  if (input.durationSemesters !== undefined) {
+    return {
+      academicStructure: input.durationSemesters === null ? null : ('SEMESTER_WISE' as const),
+      periodCount: input.durationSemesters,
+      durationSemesters: input.durationSemesters,
+    };
+  }
+  const academicStructure = input.academicStructure ?? null;
+  const periodCount = input.periodCount ?? null;
+  return {
+    academicStructure,
+    periodCount,
+    durationSemesters: legacySemesters(academicStructure, periodCount),
+  };
+}
+
+/** Legacy `duration_semesters`: the period count of semester-wise programs, otherwise null. */
+function legacySemesters(
+  structure: string | null | undefined,
+  periodCount: number | null | undefined,
+): number | null {
+  return structure === 'SEMESTER_WISE' ? (periodCount ?? null) : null;
 }
 
 async function assertActiveDepartment(

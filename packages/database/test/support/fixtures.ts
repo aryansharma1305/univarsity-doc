@@ -33,9 +33,22 @@ export function fixtures(db: PrismaClient) {
     const subject = await db.subject.create({
       data: { code: `T-SUB-${uid()}`, name: 'Test subject' },
     });
+    // Phase 7B: assignments belong to a (DRAFT, hence editable) curriculum version of the program.
+    const curriculum = await db.programCurriculum.upsert({
+      where: { programId_versionCode: { programId, versionCode: 'TEST-1' } },
+      update: {},
+      create: {
+        programId,
+        versionCode: 'TEST-1',
+        name: 'Test curriculum',
+        structureType: 'SEMESTER_WISE',
+        numberOfPeriods: 8,
+      },
+    });
     return db.programSubject.create({
       data: {
         programId,
+        curriculumId: curriculum.id,
         subjectId: subject.id,
         semesterNumber: 1,
         curriculumVersion: 'TEST-1',

@@ -1,5 +1,10 @@
 import Link from 'next/link';
-import type { StudentMe, StudentProfileRequest } from '@docversity/validation';
+import {
+  periodUnit,
+  type StudentCurriculum,
+  type StudentMe,
+  type StudentProfileRequest,
+} from '@docversity/validation';
 import {
   BellIcon,
   BookOpenIcon,
@@ -170,7 +175,102 @@ export function StudentProfileRequests({
   );
 }
 
-export function StudentCourses({ me }: { me: StudentMe }) {
+const CLASSIFICATION: Record<string, string> = {
+  THEORY: 'Theory',
+  PRACTICAL: 'Practical',
+  COMBINED: 'Theory + practical',
+};
+
+type RegistrationCurriculum = StudentCurriculum['registrations'][number]['curriculum'];
+
+/** The syllabus version a registration follows, period by period (read-only). */
+function CurriculumSection({ curriculum }: { curriculum: RegistrationCurriculum | undefined }) {
+  if (curriculum === undefined) {
+    return (
+      <div className="mt-5 rounded-lg bg-muted/50 p-4 text-sm">
+        <p role="status" className="font-semibold text-navy-950">
+          Curriculum temporarily unavailable
+        </p>
+        <p className="mt-1 text-foreground/80">
+          We could not load your syllabus and subjects. Please try again.
+        </p>
+        <a
+          href="/student/course"
+          className="mt-2 inline-flex min-h-10 items-center rounded text-brand underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          Reload course details
+        </a>
+      </div>
+    );
+  }
+  if (curriculum === null) {
+    return (
+      <div className="mt-5 rounded-lg bg-muted/50 p-4 text-sm">
+        <p className="font-semibold text-navy-950">Curriculum not assigned yet</p>
+        <p className="mt-1 text-foreground/80">
+          The university assigns the syllabus version you follow. Your subjects will appear here
+          once it does.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <section aria-label={`Curriculum ${curriculum.name}`} className="mt-5 flex flex-col gap-3">
+      <div>
+        <h4 className="text-sm font-semibold text-navy-950">
+          Curriculum: {curriculum.name} ({curriculum.versionCode})
+        </h4>
+        <p className="text-meta">
+          {curriculum.structureType === 'YEAR_WISE' ? 'Year-wise' : 'Semester-wise'} ·{' '}
+          {periodUnit(curriculum.structureType, curriculum.numberOfPeriods)}
+        </p>
+      </div>
+      {curriculum.periods.map((period) => (
+        <div key={period.number} className="rounded-lg border border-border">
+          <p className="border-b border-border bg-muted/50 px-3 py-2 text-sm font-medium text-navy-950">
+            {period.label}
+          </p>
+          {period.subjects.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-foreground/80">No subjects listed.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {period.subjects.map((subject) => (
+                <li
+                  key={subject.code}
+                  className="flex flex-wrap justify-between gap-2 px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 break-words">
+                    <span className="font-medium text-navy-950">{subject.code}</span> {subject.name}
+                  </span>
+                  <span className="text-foreground/80">
+                    {[
+                      subject.classification ? CLASSIFICATION[subject.classification] : null,
+                      subject.credits !== null ? `${String(subject.credits)} credits` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+export function StudentCourses({
+  me,
+  curricula,
+}: {
+  me: StudentMe;
+  /** From GET /student/curriculum; null when it could not be loaded (the section is then omitted). */
+  curricula?: StudentCurriculum | null;
+}) {
+  const byRegistration = new Map(
+    (curricula?.registrations ?? []).map((item) => [item.registrationId, item.curriculum]),
+  );
   return (
     <>
       <PageIntro
@@ -205,6 +305,13 @@ export function StudentCourses({ me }: { me: StudentMe }) {
                     : null,
                 },
               ]}
+            />
+            <CurriculumSection
+              curriculum={
+                byRegistration.has(registration.id)
+                  ? byRegistration.get(registration.id)
+                  : undefined
+              }
             />
           </PortalCard>
         ))}

@@ -49,6 +49,9 @@ jobs:
       - name: Database schema drift check (migrations vs schema.prisma)
         run: pnpm db:check
 
+      - name: Synthetic Phase 7 to Phase 7B upgrade integrity
+        run: node packages/database/scripts/verify-curriculum-upgrade.mjs
+
       - name: Format check
         run: pnpm format:check
 
