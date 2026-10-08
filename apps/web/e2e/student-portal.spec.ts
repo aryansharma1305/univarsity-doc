@@ -38,6 +38,9 @@ async function issueCode(page: Page): Promise<string> {
 test('a student activates with a university code, sees only their own record, signs out and back in', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const browserErrors: string[] = [];
+  page.on('pageerror', (error) => browserErrors.push(error.message));
   const { fixture } = fixtures();
   const code = await issueCode(page);
 
@@ -56,6 +59,11 @@ test('a student activates with a university code, sees only their own record, si
     'not valid, or the code has expired',
   );
 
+  // The deliberate invalid-code response above is a 400; monitor console errors on the valid flow.
+  page.on('console', (message) => {
+    if (message.type() === 'error') browserErrors.push(message.text());
+  });
+
   await page.getByLabel('Activation code').fill(code.toLowerCase());
   await page.getByRole('button', { name: 'Activate account' }).click();
   await expect(page).toHaveURL(/\/student$/);
@@ -67,6 +75,41 @@ test('a student activates with a university code, sees only their own record, si
   await expectNoSeriousA11yViolations(page);
   await capture(page, 'student-home-desktop');
 
+  for (const [label, route, heading] of [
+    ['My Profile', '/student/profile', 'My Profile'],
+    ['Course Details', '/student/course', 'Course Details'],
+    ['Examinations & Results', '/student/results', 'Examinations & Results'],
+    ['My Documents', '/student/documents', 'My Documents'],
+    ['Notifications', '/student/notifications', 'Notifications'],
+    ['Account Settings', '/student/settings', 'Account Settings'],
+  ]) {
+    await page
+      .getByRole('navigation', { name: 'Student', exact: true })
+      .getByRole('link', { name: new RegExp(`^${label}`) })
+      .click();
+    await expect(page).toHaveURL(new RegExp(`${route}$`));
+    await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Student', exact: true })
+        .locator('[aria-current="page"]'),
+    ).toHaveCount(1);
+    await expectNoSeriousA11yViolations(page);
+    await expectNoHorizontalOverflow(page);
+    if (route === '/student/profile') {
+      await expect(page.getByText('Official records are read-only')).toBeVisible();
+      await expect(page.getByRole('button', { name: /Edit/ })).toHaveCount(0);
+    }
+    if (
+      ['/student/results', '/student/documents', '/student/notifications'].includes(route ?? '')
+    ) {
+      await expect(page.getByText(/are not available yet/)).toBeVisible();
+      await expect(page.locator('main input, main form')).toHaveCount(0);
+    }
+    await capture(page, `student-${route?.split('/').at(-1)}-desktop`);
+  }
+  expect(browserErrors).toEqual([]);
+
   // The student session is not a staff session.
   await page.goto('/admin');
   await expect(page).toHaveURL(/\/admin\/login/);
@@ -74,6 +117,17 @@ test('a student activates with a university code, sees only their own record, si
   await page.goto('/student');
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/student\/login/);
+  for (const route of [
+    '/student/profile',
+    '/student/course',
+    '/student/results',
+    '/student/documents',
+    '/student/notifications',
+    '/student/settings',
+  ]) {
+    await page.goto(route);
+    await expect(page).toHaveURL(/\/student\/login/);
+  }
   await page.goto('/student');
   await expect(page).toHaveURL(/\/student\/login/);
 
@@ -105,6 +159,19 @@ test.describe('mobile', () => {
     await expect(page).toHaveURL(/\/student$/);
     await expectNoHorizontalOverflow(page);
     await capture(page, 'student-home-mobile');
+    await page.getByRole('button', { name: 'Open student navigation' }).click();
+    const drawer = page.getByRole('dialog');
+    await expect(drawer).toBeVisible();
+    await expectNoSeriousA11yViolations(page);
+    await drawer.getByRole('link', { name: 'My Profile' }).click();
+    await expect(drawer).not.toBeVisible();
+    await expect(page).toHaveURL(/\/student\/profile$/);
+    await expectNoHorizontalOverflow(page);
+    await capture(page, 'student-profile-mobile');
+    await page.getByRole('button', { name: 'Open student navigation' }).click();
+    await page.keyboard.press('Escape');
+    await expect(drawer).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open student navigation' })).toBeFocused();
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/student\/login/);
 

@@ -26,6 +26,16 @@ test('homepage renders the portal and its services (desktop)', async ({ page }) 
   for (const service of SERVICES)
     await expect(main.getByRole('link', { name: new RegExp(service.card) })).toBeVisible();
   await expect(page.getByText(/ISO 27001|blockchain|FERPA|GDPR/i)).toHaveCount(0);
+  await expect(
+    page.getByRole('link', { name: 'Student Login', exact: true }).first(),
+  ).toHaveAttribute('href', '/student/login');
+  await expect(
+    page.getByRole('link', { name: 'Activate Student Account', exact: true }).first(),
+  ).toHaveAttribute('href', '/student/register');
+  await expect(page.getByRole('link', { name: 'Staff Login', exact: true })).toHaveAttribute(
+    'href',
+    '/admin/login',
+  );
   await expectNoHorizontalOverflow(page);
   await capture(page, 'public-home-desktop');
 });
@@ -51,8 +61,20 @@ test.describe('mobile', () => {
     await page.goto('/');
     await expectNoHorizontalOverflow(page);
     await capture(page, 'public-home-mobile');
+    await expect(
+      page.getByRole('link', { name: 'Student Login', exact: true }).first(),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Open menu' }).click();
-    await page.getByRole('dialog').getByRole('link', { name: 'Certificate Verification' }).click();
+    await expect(
+      page.getByRole('dialog').getByRole('link', { name: 'Activate Student Account', exact: true }),
+    ).toHaveAttribute('href', '/student/register');
+    await expect(
+      page.getByRole('dialog').getByRole('link', { name: 'Staff Login', exact: true }),
+    ).toHaveAttribute('href', '/admin/login');
+    await page
+      .getByRole('dialog')
+      .getByRole('link', { name: /Certificate Verification/ })
+      .click();
     await expect(page).toHaveURL(/\/verify\/certificate$/);
   });
 });

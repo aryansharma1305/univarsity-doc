@@ -55,8 +55,8 @@ export default function HomePage() {
           </FadeIn>
           <FadeIn delay={0.1}>
             <p className="max-w-2xl text-base text-muted-foreground md:text-lg">
-              Verify academic results, student registrations and certificates directly against the
-              university’s official records.
+              Access your student records through the student portal. Public result and document
+              verification services are planned and are not available yet.
             </p>
           </FadeIn>
         </div>
@@ -81,9 +81,12 @@ export default function HomePage() {
                     <service.icon aria-hidden="true" className="size-5" />
                   </span>
                   <span className="text-card-title text-navy-950">{service.title}</span>
+                  <span className="self-start rounded bg-secondary px-2 py-1 text-xs font-medium text-navy-900">
+                    Not available yet
+                  </span>
                   <span className="text-sm text-muted-foreground">{service.description}</span>
                   <span className="mt-auto flex items-center gap-1 pt-2 text-sm font-medium text-brand">
-                    Open
+                    View availability
                     <ArrowRightIcon
                       aria-hidden="true"
                       className="size-4 transition-transform group-hover:translate-x-0.5"
@@ -99,16 +102,23 @@ export default function HomePage() {
       <section className="mx-auto max-w-7xl px-4 pb-16 lg:px-8">
         <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-6 shadow-card md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-section-title text-navy-950">University staff</h2>
+            <h2 className="text-section-title text-navy-950">Student portal</h2>
             <p className="text-sm text-muted-foreground">
-              Manage academic records in the Docversity admin portal.
+              Sign in to view your university records, or activate your account with a
+              university-issued code.
             </p>
           </div>
           <Link
-            href="/admin/login"
+            href="/student/login"
             className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-brand-hover"
           >
-            Staff sign in
+            Student Login
+          </Link>
+          <Link
+            href="/student/register"
+            className="rounded text-sm font-medium text-brand hover:underline"
+          >
+            Activate Student Account
           </Link>
         </div>
       </section>
