@@ -1,15 +1,18 @@
 import Link from 'next/link';
-import type { StudentMe } from '@docversity/validation';
+import type { StudentMe, StudentProfileRequest } from '@docversity/validation';
 import {
   ArrowRightIcon,
   BellIcon,
   BookOpenIcon,
+  CheckCircle2Icon,
   ClipboardListIcon,
   FileTextIcon,
   HistoryIcon,
   LifeBuoyIcon,
+  SendIcon,
   ShieldCheckIcon,
   UserRoundIcon,
+  XCircleIcon,
 } from 'lucide-react';
 import { RecordStatus, STATUS_LABELS } from '@/components/data/status';
 import { cn } from '@docversity/ui';
@@ -23,7 +26,7 @@ const ACTIONS = [
     href: '/student/profile',
     label: 'My Profile',
     available: true,
-    detail: 'Personal information',
+    detail: 'View or update details',
     icon: UserRoundIcon,
   },
   {
@@ -55,9 +58,70 @@ const ACTIONS = [
   icon: typeof UserRoundIcon;
 }[];
 
-export function StudentOverview({ me }: { me: StudentMe }) {
+const ACTIVITY_TONE = {
+  success: 'bg-success-soft text-success-text',
+  warning: 'bg-warning-soft text-warning-text',
+  danger: 'bg-danger-soft text-danger-text',
+  neutral: 'bg-muted text-muted-foreground',
+} as const;
+
+interface ActivityEvent {
+  key: string;
+  title: string;
+  at: string;
+  icon: typeof UserRoundIcon;
+  tone: keyof typeof ACTIVITY_TONE;
+}
+
+const DECISIONS = {
+  APPROVED: { title: 'Profile update approved', icon: CheckCircle2Icon, tone: 'success' },
+  REJECTED: { title: 'Profile update rejected', icon: XCircleIcon, tone: 'danger' },
+  CANCELLED: { title: 'Profile update cancelled', icon: XCircleIcon, tone: 'neutral' },
+} as const;
+
+/** The student's real events, newest first (no staff audit data). */
+function activityOf(me: StudentMe, requests: readonly StudentProfileRequest[]): ActivityEvent[] {
+  const events: ActivityEvent[] = [];
+  if (me.account.activatedAt) {
+    events.push({
+      key: 'activated',
+      title: 'Student account activated',
+      at: me.account.activatedAt,
+      icon: ShieldCheckIcon,
+      tone: 'success',
+    });
+  }
+  for (const request of requests) {
+    events.push({
+      key: `${request.id}-submitted`,
+      title: 'Profile update submitted',
+      at: request.submittedAt,
+      icon: SendIcon,
+      tone: 'warning',
+    });
+    if (request.status !== 'PENDING' && request.decidedAt) {
+      events.push({
+        key: `${request.id}-decided`,
+        at: request.decidedAt,
+        ...DECISIONS[request.status],
+      });
+    }
+  }
+  return events.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 5);
+}
+
+export function StudentOverview({
+  me,
+  requests = [],
+}: {
+  me: StudentMe;
+  /** The student's own profile requests (newest first). */
+  requests?: readonly StudentProfileRequest[];
+}) {
   const { student, registrations } = me;
   const registration = primaryRegistration(registrations);
+  const activity = activityOf(me, requests);
+  const pendingRequest = requests.some((request) => request.status === 'PENDING');
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -73,6 +137,7 @@ export function StudentOverview({ me }: { me: StudentMe }) {
         <div className="flex min-w-0 items-start gap-4 sm:items-center sm:gap-5">
           <StudentAvatar
             name={student.fullName}
+            hasPhoto={student.hasPhoto}
             size="lg"
             className="size-16 text-xl sm:size-24 sm:text-3xl"
           />
@@ -178,13 +243,27 @@ export function StudentOverview({ me }: { me: StudentMe }) {
                 { label: 'Gender', value: student.gender },
                 {
                   label: 'Photo',
-                  value: student.hasPhoto ? 'On record · display not available yet' : null,
+                  value: student.hasPhoto ? 'On record' : null,
                 },
               ]}
             />
-            <p className="mt-5 border-t border-border pt-4 text-sm text-muted-foreground">
-              Official details are read-only. Contact the registrar’s office for corrections.
-            </p>
+            <div className="mt-5 flex flex-col gap-2 border-t border-border pt-4 text-sm">
+              {pendingRequest ? (
+                <p className="font-medium text-warning-text">
+                  An update you submitted is waiting for review.
+                </p>
+              ) : (
+                <p className="text-muted-foreground">
+                  Official details change only after the university approves a request.
+                </p>
+              )}
+              <Link
+                href={pendingRequest ? '/student/profile/requests' : '/student/profile'}
+                className="self-start rounded font-semibold text-brand hover:underline"
+              >
+                {pendingRequest ? 'Track my request' : 'Update my details'}
+              </Link>
+            </div>
           </PortalCard>
           <PortalCard
             title="Academic overview"
@@ -256,22 +335,27 @@ export function StudentOverview({ me }: { me: StudentMe }) {
         </div>
         <div className="flex flex-col gap-5">
           <PortalCard title="Recent activity" icon={HistoryIcon}>
-            {me.account.activatedAt ? (
-              // The only student-visible event recorded today: the account activation itself.
+            {activity.length > 0 ? (
+              // Only real events of this student: account activation and their own profile requests.
               <ol aria-label="Recent activity" className="flex flex-col gap-4">
-                <li className="flex gap-3">
-                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-success-soft text-success-text">
-                    <ShieldCheckIcon aria-hidden="true" className="size-4" />
-                  </span>
-                  <div className="min-w-0 text-sm">
-                    <p className="font-medium text-navy-950">Student account activated</p>
-                    <p className="mt-0.5 text-muted-foreground">
-                      <time dateTime={me.account.activatedAt}>
-                        {formatDateTime(me.account.activatedAt)}
-                      </time>
-                    </p>
-                  </div>
-                </li>
+                {activity.map((event) => (
+                  <li key={event.key} className="flex gap-3">
+                    <span
+                      className={cn(
+                        'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full',
+                        ACTIVITY_TONE[event.tone],
+                      )}
+                    >
+                      <event.icon aria-hidden="true" className="size-4" />
+                    </span>
+                    <div className="min-w-0 text-sm">
+                      <p className="font-medium text-navy-950">{event.title}</p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        <time dateTime={event.at}>{formatDateTime(event.at)}</time>
+                      </p>
+                    </div>
+                  </li>
+                ))}
               </ol>
             ) : (
               <PortalEmptyState

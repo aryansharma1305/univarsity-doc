@@ -8,6 +8,7 @@ import {
   KeyRoundIcon,
   LayoutDashboardIcon,
   type LucideIcon,
+  UserRoundPenIcon,
   UsersIcon,
 } from 'lucide-react';
 
@@ -17,6 +18,7 @@ export interface AdminNavItem {
     | '/admin/students'
     | '/admin/imports'
     | '/admin/student-accounts'
+    | '/admin/profile-requests'
     | '/admin/programs'
     | '/admin/departments'
     | '/admin/academic-sessions';
@@ -51,6 +53,12 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     permission: PERMISSIONS.studentAccountsRead,
   },
   {
+    href: '/admin/profile-requests',
+    label: 'Profile Requests',
+    icon: UserRoundPenIcon,
+    permission: PERMISSIONS.studentProfileRequestsRead,
+  },
+  {
     href: '/admin/programs',
     label: 'Programs',
     icon: GraduationCapIcon,
@@ -78,6 +86,7 @@ export const SEGMENT_LABELS: Record<string, string> = {
   'academic-sessions': 'Academic Sessions',
   imports: 'Imports',
   'student-accounts': 'Student Accounts',
+  'profile-requests': 'Profile Requests',
   // Context-specific labels: "<parent>/<segment>".
   'students/new': 'New student',
   'imports/new': 'New import',

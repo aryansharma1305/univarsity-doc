@@ -11,18 +11,18 @@ records, a student portal, and (planned) public verification of results, registr
 One PostgreSQL database serves admin, student and public features — never duplicate student or
 certificate data.
 
-| Phase | Scope                                                                                       | Status (git tag)                     |
-| ----- | ------------------------------------------------------------------------------------------- | ------------------------------------ |
-| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`              |
-| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`           |
-| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`               |
-| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`        |
-| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`         |
-| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`        |
-| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | Review `phase-6.5-student-portal-ui` |
+| Phase | Scope                                                                                       | Status (git tag)                         |
+| ----- | ------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`                  |
+| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`               |
+| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`                   |
+| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`            |
+| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`             |
+| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`            |
+| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)                        |
+| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | Review `feature/phase-7-student-profile` |
 
-**Not built yet** (do not describe as working): student profile change requests (DOB/photo submission),
-subjects/curriculum/examinations/grading, results entry/import/publication, certificate generation
+**Not built yet** (do not describe as working): subjects/curriculum/examinations/grading, results entry/import/publication, certificate generation
 (PDF/QR), historic certificate upload, public verification (the `/verify/*` and `/results` pages are honest
 "not available yet" placeholders), legacy WordPress migration, retention cleanup jobs, email delivery
 (password reset refuses with 503 when no notifier is configured). Plan: [docs/roadmap.md](docs/roadmap.md).
@@ -46,7 +46,7 @@ packages/ui       shadcn/ui-based components + theme tokens (consumed as source 
 packages/config   Shared TS and ESLint configs
 packages/documents Placeholder (official document layouts later)
 references/stitch Unmodified design export — visual reference only, never production code
-docs/             Architecture, API, database, security docs, ADR-0001…0010
+docs/             Architecture, API, database, security docs, ADR-0001…0011
 ```
 
 Packages are compiled to `dist/` and consumed via their `exports`; Turborepo builds dependencies first.
@@ -141,7 +141,8 @@ totalPages } }`. Unknown query parameters are rejected.
 - Prisma 7 with the `pg` adapter, UUIDv7 keys, `partialIndexes` preview. Schema:
   `packages/database/prisma/schema.prisma`; docs: [docs/database/README.md](docs/database/README.md).
 - Migrations: `20261007191730_core_academic_schema` (Phase 2, **frozen**),
-  `20261008120000_student_imports` (Phase 5), `20261009090000_student_accounts` (Phase 6).
+  `20261008120000_student_imports` (Phase 5), `20261009090000_student_accounts` (Phase 6),
+  `20261010090000_student_profile_change_requests` (Phase 7).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -175,6 +176,16 @@ endpoints derive the student from the session and take no student/registration I
 repeated wrong guesses, identical error for every failure; a new code recovers a forgotten password. The
 registration number alone is never sufficient. Details: [docs/architecture/authentication.md](docs/architecture/authentication.md),
 [authorization.md](docs/architecture/authorization.md), ADR-0007 and ADR-0010.
+
+## 10a. Student profile change requests (Phase 7)
+
+Students propose missing DOB, a photo, or corrections to name/parents' names/gender at `/student/profile`
+(edit → review → submit); history at `/student/profile/requests` (cancel while pending). Staff review at
+`/admin/profile-requests` (`studentProfileRequests.read` / `.review`, REGISTRAR + SUPER_ADMIN). One PENDING
+request per student; approval locks the rows and refuses stale requests (`409 PROFILE_REQUEST_STALE`);
+only requested fields change. Photos are decoded and re-encoded server-side (`sharp`, no metadata) and
+stored privately; served with `no-store` after an ownership/permission check. Details:
+[docs/api/profile-requests.md](docs/api/profile-requests.md), ADR-0011.
 
 ## 11. Student import workflow (Phase 5)
 

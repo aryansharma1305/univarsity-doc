@@ -22,5 +22,9 @@ export default async function StudentPortalLayout({ children }: { children: Reac
       </main>
     );
   }
-  return <StudentShell name={state.me.student.fullName}>{children}</StudentShell>;
+  return (
+    <StudentShell name={state.me.student.fullName} hasPhoto={state.me.student.hasPhoto}>
+      {children}
+    </StudentShell>
+  );
 }

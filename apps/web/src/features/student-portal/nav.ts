@@ -18,6 +18,9 @@ export type StudentNavHref =
   | '/student/notifications'
   | '/student/settings';
 
+/** Student portal pages that are not sidebar entries (reached from their parent page). */
+export type StudentSubpageHref = '/student/profile/requests';
+
 export interface StudentNavItem {
   href: StudentNavHref;
   label: string;

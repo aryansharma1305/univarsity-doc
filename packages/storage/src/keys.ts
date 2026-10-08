@@ -21,4 +21,12 @@ export const objectKeys = {
     assertUuid(importJobId);
     return `imports/${importJobId}/error-report-${randomUUID()}.xlsx`;
   },
+  /**
+   * A student's staged profile photo (normalised JPEG). On approval the same immutable object
+   * becomes the official photo, so it is never overwritten.
+   */
+  profileRequestPhoto(studentId: string): string {
+    assertUuid(studentId);
+    return `students/${studentId}/photos/${randomUUID()}.jpg`;
+  },
 };

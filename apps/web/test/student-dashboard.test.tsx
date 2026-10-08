@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { StudentMe } from '@docversity/validation';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
+  usePathname: () => '/student/profile',
+}));
 import { StudentOverview } from '@/features/student-portal/student-overview';
 import {
   StudentCourses,
@@ -77,12 +82,35 @@ describe('student dashboard and read-only pages', () => {
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 
-  it('shows missing DOB/photo and gives no edit control or submission form', () => {
-    render(<StudentProfile me={me} />);
+  it('shows missing DOB/photo; official details are never edited directly, only requested', () => {
+    render(<StudentProfile me={me} requests={[]} />);
     expect(screen.getByText('Photo: Not on record. Initials shown instead.')).toBeInTheDocument();
     expect(screen.getByText('Official records are read-only')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Edit|Submit/ })).not.toBeInTheDocument();
+    // No direct edit or one-click submit: changes go through a review step to an approval request.
+    expect(screen.queryByRole('button', { name: /^Edit|Submit/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review changes' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Date of birth')).toHaveAttribute('type', 'date');
     expect(screen.getAllByText('Not on record').length).toBeGreaterThan(0);
+  });
+
+  it('shows the pending request instead of a new form, and an error when requests cannot load', () => {
+    const pending = {
+      id: '01900000-0000-7000-8000-0000000000aa',
+      status: 'PENDING' as const,
+      submittedAt: '2026-10-09T10:00:00.000Z',
+      decidedAt: null,
+      changes: [{ field: 'dateOfBirth' as const, previous: null, proposed: '2001-04-05' }],
+      photo: null,
+      note: null,
+      rejectionReason: null,
+    };
+    const view = render(<StudentProfile me={me} requests={[pending]} />);
+    expect(screen.queryByRole('button', { name: 'Review changes' })).not.toBeInTheDocument();
+    expect(screen.getByText('Pending review')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
+    view.rerender(<StudentProfile me={me} requests={null} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('could not be loaded');
+    expect(screen.queryByRole('button', { name: 'Review changes' })).not.toBeInTheDocument();
   });
 
   it('shows only real course fields and formats the account activation timestamp', () => {

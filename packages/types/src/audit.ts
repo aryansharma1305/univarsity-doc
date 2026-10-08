@@ -40,6 +40,10 @@ export const AUDIT_ACTIONS = {
   studentLoginSuccess: 'STUDENT_LOGIN_SUCCESS',
   studentLoginFailure: 'STUDENT_LOGIN_FAILURE',
   studentLogout: 'STUDENT_LOGOUT',
+  studentProfileRequestSubmitted: 'STUDENT_PROFILE_REQUEST_SUBMITTED',
+  studentProfileRequestCancelled: 'STUDENT_PROFILE_REQUEST_CANCELLED',
+  studentProfileRequestApproved: 'STUDENT_PROFILE_REQUEST_APPROVED',
+  studentProfileRequestRejected: 'STUDENT_PROFILE_REQUEST_REJECTED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

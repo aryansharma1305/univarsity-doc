@@ -20,6 +20,15 @@ export interface E2EFixtures {
     programCode: string;
     sessionCode: string;
   };
+  /** Students with active portal accounts (random passwords) for profile request tests. */
+  profileStudents: StudentAccount[];
+}
+
+export interface StudentAccount {
+  studentId: string;
+  studentName: string;
+  registrationNumber: string;
+  password: string;
 }
 
 /** Written by prepare-e2e.mjs: random credentials + fixture IDs for the disposable e2e database. */
@@ -91,4 +100,34 @@ export async function openSection(page: Page, name: string): Promise<void> {
     .getByRole('link', { name, exact: true })
     .click();
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+}
+
+export async function studentSignIn(page: Page, student: StudentAccount): Promise<void> {
+  await page.goto('/student/login');
+  await page.getByLabel('Registration number').fill(student.registrationNumber);
+  await page.getByLabel('Password').fill(student.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page).toHaveURL(/\/student$/);
+}
+
+/** A synthetic, solid-colour PNG drawn in the browser (never a real photo). */
+export async function syntheticPng(page: Page, width = 400, height = 500): Promise<Buffer> {
+  const dataUrl = await page.evaluate(
+    ([w, h]) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('no canvas');
+      context.fillStyle = '#1d4ed8';
+      context.fillRect(0, 0, w, h);
+      context.fillStyle = '#f8fafc';
+      context.beginPath();
+      context.arc(w / 2, h / 2.6, w / 4, 0, Math.PI * 2);
+      context.fill();
+      return canvas.toDataURL('image/png');
+    },
+    [width, height] as const,
+  );
+  return Buffer.from(dataUrl.split(',')[1] ?? '', 'base64');
 }

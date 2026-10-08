@@ -47,7 +47,15 @@ function StudentNavigation({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 /** Student cookie/CSRF logout stays separate from staff authentication. */
-export function StudentShell({ name, children }: { name: string; children: ReactNode }) {
+export function StudentShell({
+  name,
+  hasPhoto = false,
+  children,
+}: {
+  name: string;
+  hasPhoto?: boolean;
+  children: ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -138,7 +146,7 @@ export function StudentShell({ name, children }: { name: string; children: React
               aria-label="View my profile"
               className="flex items-center gap-2 rounded-lg"
             >
-              <StudentAvatar name={name} size="sm" />
+              <StudentAvatar name={name} hasPhoto={hasPhoto} size="sm" />
               <span className="hidden max-w-48 truncate text-sm font-medium text-navy-950 sm:block">
                 {name}
               </span>

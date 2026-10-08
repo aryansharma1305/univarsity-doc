@@ -178,6 +178,14 @@ enum StudentAccountStatus {
   DISABLED
 }
 
+/// Lifecycle of a student's profile change request (Phase 7). Only PENDING requests change state.
+enum ProfileChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 // ============================================================================================
 // Organisation & calendar
 // ============================================================================================
@@ -255,8 +263,9 @@ model Student {
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  registrations StudentRegistration[]
-  account       StudentAccount?
+  registrations         StudentRegistration[]
+  account               StudentAccount?
+  profileChangeRequests StudentProfileChangeRequest[]
 
   @@map("students")
 }
@@ -738,7 +747,8 @@ model StudentAccount {
   createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  student               Student                       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  profileChangeRequests StudentProfileChangeRequest[]
 
   @@index([status])
   @@map("student_accounts")
@@ -774,6 +784,49 @@ model StudentActivationCode {
 // Users & roles (schema only — authentication is Phase 3)
 // ============================================================================================
 
+/// A student's request to correct or complete their own personal details (Phase 7).
+/// Submission data is immutable (trigger); only the decision columns change, once, from PENDING.
+/// The official `students` row changes only when staff approve, inside the same transaction.
+model StudentProfileChangeRequest {
+  id                   String                     @id @default(uuid(7)) @db.Uuid
+  studentId            String                     @map("student_id") @db.Uuid
+  /// The student account (session) that submitted it — never a client-supplied ID.
+  submittedByAccountId String                     @map("submitted_by_account_id") @db.Uuid
+  status               ProfileChangeRequestStatus @default(PENDING)
+  /// Proposed values for the requested text/date fields only, e.g. {"dateOfBirth":"2001-04-05"}.
+  proposedChanges      Json                       @map("proposed_changes")
+  /// Official values of every profile field at submission (staleness check and review comparison).
+  currentSnapshot      Json                       @map("current_snapshot")
+  /// Optional explanation from the student.
+  studentNote          String?                    @map("student_note") @db.VarChar(500)
+  /// Staged, normalised JPEG under a generated key (private storage). Null = no photo change.
+  photoStorageKey      String?                    @map("photo_storage_key") @db.VarChar(512)
+  photoSha256          String?                    @map("photo_sha256") @db.Char(64)
+  photoSizeBytes       Int?                       @map("photo_size_bytes")
+  photoWidth           Int?                       @map("photo_width") @db.SmallInt
+  photoHeight          Int?                       @map("photo_height") @db.SmallInt
+  /// students.photo_storage_key at submission (internal; never returned) — detects a replaced photo.
+  basePhotoStorageKey  String?                    @map("base_photo_storage_key") @db.VarChar(512)
+  submittedAt          DateTime                   @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  reviewedByUserId     String?                    @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt           DateTime?                  @map("reviewed_at") @db.Timestamptz(3)
+  /// Required when REJECTED; shown to the student.
+  rejectionReason      String?                    @map("rejection_reason") @db.VarChar(1000)
+  cancelledAt          DateTime?                  @map("cancelled_at") @db.Timestamptz(3)
+  createdAt            DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student     Student        @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  submittedBy StudentAccount @relation(fields: [submittedByAccountId], references: [id], onDelete: Restrict)
+  reviewedBy  User?          @relation(fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  /// At most one open request per student, so two requests can never compete for the same record.
+  @@unique([studentId], map: "student_profile_change_requests_one_pending_per_student_key", where: raw("(status = 'PENDING'::\"ProfileChangeRequestStatus\")"))
+  @@index([studentId, submittedAt(sort: Desc)])
+  @@index([status, submittedAt(sort: Desc)])
+  @@map("student_profile_change_requests")
+}
+
 model User {
   id           String     @id @default(uuid(7)) @db.Uuid
   /// Stored lower-case (CHECK) so uniqueness is case-insensitive.
@@ -785,15 +838,16 @@ model User {
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  roles                 UserRole[]
-  importJobs            ImportJob[]             @relation("ImportJobCreatedBy")
-  importJobsCommitted   ImportJob[]             @relation("ImportJobCommittedBy")
-  activationCodesIssued StudentActivationCode[]
-  auditLogs             AuditLog[]
-  certificatesGenerated Certificate[]           @relation("CertificateGeneratedBy")
-  certificatesApproved  Certificate[]           @relation("CertificateApprovedBy")
-  certificatesIssued    Certificate[]           @relation("CertificateIssuedBy")
-  certificatesRevoked   Certificate[]           @relation("CertificateRevokedBy")
+  roles                   UserRole[]
+  importJobs              ImportJob[]                   @relation("ImportJobCreatedBy")
+  importJobsCommitted     ImportJob[]                   @relation("ImportJobCommittedBy")
+  activationCodesIssued   StudentActivationCode[]
+  profileRequestsReviewed StudentProfileChangeRequest[]
+  auditLogs               AuditLog[]
+  certificatesGenerated   Certificate[]                 @relation("CertificateGeneratedBy")
+  certificatesApproved    Certificate[]                 @relation("CertificateApprovedBy")
+  certificatesIssued      Certificate[]                 @relation("CertificateIssuedBy")
+  certificatesRevoked     Certificate[]                 @relation("CertificateRevokedBy")
 
   @@map("users")
 }

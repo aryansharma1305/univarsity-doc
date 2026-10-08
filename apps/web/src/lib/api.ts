@@ -153,7 +153,9 @@ export async function apiUpload<TSchema extends z.ZodType>(
   path: string,
   form: FormData,
   schema: TSchema,
+  options: { principal?: Principal } = {},
 ): Promise<z.infer<TSchema>> {
+  const principal = options.principal ?? 'staff';
   const send = async (refreshCsrf: boolean) =>
     fetch(buildUrl(path), {
       method: 'POST',
@@ -161,7 +163,7 @@ export async function apiUpload<TSchema extends z.ZodType>(
       cache: 'no-store',
       headers: {
         Accept: 'application/json',
-        'X-CSRF-Token': await getCsrfToken('staff', refreshCsrf),
+        'X-CSRF-Token': await getCsrfToken(principal, refreshCsrf),
       },
       body: form,
     });
