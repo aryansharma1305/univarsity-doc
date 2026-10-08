@@ -25,7 +25,12 @@ export const viewport: Viewport = { themeColor: '#03142F' };
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${jakarta.variable}`}>
-      <body className="min-h-screen">
+      {/*
+        Browser extensions (e.g. Grammarly adds data-gr-ext-installed / data-new-gr-c-s-check-loaded)
+        modify <body> attributes before React hydrates. suppressHydrationWarning only ignores
+        attribute differences on this one element — mismatches anywhere inside the app are still reported.
+      */}
+      <body className="min-h-screen" suppressHydrationWarning>
         {children}
         <Toaster />
       </body>
