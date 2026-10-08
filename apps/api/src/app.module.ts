@@ -1,5 +1,6 @@
 import { type DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { AcademicModule } from './academic/academic.module.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthGuard } from './auth/auth.guard.js';
 import { AuthModule } from './auth/auth.module.js';
@@ -26,6 +27,7 @@ export class AppModule {
         StorageModule,
         AuditModule,
         AuthModule,
+        AcademicModule,
         HealthModule,
       ],
       providers: [

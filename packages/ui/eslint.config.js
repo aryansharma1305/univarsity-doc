@@ -1,5 +1,3 @@
-// Base rules only until the package contains React components; switch to
-// `@docversity/config/eslint/nextjs` when the first component is added.
-import { baseConfig } from '@docversity/config/eslint/base';
+import { nextjsConfig } from '@docversity/config/eslint/nextjs';
 
-export default baseConfig({ tsconfigRootDir: import.meta.dirname });
+export default nextjsConfig({ tsconfigRootDir: import.meta.dirname });

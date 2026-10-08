@@ -176,3 +176,24 @@ export function userOf(response: HasBody) {
 export function healthOf(response: HasBody) {
   return healthResponseSchema.parse(response.body);
 }
+
+/** A signed-in staff member with the given roles: request helpers that send the CSRF token. */
+export async function staff(app: INestApplication, roles: RoleName[]) {
+  const user = await createTestUser({ roles });
+  const agent = browser(app);
+  const csrf = await signIn(agent, user);
+  return {
+    user,
+    get: (path: string) => agent.get(`/api/v1/${path}`),
+    post: (path: string, body?: object) =>
+      agent.post(`/api/v1/${path}`).set('X-CSRF-Token', csrf).send(body),
+    patch: (path: string, body?: object) =>
+      agent.patch(`/api/v1/${path}`).set('X-CSRF-Token', csrf).send(body),
+  };
+}
+
+export type Staff = Awaited<ReturnType<typeof staff>>;
+
+export function uniqueCode(prefix: string): string {
+  return `${prefix}-${randomUUID().slice(0, 6).toUpperCase()}`;
+}

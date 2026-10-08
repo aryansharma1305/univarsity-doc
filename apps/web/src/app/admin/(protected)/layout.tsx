@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
 import type { ReactNode } from 'react';
+import { AdminShell } from '@/components/admin/admin-shell';
 import { getSessionState } from '@/lib/server-auth';
 
 /**
@@ -14,12 +15,12 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
   if (state.status === 'unavailable') {
     return (
       <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-4 px-4">
-        <h1 className="text-2xl font-bold">DOCVERSITY</h1>
+        <h1 className="text-page-title text-navy-950">Docversity</h1>
         <p role="status">
           The sign-in service is temporarily unavailable. Please try again shortly.
         </p>
       </main>
     );
   }
-  return <>{children}</>;
+  return <AdminShell user={state.user}>{children}</AdminShell>;
 }

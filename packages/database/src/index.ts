@@ -4,6 +4,7 @@ export {
   domainGuardName,
   isDomainIntegrityViolation,
   prismaErrorCode,
+  uniqueConstraintName,
 } from './errors.js';
-export type { PrismaClient } from './generated/prisma/client.js';
+export type { PrismaClient, Prisma } from './generated/prisma/client.js';
 export type * as DatabaseModels from './generated/prisma/models.js';

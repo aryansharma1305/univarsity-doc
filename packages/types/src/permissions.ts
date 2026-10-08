@@ -12,8 +12,16 @@
  * (see docs/architecture/authorization.md).
  */
 export const PERMISSIONS = {
+  departmentsRead: 'departments.read',
+  departmentsWrite: 'departments.write',
+  programsRead: 'programs.read',
+  programsWrite: 'programs.write',
+  academicSessionsRead: 'academicSessions.read',
+  academicSessionsWrite: 'academicSessions.write',
   studentsRead: 'students.read',
   studentsWrite: 'students.write',
+  registrationsRead: 'registrations.read',
+  registrationsWrite: 'registrations.write',
   resultsRead: 'results.read',
   resultsWrite: 'results.write',
   resultsPublish: 'results.publish',
@@ -47,19 +55,38 @@ export type RoleName = (typeof ROLE_NAMES)[keyof typeof ROLE_NAMES];
 
 const P = PERMISSIONS;
 
-/** Read-only access shared by every staff role. */
+/** Read-only access shared by every staff role (academic masters, students, results, documents). */
 const READ_ONLY: readonly Permission[] = [
+  P.departmentsRead,
+  P.programsRead,
+  P.academicSessionsRead,
   P.studentsRead,
+  P.registrationsRead,
   P.resultsRead,
   P.certificatesRead,
   P.templatesRead,
 ];
 
+/** Maintaining the academic masters and student records (Phase 4). */
+const ACADEMIC_RECORDS_WRITE: readonly Permission[] = [
+  P.departmentsWrite,
+  P.programsWrite,
+  P.academicSessionsWrite,
+  P.studentsWrite,
+  P.registrationsWrite,
+];
+
 export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>> = Object.freeze({
   /** Everything, including user and settings management. */
   SUPER_ADMIN: ALL_PERMISSIONS,
-  /** Owns student records and imports; prepares (but cannot approve/issue) certificates. */
-  REGISTRAR: [...READ_ONLY, P.studentsWrite, P.importsRun, P.certificatesGenerate, P.auditRead],
+  /** Owns academic masters, student records and imports; prepares (cannot approve/issue) certificates. */
+  REGISTRAR: [
+    ...READ_ONLY,
+    ...ACADEMIC_RECORDS_WRITE,
+    P.importsRun,
+    P.certificatesGenerate,
+    P.auditRead,
+  ],
   /** Prepares results and runs result imports; cannot publish (maker–checker). */
   EXAM_ADMIN: [...READ_ONLY, P.resultsWrite, P.importsRun],
   /** Prepares certificates and maintains templates; cannot approve/issue (maker–checker). */

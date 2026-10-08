@@ -36,3 +36,16 @@ export function domainGuardName(error: unknown): string | undefined {
   if (typeof message !== 'string') return undefined;
   return /^([a-z_]+):/.exec(message)?.[1];
 }
+
+/**
+ * The name of the unique constraint/index a P2002 error violated (e.g. "programs_code_key"), so callers
+ * can turn it into a field-level message.
+ */
+export function uniqueConstraintName(error: unknown): string | undefined {
+  if (prismaErrorCode(error) !== 'P2002') return undefined;
+  const cause = driverCause(error) as { constraint?: { index?: unknown } } | undefined;
+  const index = cause?.constraint?.index;
+  if (typeof index === 'string') return index;
+  const target = (error as { meta?: { target?: unknown } }).meta?.target;
+  return typeof target === 'string' ? target : Array.isArray(target) ? target.join('_') : undefined;
+}

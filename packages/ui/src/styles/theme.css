@@ -1,0 +1,192 @@
+/*
+ * Docversity design tokens (Tailwind CSS v4).
+ *
+ * One consistent palette (the Stitch export contained two conflicting ones — see
+ * docs/architecture/frontend.md). Brand values are the agreed client palette; text shades of the
+ * status colours are darkened where needed so text meets WCAG AA (4.5:1) on white/soft backgrounds.
+ *
+ * Usage: import this file from the app's global CSS after `@import "tailwindcss"`.
+ */
+
+:root {
+  /* Brand */
+  --dv-navy-950: #03142f; /* primary navy — sidebar, footer, headings on light */
+  --dv-navy-900: #071f4a; /* secondary navy */
+  --dv-blue-600: #0759d7; /* primary blue — actions, links */
+  --dv-blue-700: #0648b0; /* primary blue hover */
+  --dv-blue-400: #168cff; /* accent blue — focus ring, highlights */
+  --dv-gold-400: #d4af7a; /* accent gold — official/seal accents only */
+  --dv-gold-700: #8a6227; /* gold text on light (AA) */
+
+  /* Neutrals */
+  --dv-bg: #f7f9fc;
+  --dv-surface: #ffffff;
+  --dv-surface-subtle: #f1f5f9;
+  --dv-text: #0b1c30;
+  --dv-text-muted: #64748b; /* 4.76:1 on white */
+  --dv-border: #e2e8f0;
+  --dv-border-strong: #cbd5e1;
+
+  /* Status: base colour (icons, dots, borders) / text (AA) / soft background */
+  --dv-success: #16a34a;
+  --dv-success-text: #166534;
+  --dv-success-soft: #ecfdf3;
+  --dv-warning: #d97706;
+  --dv-warning-text: #92400e;
+  --dv-warning-soft: #fffbeb;
+  --dv-danger: #dc2626;
+  --dv-danger-text: #b91c1c;
+  --dv-danger-soft: #fef2f2;
+  --dv-info-soft: #eef4ff;
+
+  /* shadcn/ui semantic variables (light theme only in this phase) */
+  --background: var(--dv-bg);
+  --foreground: var(--dv-text);
+  --card: var(--dv-surface);
+  --card-foreground: var(--dv-text);
+  --popover: var(--dv-surface);
+  --popover-foreground: var(--dv-text);
+  --primary: var(--dv-blue-600);
+  --primary-foreground: #ffffff;
+  --secondary: #eef3fb;
+  --secondary-foreground: var(--dv-navy-900);
+  --muted: var(--dv-surface-subtle);
+  --muted-foreground: var(--dv-text-muted);
+  --accent: #eef3fb;
+  --accent-foreground: var(--dv-navy-900);
+  --destructive: var(--dv-danger);
+  --border: var(--dv-border);
+  --input: var(--dv-border-strong);
+  --ring: var(--dv-blue-400);
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-border-strong: var(--dv-border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-navy-950: var(--dv-navy-950);
+  --color-navy-900: var(--dv-navy-900);
+  --color-brand: var(--dv-blue-600);
+  --color-brand-hover: var(--dv-blue-700);
+  --color-brand-accent: var(--dv-blue-400);
+  --color-gold: var(--dv-gold-400);
+  --color-gold-text: var(--dv-gold-700);
+  --color-success: var(--dv-success);
+  --color-success-text: var(--dv-success-text);
+  --color-success-soft: var(--dv-success-soft);
+  --color-warning: var(--dv-warning);
+  --color-warning-text: var(--dv-warning-text);
+  --color-warning-soft: var(--dv-warning-soft);
+  --color-danger: var(--dv-danger);
+  --color-danger-text: var(--dv-danger-text);
+  --color-danger-soft: var(--dv-danger-soft);
+  --color-info-soft: var(--dv-info-soft);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-card: 0 1px 3px 0 rgb(3 20 47 / 0.04), 0 1px 2px -1px rgb(3 20 47 / 0.04);
+  --shadow-raised: 0 4px 6px -1px rgb(3 20 47 / 0.07), 0 2px 4px -2px rgb(3 20 47 / 0.05);
+}
+
+/* Typography scale — use these instead of ad-hoc sizes. */
+@utility text-page-title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  @media (width >= 48rem) {
+    font-size: 1.75rem;
+    line-height: 2.25rem;
+  }
+}
+@utility text-section-title {
+  font-family: var(--font-heading);
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+@utility text-card-title {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+}
+@utility text-body {
+  font-size: 0.9375rem;
+  line-height: 1.5rem;
+}
+@utility text-meta {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: var(--dv-text-muted);
+}
+@utility text-table {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+@utility text-label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+}
+@utility text-badge {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+@utility tabular {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  /* Visible keyboard focus everywhere (components add their own ring as well). */
+  :focus-visible {
+    outline: 2px solid var(--dv-blue-400);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

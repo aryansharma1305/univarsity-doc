@@ -73,3 +73,39 @@ describe('role → permission mapping', () => {
     expect(permissionsForRoles(['NOT_A_ROLE']).size).toBe(0);
   });
 });
+
+describe('academic records (Phase 4)', () => {
+  const MASTER_WRITE = [
+    PERMISSIONS.departmentsWrite,
+    PERMISSIONS.programsWrite,
+    PERMISSIONS.academicSessionsWrite,
+    PERMISSIONS.studentsWrite,
+    PERMISSIONS.registrationsWrite,
+  ];
+  const MASTER_READ = [
+    PERMISSIONS.departmentsRead,
+    PERMISSIONS.programsRead,
+    PERMISSIONS.academicSessionsRead,
+    PERMISSIONS.studentsRead,
+    PERMISSIONS.registrationsRead,
+  ];
+
+  it('lets every staff role read the academic masters and student records', () => {
+    for (const role of Object.values(ROLE_NAMES)) {
+      const granted = permissionsForRoles([role]);
+      for (const permission of MASTER_READ)
+        expect(granted.has(permission), `${role} ${permission}`).toBe(true);
+    }
+  });
+
+  it('lets only SUPER_ADMIN and REGISTRAR change them', () => {
+    for (const role of Object.values(ROLE_NAMES)) {
+      const granted = permissionsForRoles([role]);
+      const canWrite = MASTER_WRITE.every((permission) => granted.has(permission));
+      const canWriteAny = MASTER_WRITE.some((permission) => granted.has(permission));
+      const expected = role === ROLE_NAMES.superAdmin || role === ROLE_NAMES.registrar;
+      expect(canWrite, role).toBe(expected);
+      expect(canWriteAny, role).toBe(expected);
+    }
+  });
+});

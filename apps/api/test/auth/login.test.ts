@@ -44,7 +44,16 @@ describe('POST /api/v1/auth/login', () => {
       email: user.email,
       displayName: 'Test Staff Member',
       roles: ['VIEWER'],
-      permissions: ['certificates.read', 'results.read', 'students.read', 'templates.read'],
+      permissions: [
+        'academicSessions.read',
+        'certificates.read',
+        'departments.read',
+        'programs.read',
+        'registrations.read',
+        'results.read',
+        'students.read',
+        'templates.read',
+      ],
     });
     const cookie = setCookie(response, 'dv_session');
     expect(cookie).toBeDefined();

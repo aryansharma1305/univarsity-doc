@@ -1,18 +1,34 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import type { ReactNode } from 'react';
+import { Toaster } from '@docversity/ui/components/sonner';
 import '@/styles/globals.css';
 
+// next/font downloads the fonts at build time and serves them from this app (no runtime CDN).
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  weight: ['600', '700'],
+  variable: '--font-jakarta',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
-  title: 'DOCVERSITY',
-  description: 'University Academic Verification & Records Portal',
-  // Phase 1 is a development foundation only — keep it out of search indexes.
+  title: { default: 'Docversity', template: '%s — Docversity' },
+  description: 'Academic Verification & Records Portal',
+  // Not launched yet — keep out of search indexes until go-live.
   robots: { index: false, follow: false },
 };
 
+export const viewport: Viewport = { themeColor: '#03142F' };
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">{children}</body>
+    <html lang="en" className={`${inter.variable} ${jakarta.variable}`}>
+      <body className="min-h-screen">
+        {children}
+        <Toaster />
+      </body>
     </html>
   );
 }

@@ -3,10 +3,10 @@
 University **Academic Verification & Records Portal** — public verification of results, registrations and
 certificates, and an admin system for students, results, imports and certificate issuance.
 
-> **Status: Phase 3 — authentication & authorization.** Foundation (Phase 1), the core academic schema
-> (Phase 2), and staff authentication with Redis sessions, CSRF protection, RBAC and the audit foundation
-> (Phase 3) are in place. **No product features (students, results, imports, certificates, public
-> verification) exist yet.** See [`docs/architecture/`](docs/architecture/overview.md).
+> **Status: Phase 4 — design system, application shells and academic records.** Foundation, core schema,
+> staff authentication/RBAC/audit, the Docversity design system, public and admin shells, and management of
+> departments, programs, academic sessions, students and registrations are in place. **Not yet built:**
+> imports, examinations/results, certificates, public verification. See [`docs/`](docs/README.md).
 
 ## Stack
 
@@ -106,6 +106,7 @@ docker/        Compose support files (MinIO bootstrap)
 - [Stitch migration rules](docs/architecture/stitch-migration.md)
 - [Product decisions already agreed](docs/architecture/product-decisions.md)
 - [Frontend animation rules](docs/architecture/frontend-animation.md)
+- [Frontend](docs/architecture/frontend.md) · [Academic masters API](docs/api/academic-masters.md)
 - [Authentication](docs/architecture/authentication.md) · [Authorization](docs/architecture/authorization.md) · [Auth threat model](docs/security/auth-threat-model.md)
 - [API](docs/api/README.md) · [Database](docs/database/README.md)
 - [Architecture decision records](docs/decisions/)

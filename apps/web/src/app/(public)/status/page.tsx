@@ -6,6 +6,8 @@ import { loadWebEnv } from '@/lib/env';
  * Phase 1 development status page. Every value shown comes from a live check made while
  * rendering this request — nothing is hard-coded or simulated.
  */
+export const metadata = { title: 'System status' };
+
 export default async function DevelopmentStatusPage() {
   // Render per request: a status page must never be served from a build-time snapshot.
   await connection();
@@ -13,9 +15,9 @@ export default async function DevelopmentStatusPage() {
   const api = await getApiHealth(env.API_INTERNAL_URL);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center gap-8 px-4 py-12">
+    <div className="mx-auto flex max-w-xl flex-col justify-center gap-8 px-4 py-12">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">DOCVERSITY</h1>
+        <h1 className="text-page-title text-navy-950">DOCVERSITY</h1>
         <p className="mt-1 text-slate-600">Development Environment</p>
       </header>
 
@@ -64,7 +66,7 @@ export default async function DevelopmentStatusPage() {
         Status is checked live on every page load. Reload the page to check again. No product
         features are available in this phase.
       </p>
-    </main>
+    </div>
   );
 }
 

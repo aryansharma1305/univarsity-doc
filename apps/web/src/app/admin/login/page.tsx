@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
+import { Wordmark } from '@/components/brand/wordmark';
 import { LoginForm } from '@/features/auth/login-form';
 import { getSessionState } from '@/lib/server-auth';
 
-export const metadata: Metadata = { title: 'Staff sign in — DOCVERSITY' };
+export const metadata: Metadata = { title: 'Staff sign in' };
 
 export default async function AdminLoginPage() {
   await connection();
@@ -12,20 +14,29 @@ export default async function AdminLoginPage() {
   if (state.status === 'authenticated') redirect('/admin');
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-4 py-12">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight">DOCVERSITY</h1>
-        <p className="mt-1 text-slate-600">Staff sign in</p>
-      </header>
-      {state.status === 'unavailable' && (
-        <p
-          role="status"
-          className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
-        >
-          Sign-in is temporarily unavailable. Please try again shortly.
-        </p>
-      )}
-      <LoginForm />
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-info-soft to-background px-4 py-12">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex justify-center">
+          <Link href="/" className="rounded-md" aria-label="Docversity home">
+            <Wordmark />
+          </Link>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-6 shadow-raised">
+          <h1 className="text-section-title text-navy-950">Staff sign in</h1>
+          <p className="mt-1 mb-6 text-sm text-muted-foreground">
+            For authorised university staff only.
+          </p>
+          {state.status === 'unavailable' && (
+            <p
+              role="status"
+              className="mb-4 rounded-md border border-warning/30 bg-warning-soft p-3 text-sm text-warning-text"
+            >
+              Sign-in is temporarily unavailable. Please try again shortly.
+            </p>
+          )}
+          <LoginForm />
+        </div>
+      </div>
     </main>
   );
 }

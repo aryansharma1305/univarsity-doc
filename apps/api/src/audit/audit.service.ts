@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@docversity/database';
 import type { AuditAction } from '@docversity/types';
 import { currentRequestId } from '../common/request-context.js';
 import { redact } from '../common/json-logger.js';
@@ -23,8 +24,12 @@ export interface AuditEvent {
 export class AuditService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async writeAuditEvent(event: AuditEvent): Promise<void> {
-    await this.prisma.client.auditLog.create({
+  /**
+   * Writes one audit entry. Pass the transaction client (`tx`) when auditing a data change so the
+   * change and its audit entry commit — or roll back — together.
+   */
+  async writeAuditEvent(event: AuditEvent, tx?: Prisma.TransactionClient): Promise<void> {
+    await (tx ?? this.prisma.client).auditLog.create({
       data: {
         actorUserId: event.actorUserId ?? null,
         action: event.action,

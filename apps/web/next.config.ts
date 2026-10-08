@@ -22,6 +22,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // The design system is consumed as TypeScript source.
+  transpilePackages: ['@docversity/ui'],
   poweredByHeader: false,
   typedRoutes: true,
   headers() {

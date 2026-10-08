@@ -1,13 +1,6 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@docversity/ui/styles/theme.css';
 
-/*
- * Phase 1: Tailwind is wired up with its defaults only. The Docversity design tokens (colour,
- * typography, radius, elevation) are introduced in Phase 2 after client sign-off — see
- * docs/architecture/stitch-migration.md. Do not add ad-hoc brand colours here.
- */
-
-@layer base {
-  html {
-    color-scheme: light;
-  }
-}
+/* Tailwind must also scan the design-system package for class names. */
+@source '../../../../packages/ui/src';

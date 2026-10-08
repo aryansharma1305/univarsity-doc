@@ -13,7 +13,9 @@ test fixtures) ensure all six code-defined roles exist as records.
 
 ## Permissions
 
-`students.read` · `students.write` · `results.read` · `results.write` · `results.publish` ·
+`departments.read` · `departments.write` · `programs.read` · `programs.write` ·
+`academicSessions.read` · `academicSessions.write` · `students.read` · `students.write` ·
+`registrations.read` · `registrations.write` · `results.read` · `results.write` · `results.publish` ·
 `certificates.read` · `certificates.generate` · `certificates.approve` · `certificates.issue` ·
 `certificates.revoke` · `templates.read` · `templates.write` · `imports.run` · `audit.read` ·
 `users.manage` · `settings.manage`
@@ -45,6 +47,7 @@ Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
   (`results.write` + `results.publish`; `certificates.generate` + `certificates.issue`).
 - **VIEWER is read-only.**
 - **Only SUPER_ADMIN manages users and settings.**
+- **Academic masters and student records (Phase 4):** every role reads; only SUPER_ADMIN and REGISTRAR change them.
 - A user's permissions are the union of their roles' permissions. There is no role hierarchy.
 
 ## Guards
@@ -69,5 +72,5 @@ create(@CurrentAuth() auth: AuthContext, @Body(new ZodValidationPipe(schema)) bo
 The web app may read `permissions` from `GET /api/v1/auth/me` to hide controls, but the API remains
 authoritative.
 
-Phase 3 has no feature endpoints, so the guard is tested through test-only routes
-(`apps/api/test/support/test-routes.ts`) that never ship in the application.
+The guard is tested through test-only routes (`apps/api/test/support/test-routes.ts`) and, since
+Phase 4, through the real academic endpoints (`apps/api/test/academic`).
