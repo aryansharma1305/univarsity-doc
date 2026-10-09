@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "clean": "rm -rf dist",
-    "admin:create": "node dist/cli/create-admin.js"
+    "admin:create": "node dist/cli/create-admin.js",
+    "documents:backfill-student-copies": "node dist/cli/backfill-student-copies.js"
   },
   "dependencies": {
     "@docversity/database": "workspace:*",

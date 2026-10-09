@@ -168,3 +168,32 @@ describe('course & curriculum management (Phase 7B)', () => {
     }
   });
 });
+
+describe('historical documents (Phase 8)', () => {
+  const has = (role: string, permission: string) =>
+    permissionsForRoles([role]).has(permission as never);
+
+  it('keeps personal documents away from read-only and examination roles', () => {
+    for (const role of [ROLE_NAMES.viewer, ROLE_NAMES.examAdmin]) {
+      expect(has(role, PERMISSIONS.historicalDocumentsRead), role).toBe(false);
+    }
+  });
+
+  it('separates preparing (upload) from publishing and authenticity review', () => {
+    expect(has(ROLE_NAMES.certificateAdmin, PERMISSIONS.historicalDocumentsUpload)).toBe(true);
+    expect(has(ROLE_NAMES.certificateAdmin, PERMISSIONS.historicalDocumentsPublish)).toBe(false);
+    expect(has(ROLE_NAMES.certificateAdmin, PERMISSIONS.historicalDocumentsVerify)).toBe(false);
+    expect(has(ROLE_NAMES.approver, PERMISSIONS.historicalDocumentsUpload)).toBe(false);
+    expect(has(ROLE_NAMES.approver, PERMISSIONS.historicalDocumentsPublish)).toBe(true);
+    expect(has(ROLE_NAMES.approver, PERMISSIONS.historicalDocumentsVerify)).toBe(true);
+    for (const permission of [
+      PERMISSIONS.historicalDocumentsRead,
+      PERMISSIONS.historicalDocumentsUpload,
+      PERMISSIONS.historicalDocumentsPublish,
+      PERMISSIONS.historicalDocumentsVerify,
+    ]) {
+      expect(has(ROLE_NAMES.registrar, permission)).toBe(true);
+      expect(has(ROLE_NAMES.superAdmin, permission)).toBe(true);
+    }
+  });
+});

@@ -204,6 +204,54 @@ enum SubjectCategory {
   COMBINED
 }
 
+/// Kind of historical document uploaded by staff (Phase 8). Not a Docversity-issued credential.
+enum HistoricalDocumentType {
+  DEGREE_CERTIFICATE
+  DIPLOMA_CERTIFICATE
+  PROVISIONAL_CERTIFICATE
+  MARKSHEET
+  TRANSCRIPT
+  MIGRATION_CERTIFICATE
+  CHARACTER_CERTIFICATE
+  OTHER
+}
+
+/// Student visibility lifecycle of a historical document. Nothing is ever deleted.
+enum HistoricalDocumentStatus {
+  /// Uploaded by staff; not visible to the student.
+  DRAFT
+  /// Visible to its student in /student/documents.
+  PUBLISHED
+  /// Hidden from the student with a recorded reason (may be published again).
+  WITHDRAWN
+  /// Replaced by a newer published document; kept for history.
+  SUPERSEDED
+}
+
+/// Official authenticity review — independent of student visibility. Never "cryptographically verified".
+enum DocumentAuthenticity {
+  UNVERIFIED
+  CONFIRMED_AGAINST_RECORDS
+  DISPUTED
+}
+
+/// Where a historical document came from.
+enum DocumentProvenance {
+  UNIVERSITY_ARCHIVE
+  LEGACY_WORDPRESS
+  STUDENT_PROVIDED_COPY
+  OTHER
+}
+
+/// Kinds of embedded image metadata detected at upload (Phase 8 hardening). Values are never stored.
+enum EmbeddedMetadataCategory {
+  LOCATION
+  DEVICE
+  PERSON
+  TEXT
+  OTHER
+}
+
 /// Lifecycle of a student's profile change request (Phase 7). Only PENDING requests change state.
 enum ProfileChangeRequestStatus {
   PENDING
@@ -329,16 +377,17 @@ model StudentRegistration {
   createdAt                    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  student          Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  curriculum       ProgramCurriculum?      @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
-  program          Program                 @relation(fields: [programId], references: [id], onDelete: Restrict)
-  department       Department?             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  academicSession  AcademicSession         @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
-  results          Result[]
-  certificates     Certificate[]
-  verificationLogs VerificationLog[]
-  importRows       ImportRow[]
-  activationCodes  StudentActivationCode[]
+  student             Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  curriculum          ProgramCurriculum?      @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  program             Program                 @relation(fields: [programId], references: [id], onDelete: Restrict)
+  department          Department?             @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  academicSession     AcademicSession         @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
+  results             Result[]
+  certificates        Certificate[]
+  verificationLogs    VerificationLog[]
+  importRows          ImportRow[]
+  activationCodes     StudentActivationCode[]
+  historicalDocuments HistoricalDocument[]
 
   /// Target of the certificates (registration, program) composite FK: a certificate's program
   /// must be the registration's program.
@@ -918,6 +967,83 @@ model StudentProfileChangeRequest {
   @@map("student_profile_change_requests")
 }
 
+/// A historical certificate/marksheet uploaded by staff for one registration (Phase 8).
+/// Evidence of a previously issued document — NOT a Docversity-issued credential (those live in
+/// `certificates`). Students see it only while PUBLISHED. The file and its identity are immutable;
+/// metadata changes only while DRAFT; corrections after publication use a replacement. Never deleted.
+model HistoricalDocument {
+  id                           String                     @id @default(uuid(7)) @db.Uuid
+  studentRegistrationId        String                     @map("student_registration_id") @db.Uuid
+  documentType                 HistoricalDocumentType     @map("document_type")
+  title                        String                     @db.VarChar(200)
+  /// Certificate number exactly as provided (never trimmed or rewritten; rows created before the
+  /// Phase 8 hardening migration were stored trimmed).
+  certificateNumber            String?                    @map("certificate_number") @db.VarChar(64)
+  /// Search/duplicate-detection form of `certificateNumber` (NFKC, upper-case, letters and digits
+  /// only; see `normalizeCertificateNumber`). Never displayed as the number.
+  certificateNumberNormalized  String?                    @map("certificate_number_normalized") @db.VarChar(128)
+  issuedOn                     DateTime?                  @map("issued_on") @db.Date
+  provenance                   DocumentProvenance
+  provenanceNote               String?                    @map("provenance_note") @db.VarChar(1000)
+  /// Identifiers of the record in a legacy system (e.g. WordPress), preserved as given — never rewritten.
+  legacySourceSystem           String?                    @map("legacy_source_system") @db.VarChar(32)
+  legacyRecordId               String?                    @map("legacy_record_id") @db.VarChar(128)
+  /// Verification URL printed on the original (e.g. its QR code). Reference only; never fetched.
+  legacyVerificationUrl        String?                    @map("legacy_verification_url") @db.VarChar(512)
+  /// Private object under a generated key; never returned by the API.
+  storageKey                   String                     @map("storage_key") @db.VarChar(512)
+  contentType                  String                     @map("content_type") @db.VarChar(64)
+  sizeBytes                    Int                        @map("size_bytes")
+  sha256                       String                     @db.Char(64)
+  /// Uploaded file name, sanitised; display only.
+  originalFilename             String                     @map("original_filename") @db.VarChar(255)
+  /// Images only: the copy students receive — re-encoded from the original without embedded
+  /// metadata, stored as a separate private object. Set once (at upload or by the backfill), then
+  /// immutable; an image cannot be published without it.
+  studentCopyStorageKey        String?                    @map("student_copy_storage_key") @db.VarChar(512)
+  studentCopyContentType       String?                    @map("student_copy_content_type") @db.VarChar(64)
+  studentCopySizeBytes         Int?                       @map("student_copy_size_bytes")
+  studentCopySha256            String?                    @map("student_copy_sha256") @db.Char(64)
+  studentCopyCreatedAt         DateTime?                  @map("student_copy_created_at") @db.Timestamptz(3)
+  /// Kinds of metadata found embedded in the original image (never the values). Recorded together
+  /// with the student copy; empty for PDFs.
+  embeddedMetadata             EmbeddedMetadataCategory[] @default([]) @map("embedded_metadata")
+  status                       HistoricalDocumentStatus   @default(DRAFT)
+  uploadedByUserId             String                     @map("uploaded_by_user_id") @db.Uuid
+  publishedAt                  DateTime?                  @map("published_at") @db.Timestamptz(3)
+  publishedByUserId            String?                    @map("published_by_user_id") @db.Uuid
+  withdrawnAt                  DateTime?                  @map("withdrawn_at") @db.Timestamptz(3)
+  withdrawnByUserId            String?                    @map("withdrawn_by_user_id") @db.Uuid
+  withdrawalReason             String?                    @map("withdrawal_reason") @db.VarChar(1000)
+  supersededAt                 DateTime?                  @map("superseded_at") @db.Timestamptz(3)
+  /// The document this one replaces (same registration).
+  replacesDocumentId           String?                    @map("replaces_document_id") @db.Uuid
+  authenticity                 DocumentAuthenticity       @default(UNVERIFIED)
+  authenticityNote             String?                    @map("authenticity_note") @db.VarChar(1000)
+  authenticityReviewedAt       DateTime?                  @map("authenticity_reviewed_at") @db.Timestamptz(3)
+  authenticityReviewedByUserId String?                    @map("authenticity_reviewed_by_user_id") @db.Uuid
+  createdAt                    DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                    DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  registration StudentRegistration  @relation(fields: [studentRegistrationId], references: [id], onDelete: Restrict)
+  uploadedBy   User                 @relation("HistoricalDocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  publishedBy  User?                @relation("HistoricalDocumentPublishedBy", fields: [publishedByUserId], references: [id], onDelete: Restrict)
+  withdrawnBy  User?                @relation("HistoricalDocumentWithdrawnBy", fields: [withdrawnByUserId], references: [id], onDelete: Restrict)
+  reviewedBy   User?                @relation("HistoricalDocumentReviewedBy", fields: [authenticityReviewedByUserId], references: [id], onDelete: Restrict)
+  replaces     HistoricalDocument?  @relation("HistoricalDocumentReplacement", fields: [replacesDocumentId], references: [id], onDelete: Restrict)
+  replacements HistoricalDocument[] @relation("HistoricalDocumentReplacement")
+
+  /// The same file is not uploaded twice for one registration (withdrawn copies excepted).
+  @@unique([studentRegistrationId, sha256], map: "historical_documents_one_file_per_registration_key", where: raw("(status <> 'WITHDRAWN'::\"HistoricalDocumentStatus\")"))
+  /// At most one live replacement per document.
+  @@unique([replacesDocumentId], map: "historical_documents_one_live_replacement_key", where: raw("((replaces_document_id IS NOT NULL) AND (status <> 'WITHDRAWN'::\"HistoricalDocumentStatus\"))"))
+  @@index([studentRegistrationId, status])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([certificateNumber])
+  @@index([certificateNumberNormalized])
+  @@map("historical_documents")
+}
+
 model User {
   id           String     @id @default(uuid(7)) @db.Uuid
   /// Stored lower-case (CHECK) so uniqueness is case-insensitive.
@@ -929,18 +1055,22 @@ model User {
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  roles                   UserRole[]
-  importJobs              ImportJob[]                   @relation("ImportJobCreatedBy")
-  importJobsCommitted     ImportJob[]                   @relation("ImportJobCommittedBy")
-  activationCodesIssued   StudentActivationCode[]
-  profileRequestsReviewed StudentProfileChangeRequest[]
-  curriculaActivated      ProgramCurriculum[]           @relation("CurriculumActivatedBy")
-  curriculaArchived       ProgramCurriculum[]           @relation("CurriculumArchivedBy")
-  auditLogs               AuditLog[]
-  certificatesGenerated   Certificate[]                 @relation("CertificateGeneratedBy")
-  certificatesApproved    Certificate[]                 @relation("CertificateApprovedBy")
-  certificatesIssued      Certificate[]                 @relation("CertificateIssuedBy")
-  certificatesRevoked     Certificate[]                 @relation("CertificateRevokedBy")
+  roles                        UserRole[]
+  importJobs                   ImportJob[]                   @relation("ImportJobCreatedBy")
+  importJobsCommitted          ImportJob[]                   @relation("ImportJobCommittedBy")
+  activationCodesIssued        StudentActivationCode[]
+  profileRequestsReviewed      StudentProfileChangeRequest[]
+  historicalDocumentsUploaded  HistoricalDocument[]          @relation("HistoricalDocumentUploadedBy")
+  historicalDocumentsPublished HistoricalDocument[]          @relation("HistoricalDocumentPublishedBy")
+  historicalDocumentsWithdrawn HistoricalDocument[]          @relation("HistoricalDocumentWithdrawnBy")
+  historicalDocumentsReviewed  HistoricalDocument[]          @relation("HistoricalDocumentReviewedBy")
+  curriculaActivated           ProgramCurriculum[]           @relation("CurriculumActivatedBy")
+  curriculaArchived            ProgramCurriculum[]           @relation("CurriculumArchivedBy")
+  auditLogs                    AuditLog[]
+  certificatesGenerated        Certificate[]                 @relation("CertificateGeneratedBy")
+  certificatesApproved         Certificate[]                 @relation("CertificateApprovedBy")
+  certificatesIssued           Certificate[]                 @relation("CertificateIssuedBy")
+  certificatesRevoked          Certificate[]                 @relation("CertificateRevokedBy")
 
   @@map("users")
 }

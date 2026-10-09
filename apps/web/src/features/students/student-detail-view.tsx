@@ -1,7 +1,8 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { PencilIcon, PlusIcon } from 'lucide-react';
+import Link from 'next/link';
+import { FileUpIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { PERMISSIONS } from '@docversity/types';
 import { Avatar, AvatarFallback } from '@docversity/ui/components/avatar';
@@ -38,6 +39,7 @@ function RegistrationCard({
   canEdit: boolean;
   onEdit: () => void;
 }) {
+  const canUploadDocuments = useCan(PERMISSIONS.historicalDocumentsUpload);
   return (
     <Card className="gap-0 py-0 shadow-card">
       <CardContent className="flex flex-col gap-4 p-4">
@@ -48,8 +50,19 @@ function RegistrationCard({
               {registration.program.code} — {registration.program.name}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <RecordStatus status={registration.status} />
+            {canUploadDocuments && (
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={`/admin/historical-documents/new?registration=${registration.id}`}
+                  aria-label={`Upload a historical document for ${registration.registrationNumber}`}
+                >
+                  <FileUpIcon aria-hidden="true" />
+                  Upload document
+                </Link>
+              </Button>
+            )}
             {canEdit && (
               <Button
                 variant="outline"

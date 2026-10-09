@@ -1,5 +1,10 @@
 import Link from 'next/link';
-import type { StudentMe, StudentProfileRequest } from '@docversity/validation';
+import {
+  HISTORICAL_DOCUMENT_TYPE_LABELS,
+  type StudentDocument,
+  type StudentMe,
+  type StudentProfileRequest,
+} from '@docversity/validation';
 import {
   ArrowRightIcon,
   BellIcon,
@@ -39,8 +44,8 @@ const ACTIONS = [
   {
     href: '/student/documents',
     label: 'My Documents',
-    available: false,
-    detail: 'Not available yet',
+    available: true,
+    detail: 'Your certificates',
     icon: FileTextIcon,
   },
   {
@@ -113,10 +118,13 @@ function activityOf(me: StudentMe, requests: readonly StudentProfileRequest[]): 
 export function StudentOverview({
   me,
   requests = [],
+  documents = [],
 }: {
   me: StudentMe;
   /** The student's own profile requests (newest first). */
   requests?: readonly StudentProfileRequest[];
+  /** The student's PUBLISHED documents. */
+  documents?: readonly StudentDocument[];
 }) {
   const { student, registrations } = me;
   const registration = primaryRegistration(registrations);
@@ -313,13 +321,27 @@ export function StudentOverview({
           <PortalCard
             title="Documents"
             icon={FileTextIcon}
-            action={{ href: '/student/documents', label: 'View status' }}
+            action={{ href: '/student/documents', label: 'View all' }}
           >
-            <PortalEmptyState
-              icon={FileTextIcon}
-              title="Documents are not available yet"
-              description="Admission letters, transcripts and certificates will appear here when document services are enabled."
-            />
+            {documents.length === 0 ? (
+              <PortalEmptyState
+                icon={FileTextIcon}
+                title="No documents published yet"
+                description="Certificates and records the university publishes to you will appear here."
+              />
+            ) : (
+              <ul aria-label="Published documents" className="divide-y divide-border">
+                {documents.slice(0, 3).map((document) => (
+                  <li key={document.id} className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0">
+                    <span className="font-medium break-words text-navy-950">{document.title}</span>
+                    <span className="text-meta">
+                      {HISTORICAL_DOCUMENT_TYPE_LABELS[document.documentType]}
+                      {document.issuedOn ? ` · Issued ${formatDate(document.issuedOn)}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </PortalCard>
           <PortalCard
             title="Examinations & Results"

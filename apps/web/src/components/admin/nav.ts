@@ -5,6 +5,7 @@ import {
   CalendarRangeIcon,
   FileSpreadsheetIcon,
   GraduationCapIcon,
+  FileBadgeIcon,
   KeyRoundIcon,
   LibraryIcon,
   LayoutDashboardIcon,
@@ -20,6 +21,7 @@ export interface AdminNavItem {
     | '/admin/imports'
     | '/admin/student-accounts'
     | '/admin/profile-requests'
+    | '/admin/historical-documents'
     | '/admin/programs'
     | '/admin/subjects'
     | '/admin/departments'
@@ -61,6 +63,12 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     permission: PERMISSIONS.studentProfileRequestsRead,
   },
   {
+    href: '/admin/historical-documents',
+    label: 'Historical Certificates',
+    icon: FileBadgeIcon,
+    permission: PERMISSIONS.historicalDocumentsRead,
+  },
+  {
     href: '/admin/programs',
     label: 'Course Management',
     icon: GraduationCapIcon,
@@ -97,6 +105,8 @@ export const SEGMENT_LABELS: Record<string, string> = {
   imports: 'Imports',
   'student-accounts': 'Student Accounts',
   'profile-requests': 'Profile Requests',
+  'historical-documents': 'Historical Certificates',
+  'historical-documents/new': 'Upload',
   // Context-specific labels: "<parent>/<segment>"; "<parent>/*" labels an id segment in the trail.
   'programs/*': 'Course',
   'students/new': 'New student',
