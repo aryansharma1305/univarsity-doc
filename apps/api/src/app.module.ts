@@ -16,6 +16,7 @@ import { ReExamsModule } from './re-exams/re-exams.module.js';
 import { HistoricalDocumentsModule } from './historical-documents/historical-documents.module.js';
 import { ImportsModule } from './imports/imports.module.js';
 import { QueueModule } from './queue/queue.module.js';
+import { ResultImportsModule } from './result-imports/result-imports.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { StudentAccountsModule } from './student-accounts/student-accounts.module.js';
@@ -39,6 +40,7 @@ export class AppModule {
         AuthModule,
         AcademicModule,
         ImportsModule,
+        ResultImportsModule,
         StudentAuthModule,
         StudentAccountsModule,
         StudentProfileModule,

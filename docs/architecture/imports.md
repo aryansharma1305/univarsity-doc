@@ -1,7 +1,8 @@
 # Imports (Phase 5: students / registrations)
 
 One import subsystem (`/admin/imports`, `/api/v1/imports`, BullMQ queue `imports`) serves every import
-type. Phase 5 implements `STUDENTS`; `RESULTS` is reserved for Phase 8. Design rationale:
+type. Phase 5 implements `STUDENTS`. Phase 10B adds a separate, temporary results preview workflow
+without creating persistent `RESULTS` jobs or a commit route: [results previews](../api/result-import-previews.md). Design rationale:
 [ADR-0009](../decisions/ADR-0009-import-engine.md). API reference: [docs/api/imports.md](../api/imports.md).
 Columns: [docs/imports/student-template.md](../imports/student-template.md).
 

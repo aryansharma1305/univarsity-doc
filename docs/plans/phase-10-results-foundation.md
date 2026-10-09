@@ -66,3 +66,11 @@
 3. **Manual Entry Frontend & Draft APIs**: Develop the UX context selectors and grid for manual marks entry (saving strictly as `DRAFT`).
 4. **Conflict Resolution UI**: Implement the explicit conflict-handling UI for the import review stage.
 5. _(Deferred)_: Integration with Phase 9 grading calculations and final result publication logic.
+
+## 10. Phase 10B delivery boundary
+
+The results upload/mapping/validation preview is implemented separately from persistent student
+import jobs. See [API and lifecycle](../api/result-import-previews.md). It retains source and
+classified rows privately in Redis for two hours and exposes no commit operation. Persistent
+RESULTS staging, manual marks entry, result conflict resolution, attempt/revision policy and
+approval/publication remain later phases. No new database migration is required.

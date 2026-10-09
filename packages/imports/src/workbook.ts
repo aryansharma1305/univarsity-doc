@@ -3,10 +3,11 @@ import {
   type ImportColumn,
   type ImportSheet,
   isSensitiveImportHeader,
+  type ResultImportSheet,
 } from '@docversity/validation';
 import { cellDisplay, type SourceCell, toSourceCell } from './cells.js';
 import { ImportFileError } from './errors.js';
-import { suggestStudentMapping } from './mapping.js';
+import { suggestResultMapping, suggestStudentMapping } from './mapping.js';
 
 export interface SheetLimits {
   maxRows: number;
@@ -168,6 +169,30 @@ export function describeWorksheets(workbook: ExcelJS.Workbook, limits: SheetLimi
       problem,
     };
   });
+}
+
+/**
+ * Describes every worksheet of a RESULTS workbook: like `describeWorksheets`, with results mapping
+ * suggestions and without collected cell values (a results file has no values to translate, so no
+ * cell content leaves the server before validation).
+ */
+export function describeResultWorksheets(
+  workbook: ExcelJS.Workbook,
+  limits: SheetLimits,
+): ResultImportSheet[] {
+  return describeWorksheets(workbook, limits).map((sheet) => ({
+    name: sheet.name,
+    rowCount: sheet.rowCount,
+    columnCount: sheet.columnCount,
+    columns: sheet.columns.map(({ index, letter, header, sensitive }) => ({
+      index,
+      letter,
+      header,
+      sensitive,
+    })),
+    suggestedMapping: suggestResultMapping(sheet.columns),
+    problem: sheet.problem,
+  }));
 }
 
 /** The worksheet chosen by default: "Students" (the template's data sheet), else the first usable one. */

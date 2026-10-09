@@ -23,6 +23,7 @@ export interface AdminNavItem {
     | '/admin'
     | '/admin/students'
     | '/admin/imports'
+    | '/admin/results/import'
     | '/admin/student-accounts'
     | '/admin/profile-requests'
     | '/admin/historical-documents'
@@ -41,8 +42,7 @@ export interface AdminNavItem {
 }
 
 /**
- * Admin navigation. Only features that exist are listed — results, certificates and templates are
- * omitted until they are built (no fake navigation).
+ * Admin navigation. Only implemented workflows are listed; results currently expose preview imports.
  */
 export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboardIcon },
@@ -57,6 +57,12 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     label: 'Imports',
     icon: FileSpreadsheetIcon,
     permission: PERMISSIONS.importsRead,
+  },
+  {
+    href: '/admin/results/import',
+    label: 'Results Import',
+    icon: FileSpreadsheetIcon,
+    permission: PERMISSIONS.importsResultsRun,
   },
   {
     href: '/admin/student-accounts',
@@ -135,6 +141,9 @@ export const SEGMENT_LABELS: Record<string, string> = {
   departments: 'Departments',
   'academic-sessions': 'Academic Sessions',
   imports: 'Imports',
+  results: 'Results',
+  'results/import': 'Results Import',
+  'import/*': 'Preview',
   'student-accounts': 'Student Accounts',
   'profile-requests': 'Profile Requests',
   'historical-documents': 'Historical Certificates',

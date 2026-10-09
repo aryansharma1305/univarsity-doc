@@ -134,7 +134,7 @@ export async function apiRequest<TSchema extends z.ZodType>(
   }
 
   if (!response.ok) throw await toApiError(response);
-  const parsed = schema.safeParse(await response.json());
+  const parsed = schema.safeParse(response.status === 204 ? undefined : await response.json());
   if (!parsed.success) {
     throw new ApiError(
       response.status,

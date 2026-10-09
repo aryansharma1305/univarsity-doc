@@ -5,7 +5,15 @@ import { cn } from '../lib/utils';
 
 function Table({ className, ...props }: React.ComponentProps<'table'>) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div
+      data-slot="table-container"
+      role="region"
+      aria-label="Scrollable table"
+      // Keyboard users must be able to scroll wide tables (WCAG 2.1.1).
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
+      className="relative w-full overflow-x-auto focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+    >
       <table
         data-slot="table"
         className={cn('w-full caption-bottom text-sm', className)}

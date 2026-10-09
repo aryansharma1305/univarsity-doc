@@ -32,6 +32,11 @@ export const AUDIT_ACTIONS = {
   studentImportCancelled: 'STUDENT_IMPORT_CANCELLED',
   studentImportFailed: 'STUDENT_IMPORT_FAILED',
   studentImportRetried: 'STUDENT_IMPORT_RETRIED',
+  /** Results import preview (Phase 10B): temporary, nothing is written to results. */
+  resultImportPreviewCreated: 'RESULT_IMPORT_PREVIEW_CREATED',
+  resultImportPreviewValidated: 'RESULT_IMPORT_PREVIEW_VALIDATED',
+  resultImportPreviewReportDownloaded: 'RESULT_IMPORT_PREVIEW_REPORT_DOWNLOADED',
+  resultImportPreviewDiscarded: 'RESULT_IMPORT_PREVIEW_DISCARDED',
   studentActivationCodeIssued: 'STUDENT_ACTIVATION_CODE_ISSUED',
   studentActivationCodeRevoked: 'STUDENT_ACTIVATION_CODE_REVOKED',
   studentActivationFailed: 'STUDENT_ACTIVATION_FAILED',
@@ -140,4 +145,8 @@ export const IMPORT_AUDIT_ACTIONS: readonly AuditAction[] = [
   'STUDENT_IMPORT_CANCELLED',
   'STUDENT_IMPORT_FAILED',
   'STUDENT_IMPORT_RETRIED',
+  'RESULT_IMPORT_PREVIEW_CREATED',
+  'RESULT_IMPORT_PREVIEW_VALIDATED',
+  'RESULT_IMPORT_PREVIEW_REPORT_DOWNLOADED',
+  'RESULT_IMPORT_PREVIEW_DISCARDED',
 ];
