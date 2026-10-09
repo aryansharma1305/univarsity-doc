@@ -45,3 +45,12 @@ generation, public verification, deployment.
 | P7  | Which subjects a student may apply for (only failed/absent ones?)                                                                     | Any subject of the chosen period; staff decide. Results are not in Docversity yet                                                                            |
 | P8  | Grading, components and attempt mapping for manual marks                                                                              | Part F design only; Phase 10                                                                                                                                 |
 | P9  | Refunds, waivers and partial payments                                                                                                 | Not supported                                                                                                                                                |
+
+## Screenshots (synthetic E2E data)
+
+| 9A desktop                                                              | 9A mobile (390 px)                                               |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| ![Examination application](phase-9/examination-application-desktop.png) | ![Examinations list](phase-9/examinations-list-mobile.png)       |
+| ![New examination record](phase-9/examination-create-desktop.png)       | ![Examination detail](phase-9/examination-detail-mobile.png)     |
+| ![Examination detail](phase-9/examination-detail-desktop.png)           | ![Student examinations](phase-9/student-examinations-mobile.png) |
+| ![Student examinations](phase-9/student-examinations-desktop.png)       |                                                                  |
