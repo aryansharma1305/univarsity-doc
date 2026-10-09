@@ -62,7 +62,7 @@ export interface ResultValidationContext {
 
 export function parseResultFieldValues(
   rawData: RawRowData,
-  mapping: Record<ResultImportField, string | null>
+  mapping: Record<ResultImportField, string | null>,
 ): ResultFieldValues {
   const values: ResultFieldValues = {};
   for (const [field, colKey] of Object.entries(mapping)) {
@@ -95,7 +95,7 @@ function parseNumericMark(value: string | null | undefined): number | null {
 export function validateResultRows(
   rows: { rowNumber: number; rawData: RawRowData }[],
   mapping: Record<ResultImportField, string | null>,
-  context: ResultValidationContext
+  context: ResultValidationContext,
 ): ResultRowOutcome[] {
   if (!context.academicPeriod || context.academicPeriod.trim() === '') {
     throw new Error('Academic period context is missing, empty, or invalid.');
@@ -110,7 +110,9 @@ export function validateResultRows(
       !Number.isSafeInteger(attempt) ||
       attempt < 1
     ) {
-      throw new Error('Examination context is invalid. Ensure examinationId and attemptNumber are explicitly provided and safe integers.');
+      throw new Error(
+        'Examination context is invalid. Ensure examinationId and attemptNumber are explicitly provided and safe integers.',
+      );
     }
   }
 
@@ -125,20 +127,29 @@ export function validateResultRows(
 
     // 1. Validate Registration Number
     const rawRegNum = values.registrationNumber;
-    const rawRegNumCell = mapping.registrationNumber ? row.rawData[mapping.registrationNumber] : null;
+    const rawRegNumCell = mapping.registrationNumber
+      ? row.rawData[mapping.registrationNumber]
+      : null;
     let registrationNumberNormalized: string | null = null;
     let registration: ResultExistingRegistration | null = null;
 
     if (!rawRegNum) {
-      errors.push({ severity: 'error', field: 'registrationNumber', code: 'REQUIRED', message: 'Registration number is missing.' });
+      errors.push({
+        severity: 'error',
+        field: 'registrationNumber',
+        code: 'REQUIRED',
+        message: 'Registration number is missing.',
+      });
     } else if (rawRegNumCell?.type === 'number') {
-      errors.push({ severity: 'error',
+      errors.push({
+        severity: 'error',
         field: 'registrationNumber',
         code: 'NUMERIC_REGISTRATION',
         message: 'Registration number must be formatted as text to preserve leading zeros.',
       });
     } else if (rawRegNumCell?.type === 'formula') {
-      errors.push({ severity: 'error',
+      errors.push({
+        severity: 'error',
         field: 'registrationNumber',
         code: 'FORMULA_REGISTRATION',
         message: 'Registration number cannot be computed by a formula.',
@@ -147,7 +158,8 @@ export function validateResultRows(
       registrationNumberNormalized = normalizeRegistrationNumber(rawRegNum);
       registration = context.registrations.get(registrationNumberNormalized) || null;
       if (!registration) {
-        errors.push({ severity: 'error',
+        errors.push({
+          severity: 'error',
           field: 'registrationNumber',
           code: 'REGISTRATION_NOT_FOUND',
           message: `Registration number '${rawRegNum}' not found in the database.`,
@@ -160,18 +172,26 @@ export function validateResultRows(
     let programSubject: ResultProgramSubject | null = null;
 
     if (!rawSubject) {
-      errors.push({ severity: 'error', field: 'subjectCode', code: 'REQUIRED', message: 'Subject code is missing.' });
+      errors.push({
+        severity: 'error',
+        field: 'subjectCode',
+        code: 'REQUIRED',
+        message: 'Subject code is missing.',
+      });
     } else if (registration) {
       if (!registration.curriculumId) {
-        errors.push({ severity: 'error',
+        errors.push({
+          severity: 'error',
           field: 'subjectCode',
           code: 'CURRICULUM_NOT_ASSIGNED',
           message: `Student '${rawRegNum}' does not have an assigned curriculum version.`,
         });
       } else {
         const curriculumSubjects = context.curriculumSubjects.get(registration.curriculumId) || [];
-        const isPeriodValidForCurriculum = curriculumSubjects.some(s => s.academicPeriod === context.academicPeriod);
-        
+        const isPeriodValidForCurriculum = curriculumSubjects.some(
+          (s) => s.academicPeriod === context.academicPeriod,
+        );
+
         if (!isPeriodValidForCurriculum) {
           errors.push({
             severity: 'error',
@@ -181,25 +201,28 @@ export function validateResultRows(
           });
         } else {
           const matchingSubjects = curriculumSubjects.filter(
-            (s) => s.subjectCode.toUpperCase() === rawSubject.trim().toUpperCase()
+            (s) => s.subjectCode.toUpperCase() === rawSubject.trim().toUpperCase(),
           );
 
-        if (matchingSubjects.length === 0) {
-          errors.push({ severity: 'error',
-            field: 'subjectCode',
-            code: 'SUBJECT_NOT_FOUND',
-            message: `Subject code '${rawSubject}' is not part of the student's assigned curriculum.`,
-          });
-        } else if (matchingSubjects.length > 1) {
-          errors.push({ severity: 'error',
-            field: 'subjectCode',
-            code: 'SUBJECT_AMBIGUOUS',
-            message: `Subject code '${rawSubject}' is ambiguous in the curriculum.`,
-          });
-        } else {
-          programSubject = matchingSubjects[0] || null;
+          if (matchingSubjects.length === 0) {
+            errors.push({
+              severity: 'error',
+              field: 'subjectCode',
+              code: 'SUBJECT_NOT_FOUND',
+              message: `Subject code '${rawSubject}' is not part of the student's assigned curriculum.`,
+            });
+          } else if (matchingSubjects.length > 1) {
+            errors.push({
+              severity: 'error',
+              field: 'subjectCode',
+              code: 'SUBJECT_AMBIGUOUS',
+              message: `Subject code '${rawSubject}' is ambiguous in the curriculum.`,
+            });
+          } else {
+            programSubject = matchingSubjects[0] || null;
             if (programSubject && programSubject.academicPeriod !== context.academicPeriod) {
-              errors.push({ severity: 'error',
+              errors.push({
+                severity: 'error',
                 field: 'subjectCode',
                 code: 'SUBJECT_PERIOD_MISMATCH',
                 message: `Subject '${rawSubject}' does not belong to the selected academic period (${context.academicPeriod}).`,
@@ -217,7 +240,8 @@ export function validateResultRows(
         attemptKey += `:${context.examinationContext.examinationId}:${context.examinationContext.attemptNumber}`;
       }
       if (seenSubjectAttempts.has(attemptKey)) {
-        errors.push({ severity: 'error',
+        errors.push({
+          severity: 'error',
           field: 'subjectCode',
           code: 'DUPLICATE_ROW',
           message: `Duplicate entry for student and subject in this import.`,
@@ -227,7 +251,11 @@ export function validateResultRows(
     }
 
     // 4. Validate marks values and max boundaries
-    const marksFields: { key: ResultImportField; maxKey: keyof NonNullable<ResultProgramSubject['componentConfiguration']> | 'maxMarks'; requiredKey?: keyof NonNullable<ResultProgramSubject['componentConfiguration']> }[] = [
+    const marksFields: {
+      key: ResultImportField;
+      maxKey: keyof NonNullable<ResultProgramSubject['componentConfiguration']> | 'maxMarks';
+      requiredKey?: keyof NonNullable<ResultProgramSubject['componentConfiguration']>;
+    }[] = [
       { key: 'internalMarks', maxKey: 'internalMax', requiredKey: 'internalRequired' },
       { key: 'externalMarks', maxKey: 'externalMax', requiredKey: 'externalRequired' },
       { key: 'practicalMarks', maxKey: 'practicalMax', requiredKey: 'practicalRequired' },
@@ -240,13 +268,15 @@ export function validateResultRows(
       if (markStr) {
         const mark = parseNumericMark(markStr);
         if (mark === null) {
-          errors.push({ severity: 'error',
+          errors.push({
+            severity: 'error',
             field: key,
             code: 'INVALID_NUMBER',
             message: `Value '${markStr}' is not a valid number.`,
           });
         } else if (mark < 0) {
-          errors.push({ severity: 'error',
+          errors.push({
+            severity: 'error',
             field: key,
             code: 'NEGATIVE_MARKS_NOT_ALLOWED',
             message: `Marks cannot be negative.`,
@@ -260,7 +290,8 @@ export function validateResultRows(
           }
 
           if (max !== null && max !== undefined && mark > max) {
-            errors.push({ severity: 'error',
+            errors.push({
+              severity: 'error',
               field: key,
               code: 'EXCEEDS_MAX_MARKS',
               message: `Marks (${mark}) exceed the configured maximum (${max}) for this component.`,
@@ -270,7 +301,8 @@ export function validateResultRows(
       } else if (programSubject?.componentConfiguration && requiredKey) {
         const isRequired = programSubject.componentConfiguration[requiredKey];
         if (isRequired) {
-          errors.push({ severity: 'error',
+          errors.push({
+            severity: 'error',
             field: key,
             code: 'REQUIRED_COMPONENT_MISSING',
             message: `Marks component '${key}' is required by the curriculum.`,
@@ -284,13 +316,16 @@ export function validateResultRows(
     const hasGrade = values.grade != null;
     if (!hasAnyMark) {
       if (hasGrade) {
-        errors.push({ severity: 'error',
+        errors.push({
+          severity: 'error',
           field: 'grade',
           code: 'GRADE_ONLY_IMPORT_NOT_ALLOWED',
-          message: 'Grade-only imports are not approved. A row must contain at least one marks component.',
+          message:
+            'Grade-only imports are not approved. A row must contain at least one marks component.',
         });
       } else {
-        errors.push({ severity: 'error',
+        errors.push({
+          severity: 'error',
           field: 'totalMarks',
           code: 'NO_MARKS',
           message: 'A row must contain at least one marks component.',

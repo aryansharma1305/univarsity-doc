@@ -1,5 +1,9 @@
 import ExcelJS from 'exceljs';
-import { type ImportIssue, studentImportField, type StudentImportField } from '@docversity/validation';
+import {
+  type ImportIssue,
+  studentImportField,
+  type StudentImportField,
+} from '@docversity/validation';
 import { escapeSpreadsheetText } from './safety.js';
 
 export interface ReportRow {
