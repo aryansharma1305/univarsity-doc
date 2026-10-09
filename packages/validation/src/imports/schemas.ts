@@ -240,7 +240,7 @@ export const importIssueSchema = z.object({
   code: z.string(),
   severity: z.enum(['error', 'warning']),
   /** The import field the issue is about (null = the whole row). */
-  field: studentImportFieldSchema.nullable(),
+  field: z.string().nullable(),
   message: z.string(),
 });
 
@@ -296,7 +296,7 @@ export const importRowDetailSchema = z
     /** Proposed changes to the existing record. */
     changes: z.array(
       z.object({
-        field: studentImportFieldSchema,
+        field: z.string(),
         from: z.string().nullable(),
         to: z.string().nullable(),
       }),
