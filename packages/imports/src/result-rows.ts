@@ -101,21 +101,16 @@ export function validateResultRows(
     throw new Error('Academic period context is missing, empty, or invalid.');
   }
 
-  // Validate curriculum context consistency
-  let isPeriodFound = false;
-  for (const subjects of context.curriculumSubjects.values()) {
-    if (subjects.some(s => s.academicPeriod === context.academicPeriod)) {
-      isPeriodFound = true;
-      break;
-    }
-  }
-  if (!isPeriodFound && context.curriculumSubjects.size > 0) {
-    throw new Error(`The selected academic period (${context.academicPeriod}) does not exist in the loaded curriculum structure.`);
-  }
-
   if (context.examinationContext) {
-    if (!context.examinationContext.examinationId || typeof context.examinationContext.attemptNumber !== 'number') {
-      throw new Error('Examination context is invalid. Ensure examinationId and attemptNumber are explicitly provided.');
+    const attempt = context.examinationContext.attemptNumber;
+    if (
+      !context.examinationContext.examinationId ||
+      typeof attempt !== 'number' ||
+      !Number.isFinite(attempt) ||
+      !Number.isSafeInteger(attempt) ||
+      attempt < 1
+    ) {
+      throw new Error('Examination context is invalid. Ensure examinationId and attemptNumber are explicitly provided and safe integers.');
     }
   }
 
@@ -175,9 +170,19 @@ export function validateResultRows(
         });
       } else {
         const curriculumSubjects = context.curriculumSubjects.get(registration.curriculumId) || [];
-        const matchingSubjects = curriculumSubjects.filter(
-          (s) => s.subjectCode.toUpperCase() === rawSubject.trim().toUpperCase()
-        );
+        const isPeriodValidForCurriculum = curriculumSubjects.some(s => s.academicPeriod === context.academicPeriod);
+        
+        if (!isPeriodValidForCurriculum) {
+          errors.push({
+            severity: 'error',
+            field: 'subjectCode',
+            code: 'INVALID_PERIOD_FOR_CURRICULUM',
+            message: `The imported academic period (${context.academicPeriod}) is not valid for the student's assigned curriculum.`,
+          });
+        } else {
+          const matchingSubjects = curriculumSubjects.filter(
+            (s) => s.subjectCode.toUpperCase() === rawSubject.trim().toUpperCase()
+          );
 
         if (matchingSubjects.length === 0) {
           errors.push({ severity: 'error',
@@ -193,12 +198,13 @@ export function validateResultRows(
           });
         } else {
           programSubject = matchingSubjects[0] || null;
-          if (programSubject && programSubject.academicPeriod !== context.academicPeriod) {
-            errors.push({ severity: 'error',
-              field: 'subjectCode',
-              code: 'SUBJECT_PERIOD_MISMATCH',
-              message: `Subject '${rawSubject}' does not belong to the selected academic period (${context.academicPeriod}).`,
-            });
+            if (programSubject && programSubject.academicPeriod !== context.academicPeriod) {
+              errors.push({ severity: 'error',
+                field: 'subjectCode',
+                code: 'SUBJECT_PERIOD_MISMATCH',
+                message: `Subject '${rawSubject}' does not belong to the selected academic period (${context.academicPeriod}).`,
+              });
+            }
           }
         }
       }
