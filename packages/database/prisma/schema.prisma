@@ -74,6 +74,32 @@ enum ExaminationKind {
   RE_EXAMINATION
 }
 
+/// What a re-exam fee is charged per (Phase 9B). Chosen explicitly by staff; unconfirmed policy.
+enum ReExamFeeScope {
+  PER_SUBJECT
+  PER_APPLICATION
+  PER_EXAMINATION_SESSION
+}
+
+enum ReExamFeeRuleStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+enum ReExamApplicationStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// Whether a fee could be assessed when the application was submitted (or re-checked).
+enum ReExamFeeStatus {
+  ASSESSED
+  NOT_CONFIGURED
+}
+
 enum ResultPublicationStatus {
   DRAFT
   UNDER_REVIEW
@@ -356,6 +382,7 @@ model Student {
   registrations         StudentRegistration[]
   account               StudentAccount?
   profileChangeRequests StudentProfileChangeRequest[]
+  reExamApplications    ReExamApplication[]
 
   @@map("students")
 }
@@ -394,6 +421,7 @@ model StudentRegistration {
   importRows          ImportRow[]
   activationCodes     StudentActivationCode[]
   historicalDocuments HistoricalDocument[]
+  reExamApplications  ReExamApplication[]
 
   /// Target of the certificates (registration, program) composite FK: a certificate's program
   /// must be the registration's program.
@@ -462,7 +490,8 @@ model Subject {
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  programSubjects ProgramSubject[]
+  programSubjects    ProgramSubject[]
+  reExamApplications ReExamApplication[]
 
   @@unique([code, version])
   @@map("subjects")
@@ -493,11 +522,12 @@ model ProgramSubject {
   createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  program     Program           @relation(fields: [programId], references: [id], onDelete: Restrict)
+  program            Program             @relation(fields: [programId], references: [id], onDelete: Restrict)
   /// Composite FK: the curriculum always belongs to the same program.
-  curriculum  ProgramCurriculum @relation(fields: [curriculumId, programId], references: [id, programId], onDelete: Restrict)
-  subject     Subject           @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  resultItems ResultItem[]
+  curriculum         ProgramCurriculum   @relation(fields: [curriculumId, programId], references: [id, programId], onDelete: Restrict)
+  subject            Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  resultItems        ResultItem[]
+  reExamApplications ReExamApplication[]
 
   /// A subject appears at most once per curriculum version of a program.
   @@unique([programId, curriculumVersion, subjectId])
@@ -561,12 +591,13 @@ model Examination {
   createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  program         Program            @relation(fields: [programId], references: [id], onDelete: Restrict)
+  program            Program             @relation(fields: [programId], references: [id], onDelete: Restrict)
   /// Composite FK: the curriculum always belongs to the examination's program.
-  curriculum      ProgramCurriculum? @relation(fields: [curriculumId, programId], references: [id, programId], onDelete: Restrict)
-  academicSession AcademicSession    @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
-  gradingScheme   GradingScheme?     @relation(fields: [gradingSchemeId], references: [id], onDelete: Restrict)
-  results         Result[]
+  curriculum         ProgramCurriculum?  @relation(fields: [curriculumId, programId], references: [id, programId], onDelete: Restrict)
+  academicSession    AcademicSession     @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
+  gradingScheme      GradingScheme?      @relation(fields: [gradingSchemeId], references: [id], onDelete: Restrict)
+  results            Result[]
+  reExamApplications ReExamApplication[]
 
   @@index([curriculumId, status])
   @@index([programId, academicSessionId, semesterNumber])
@@ -906,6 +937,7 @@ model StudentAccount {
 
   student               Student                       @relation(fields: [studentId], references: [id], onDelete: Restrict)
   profileChangeRequests StudentProfileChangeRequest[]
+  reExamApplications    ReExamApplication[]
 
   @@index([status])
   @@map("student_accounts")
@@ -1061,6 +1093,109 @@ model HistoricalDocument {
   @@map("historical_documents")
 }
 
+/// A versioned re-exam fee schedule (Phase 9B). Amounts are integer minor units of `currency`.
+/// DRAFT rules are editable; ACTIVE and RETIRED rules (and their rates) are frozen (trigger). At most
+/// one ACTIVE rule. Applications snapshot the rule they were assessed with.
+model ReExamFeeRule {
+  id                String              @id @default(uuid(7)) @db.Uuid
+  version           Int                 @unique
+  status            ReExamFeeRuleStatus @default(DRAFT)
+  scope             ReExamFeeScope
+  /// ISO 4217 code (e.g. INR).
+  currency          String              @db.Char(3)
+  /// How attempts are counted for this rule (stored so later policy changes stay traceable).
+  attemptBasis      String              @map("attempt_basis") @db.VarChar(64)
+  note              String?             @db.VarChar(1000)
+  createdByUserId   String              @map("created_by_user_id") @db.Uuid
+  activatedAt       DateTime?           @map("activated_at") @db.Timestamptz(3)
+  activatedByUserId String?             @map("activated_by_user_id") @db.Uuid
+  retiredAt         DateTime?           @map("retired_at") @db.Timestamptz(3)
+  retiredByUserId   String?             @map("retired_by_user_id") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdBy    User                @relation("ReExamFeeRuleCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  activatedBy  User?               @relation("ReExamFeeRuleActivatedBy", fields: [activatedByUserId], references: [id], onDelete: Restrict)
+  retiredBy    User?               @relation("ReExamFeeRuleRetiredBy", fields: [retiredByUserId], references: [id], onDelete: Restrict)
+  rates        ReExamFeeRate[]
+  applications ReExamApplication[]
+
+  @@unique([status], map: "re_exam_fee_rules_one_active_key", where: raw("(status = 'ACTIVE'::\"ReExamFeeRuleStatus\")"))
+  @@map("re_exam_fee_rules")
+}
+
+/// The fee for one attempt number under a fee rule. Attempts without a rate have no approved fee.
+model ReExamFeeRate {
+  ruleId        String @map("rule_id") @db.Uuid
+  attemptNumber Int    @map("attempt_number") @db.SmallInt
+  amountMinor   Int    @map("amount_minor")
+
+  rule ReExamFeeRule @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+
+  @@id([ruleId, attemptNumber])
+  @@map("re_exam_fee_rates")
+}
+
+/// A student's application for a re-examination of ONE subject (Phase 9B). Identity, attempt and fee
+/// are snapshotted by the server at submission; nothing here is client-authoritative. Never deleted.
+model ReExamApplication {
+  id                    String                  @id @default(uuid(7)) @db.Uuid
+  studentId             String                  @map("student_id") @db.Uuid
+  studentRegistrationId String                  @map("student_registration_id") @db.Uuid
+  examinationId         String                  @map("examination_id") @db.Uuid
+  programSubjectId      String                  @map("program_subject_id") @db.Uuid
+  /// Catalogue subject (attempts are counted per registration and catalogue subject).
+  subjectId             String                  @map("subject_id") @db.Uuid
+  attemptNumber         Int                     @map("attempt_number") @db.SmallInt
+  attemptBasis          String                  @map("attempt_basis") @db.VarChar(64)
+  // Verified identity at submission (read-only for the student).
+  studentName           String                  @map("student_name") @db.VarChar(200)
+  registrationNumber    String                  @map("registration_number") @db.VarChar(64)
+  programCode           String                  @map("program_code") @db.VarChar(32)
+  programName           String                  @map("program_name") @db.VarChar(200)
+  academicSessionName   String                  @map("academic_session_name") @db.VarChar(120)
+  periodLabel           String                  @map("period_label") @db.VarChar(32)
+  subjectCode           String                  @map("subject_code") @db.VarChar(32)
+  subjectName           String                  @map("subject_name") @db.VarChar(200)
+  examinationName       String                  @map("examination_name") @db.VarChar(200)
+  examSession           String                  @map("exam_session") @db.VarChar(64)
+  status                ReExamApplicationStatus @default(SUBMITTED)
+  submittedAt           DateTime                @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  submittedByAccountId  String                  @map("submitted_by_account_id") @db.Uuid
+  decidedAt             DateTime?               @map("decided_at") @db.Timestamptz(3)
+  decidedByUserId       String?                 @map("decided_by_user_id") @db.Uuid
+  decisionReason        String?                 @map("decision_reason") @db.VarChar(1000)
+  cancelledAt           DateTime?               @map("cancelled_at") @db.Timestamptz(3)
+  // Fee snapshot (null while NOT_CONFIGURED).
+  feeStatus             ReExamFeeStatus         @map("fee_status")
+  feeBlockedReason      String?                 @map("fee_blocked_reason") @db.VarChar(64)
+  feeRuleId             String?                 @map("fee_rule_id") @db.Uuid
+  feeRuleVersion        Int?                    @map("fee_rule_version")
+  feeScope              ReExamFeeScope?         @map("fee_scope")
+  feeCurrency           String?                 @map("fee_currency") @db.Char(3)
+  feeAmountMinor        Int?                    @map("fee_amount_minor")
+  feeAssessedAt         DateTime?               @map("fee_assessed_at") @db.Timestamptz(3)
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student        Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  registration   StudentRegistration @relation(fields: [studentRegistrationId], references: [id], onDelete: Restrict)
+  examination    Examination         @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  programSubject ProgramSubject      @relation(fields: [programSubjectId], references: [id], onDelete: Restrict)
+  subject        Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  submittedBy    StudentAccount      @relation(fields: [submittedByAccountId], references: [id], onDelete: Restrict)
+  decidedBy      User?               @relation("ReExamApplicationDecidedBy", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+  feeRule        ReExamFeeRule?      @relation(fields: [feeRuleId], references: [id], onDelete: Restrict)
+
+  /// No second live (SUBMITTED/APPROVED) application for the same registration, examination and subject.
+  @@unique([studentRegistrationId, examinationId, subjectId], map: "re_exam_applications_one_live_key", where: raw("(status = ANY (ARRAY['SUBMITTED'::\"ReExamApplicationStatus\", 'APPROVED'::\"ReExamApplicationStatus\"]))"))
+  @@index([status, submittedAt(sort: Desc)])
+  @@index([examinationId])
+  @@index([studentId])
+  @@index([studentRegistrationId, subjectId])
+  @@map("re_exam_applications")
+}
+
 /// The university's separate examination application (Phase 9). Docversity only links to it: the
 /// examination itself happens outside Docversity. URLs are https only (CHECK).
 model ExternalExamApplication {
@@ -1107,6 +1242,10 @@ model User {
   curriculaArchived            ProgramCurriculum[]           @relation("CurriculumArchivedBy")
   examAppsCreated              ExternalExamApplication[]     @relation("ExternalExamAppCreatedBy")
   examAppsUpdated              ExternalExamApplication[]     @relation("ExternalExamAppUpdatedBy")
+  reExamFeeRulesCreated        ReExamFeeRule[]               @relation("ReExamFeeRuleCreatedBy")
+  reExamFeeRulesActivated      ReExamFeeRule[]               @relation("ReExamFeeRuleActivatedBy")
+  reExamFeeRulesRetired        ReExamFeeRule[]               @relation("ReExamFeeRuleRetiredBy")
+  reExamApplicationsDecided    ReExamApplication[]           @relation("ReExamApplicationDecidedBy")
   auditLogs                    AuditLog[]
   certificatesGenerated        Certificate[]                 @relation("CertificateGeneratedBy")
   certificatesApproved         Certificate[]                 @relation("CertificateApprovedBy")

@@ -149,6 +149,27 @@ Support tables without relations: `number_sequences`, `legacy_mappings`.
 |              | `verification_logs`               | Public verification attempts (hashes only)                                                  |
 | Legacy       | `legacy_mappings`                 | Legacy identifier → new record (WordPress migration, old QR URLs)                           |
 
+### Phase 9B snapshot hardening (`20261015093000_re_exam_fee_snapshot_required_fields`)
+
+An additive CHECK explicitly requires currency and amount on assessed fees. PostgreSQL CHECKs accept
+NULL results, so pattern and positive-value comparisons alone cannot enforce these nullable columns.
+The original applied migration is unchanged.
+
+### Phase 9B migration (`20261015090000_re_exam_applications`)
+
+Additive: enums `ReExamFeeScope`, `ReExamFeeRuleStatus`, `ReExamApplicationStatus`, `ReExamFeeStatus`;
+tables `re_exam_fee_rules` (version, scope, ISO currency, attempt basis, lifecycle; partial unique: one
+ACTIVE), `re_exam_fee_rates` (rule, attempt ≥ 1, `amount_minor` > 0 — integer minor units) and
+`re_exam_applications` (student, registration, examination, curriculum line, catalogue subject,
+server-derived attempt + basis, identity snapshot, decision columns, fee snapshot; partial unique: one live
+application per registration + examination + subject). CHECKs keep the fee snapshot all-or-nothing and the
+decision columns consistent with the status. Triggers: `re_exam_fee_rules_guard` (no deletes, DRAFT-only
+edits, DRAFT→ACTIVE (needs a rate)→RETIRED), `re_exam_fee_rates_guard` (rates change only while the rule is
+DRAFT), `re_exam_applications_guard` (created SUBMITTED for a registration of the student that follows the
+examination's curriculum, an OPEN re-examination accepting applications and a subject of its period;
+identity/attempt immutable; fee NOT_CONFIGURED → ASSESSED once while SUBMITTED; SUBMITTED → APPROVED |
+REJECTED | CANCELLED once; never deleted).
+
 ### Phase 9A migration (`20261014090000_examination_portal_foundation`)
 
 Additive: enum `ExaminationKind` (REGULAR, RE_EXAMINATION); table `external_exam_applications` (name,

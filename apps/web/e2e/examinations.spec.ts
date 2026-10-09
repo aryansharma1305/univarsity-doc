@@ -160,6 +160,102 @@ test('examination application links and year-wise examination records reach the 
   await portal.context().close();
 });
 
+test('re-exam application: confirmed fee schedule, verified identity, attempt and fee snapshot, staff decision', async ({
+  browser,
+}) => {
+  const { admin, examAdmin, examStudents } = fixtures();
+  const [alpha, beta] = examStudents;
+  if (!alpha || !beta) throw new Error('missing fixtures');
+
+  // SUPER_ADMIN enters the confirmed schedule (INR 1,000 / 2,500, per subject) and activates it.
+  const finance = await staffPage(browser, admin);
+  await finance.goto('/admin/re-exam-applications/fees');
+  await expect(finance.getByText('No fee rules yet')).toBeVisible();
+  await finance.getByRole('button', { name: 'New version' }).click();
+  const dialog = finance.getByRole('dialog', { name: 'New fee rule version' });
+  await choose(finance, 'Fee is charged', 'Per subject (paper)');
+  await dialog.getByLabel(/Attempt 1 amount/).fill('1000');
+  await dialog.getByRole('button', { name: 'Add attempt 2' }).click();
+  await dialog.getByLabel(/Attempt 2 amount/).fill('2500');
+  await expectNoSeriousA11yViolations(finance);
+  await dialog.getByRole('button', { name: 'Save draft' }).click();
+  await finance.getByRole('button', { name: 'Activate' }).click();
+  await finance.getByRole('dialog').getByRole('button', { name: 'Activate' }).click();
+  const fees = finance.getByRole('list', { name: 'Fees of version 1' });
+  await expect(fees).toContainText('Attempt 1: ₹1,000.00');
+  await expect(fees).toContainText('Attempt 2: ₹2,500.00');
+  await expect(fees).toContainText('Attempt 3+: no approved fee');
+  await capture(finance, 're-exam-fee-rules-desktop');
+  await finance.context().close();
+
+  // EXAM_ADMIN opens a Year 1 re-examination for applications (setup through the API).
+  const staff = await staffPage(browser, examAdmin);
+  const reExam = await staffApi(staff, 'POST', 'examinations', {
+    code: 'E2E-REX-Y1',
+    name: 'E2E Year 1 Re-examination',
+    curriculumId: shared.curriculumId,
+    academicSessionId: fixtures().examProgram.sessionId,
+    periodNumber: 1,
+    kind: 'RE_EXAMINATION',
+    examSession: 'E2E Nov 2026',
+  });
+  await staffApi(staff, 'POST', `examinations/${reExam.id}/open`, {});
+  await staffApi(staff, 'POST', `examinations/${reExam.id}/re-exam-applications`, { open: true });
+
+  // The student applies: identity is read-only, attempt and fee come from the server.
+  const portal = await studentPage(browser, alpha);
+  await portal.goto('/student/examinations');
+  await portal.getByRole('link', { name: 'Apply for a re-examination' }).click();
+  await expect(
+    portal.getByRole('heading', { level: 1, name: 'Apply for a re-examination' }),
+  ).toBeVisible();
+  const details = portal.getByRole('main');
+  await expect(details.getByText('E2E Examinee Alpha')).toBeVisible();
+  await expect(details.getByText(alpha.registrationNumber)).toBeVisible();
+  await expect(portal.getByRole('textbox')).toHaveCount(0);
+  await portal.getByRole('radio', { name: /E2E Year 1 Re-examination/ }).check();
+  await expect(portal.getByText(/Re-exam attempt 1 · Fee ₹1,000.00/)).toBeVisible();
+  await portal.getByRole('radio', { name: /E2E Synthetic Anatomy/ }).check();
+  await expectNoSeriousA11yViolations(portal);
+  await capture(portal, 'student-re-exam-apply-desktop');
+  await portal.getByRole('button', { name: 'Submit application' }).click();
+  await expect(portal).toHaveURL(/\/student\/examinations\/re-exam\/applications$/);
+  const card = portal.getByRole('article').first();
+  await expect(card).toContainText('Submitted — awaiting decision');
+  await expect(card).toContainText('₹1,000.00');
+  const reference = (await card.locator('.tabular').first().textContent()) ?? '';
+  expect(reference).toMatch(/^RX-/);
+
+  // Another student sees nothing of it.
+  const other = await studentPage(browser, beta);
+  await other.goto('/student/examinations/re-exam/applications');
+  await expect(other.getByText('No re-exam applications yet')).toBeVisible();
+  await other.context().close();
+
+  // EXAM_ADMIN finds it by registration number and approves it.
+  await staff.goto('/admin/re-exam-applications');
+  await staff
+    .getByLabel('Search by student name or registration number')
+    .fill(alpha.registrationNumber);
+  await staff.getByRole('link', { name: reference }).first().click();
+  await expect(staff.getByRole('heading', { level: 1, name: 'E2E Examinee Alpha' })).toBeVisible();
+  await expect(staff.getByText('₹1,000.00 · Per subject (paper)')).toBeVisible();
+  await expectNoSeriousA11yViolations(staff);
+  await capture(staff, 're-exam-application-detail-desktop');
+  await staff.getByRole('button', { name: 'Approve' }).click();
+  await staff.getByRole('dialog').getByRole('button', { name: 'Approve' }).click();
+  await expect(staff.getByText('Approved').first()).toBeVisible();
+  await staff.goto('/admin/re-exam-applications');
+  await capture(staff, 're-exam-applications-desktop');
+  await staff.context().close();
+
+  await portal.reload();
+  await expect(portal.getByRole('article').first()).toContainText('Approved by the university');
+  await expectNoSeriousA11yViolations(portal);
+  await capture(portal, 'student-re-exam-applications-desktop');
+  await portal.context().close();
+});
+
 test.describe('mobile', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
@@ -172,6 +268,7 @@ test.describe('mobile', () => {
       ['examinations-list-mobile', '/admin/examinations'],
       ['examination-detail-mobile', shared.examinationUrl],
       ['examination-application-mobile', '/admin/examinations/application'],
+      ['re-exam-applications-mobile', '/admin/re-exam-applications'],
     ] as const) {
       await staff.goto(url);
       await expect(staff.getByRole('heading', { level: 1 })).toBeVisible();
@@ -186,6 +283,16 @@ test.describe('mobile', () => {
     await expectNoHorizontalOverflow(portal);
     await expectNoSeriousA11yViolations(portal);
     await capture(portal, 'student-examinations-mobile');
+    for (const [name, url] of [
+      ['student-re-exam-apply-mobile', '/student/examinations/re-exam'],
+      ['student-re-exam-applications-mobile', '/student/examinations/re-exam/applications'],
+    ] as const) {
+      await portal.goto(url);
+      await expect(portal.getByRole('heading', { level: 1 })).toBeVisible();
+      await expectNoHorizontalOverflow(portal);
+      await expectNoSeriousA11yViolations(portal);
+      await capture(portal, name);
+    }
     await portal.context().close();
   });
 });
