@@ -52,7 +52,7 @@
 - **Draft Conflict Resolution**: If an Excel import conflicts with an existing `DRAFT` created via manual entry, does the Excel file take precedence or should the row be completely rejected?
 
 ## 9. Proposed Implementation Stages
-1. **Independent Excel Parsing & Validation Components**: Build pure-function validators for marks components and registration lookups that reuse Phase 5 infra but don't interact with Phase 9 schemas yet.
+1. **Independent Excel Parsing & Validation Components (DONE - HARDENED)**: Built pure-function validators for marks components and registration lookups that reuse Phase 5 infra but don't interact with Phase 9 schemas yet. Added numeric precision checks, academic period mismatch checks, registration integrity checks, missing required components detection, and examination-context duplicate checking.
 2. **Import Engine Extension**: Add `ImportType.RESULTS` and the associated mapping/validation state machine.
 3. **Manual Entry Frontend & Draft APIs**: Develop the UX context selectors and grid for manual marks entry (saving strictly as `DRAFT`).
 4. **Conflict Resolution UI**: Implement the explicit conflict-handling UI for the import review stage.
