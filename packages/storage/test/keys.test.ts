@@ -21,6 +21,17 @@ describe('objectKeys', () => {
   it('refuses anything that is not a UUID (no path traversal through ids)', () => {
     expect(() => objectKeys.importSource('../../etc/passwd')).toThrow();
     expect(() => objectKeys.importErrorReport('a/b')).toThrow();
+    expect(() => objectKeys.paymentDestinationQr('../x', 'png')).toThrow();
+    expect(() => objectKeys.reExamPaymentEvidence('a/b', 'pdf')).toThrow();
+  });
+
+  it('keeps payment QR images and evidence under separate generated prefixes', () => {
+    expect(objectKeys.paymentDestinationQr(JOB, 'png')).toMatch(
+      /^payments\/destinations\/0199a8f0-0000-7000-8000-000000000001\/qr-[0-9a-f-]{36}\.png$/,
+    );
+    expect(objectKeys.reExamPaymentEvidence(JOB, 'pdf')).toMatch(
+      /^payments\/evidence\/0199a8f0-0000-7000-8000-000000000001\/[0-9a-f-]{36}\.pdf$/,
+    );
   });
 });
 

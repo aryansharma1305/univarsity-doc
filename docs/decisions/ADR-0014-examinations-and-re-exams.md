@@ -50,3 +50,20 @@ FX/regional amounts; the manual-marks rules.
 - New role rows are not needed (no migration inserts roles); the permission mapping is a proposal
   pending sign-off.
 - Phase 10 must decide the attempt mapping between results and re-exam applications.
+
+## Addendum (Phase 9C implementation, 2026-10-10)
+
+- Decision 5 is implemented with **maker–checker approval** of payment destinations (the approver must
+  differ from the preparer, also enforced by a database CHECK) and **versioned, frozen** destinations:
+  replacing a QR means approving a replacement version, which retires the old one atomically while
+  existing payments keep pointing at their version.
+- An obligation's amount is the application's own assessed fee when the currencies match, otherwise only
+  an explicitly approved per-attempt amount of the destination; the database trigger re-derives it, so a
+  conversion or invented amount cannot be stored.
+- Stored states are `AWAITING_PAYMENT`, `SUBMITTED`, `VERIFIED`, `REJECTED` and `VOID` (region changed
+  before paying). `NOT_CONFIGURED` is derived (no row); `UNDER_REVIEW` was not added because verification is
+  a single locked, atomic step — there is no claim/hand-off between reviewers to model.
+- Verification requires the amount and currency actually received to equal the obligation and an explicit
+  confirmation that the university's account was checked; partial/excess payments, refunds and
+  reconciliation of one transaction across several applications are not supported (P9) and are rejected
+  with a reason.

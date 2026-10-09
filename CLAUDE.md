@@ -11,19 +11,19 @@ records, a student portal, and (planned) public verification of results, registr
 One PostgreSQL database serves admin, student and public features — never duplicate student or
 certificate data.
 
-| Phase | Scope                                                                                       | Status (git tag)                  |
-| ----- | ------------------------------------------------------------------------------------------- | --------------------------------- |
-| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`           |
-| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`        |
-| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`            |
-| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`     |
-| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`      |
-| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`     |
-| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)                 |
-| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | ✅ merged (PR #2)                 |
-| 7B    | Course management, curriculum versions, subject catalogue and explicit student assignment   | ✅ merged (PR #3)                 |
-| 8     | Staff-managed historical certificates and the student document library                      | ✅ merged (PR #4)                 |
-| 9     | External examination links/records, re-exam applications, regional QR payments (9A/9B/9C)   | 9A draft PR; 9B local; 9C planned |
+| Phase | Scope                                                                                       | Status (git tag)                |
+| ----- | ------------------------------------------------------------------------------------------- | ------------------------------- |
+| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`         |
+| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`      |
+| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`          |
+| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`   |
+| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`    |
+| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`   |
+| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)               |
+| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | ✅ merged (PR #2)               |
+| 7B    | Course management, curriculum versions, subject catalogue and explicit student assignment   | ✅ merged (PR #3)               |
+| 8     | Staff-managed historical certificates and the student document library                      | ✅ merged (PR #4)               |
+| 9     | External examination links/records, re-exam applications, regional QR payments (9A/9B/9C)   | 9A/9B merged (PR #5, #7); 9C PR |
 
 **Not built yet** (do not describe as working): examination-taking (done in the university's separate app), grading, results entry/import/publication, certificate generation
 (PDF/QR), legacy QR mapping and bulk migration of historic documents, public verification (the `/verify/*` and `/results` pages are honest
@@ -151,7 +151,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261011100000_curriculum_activation_period_bounds` (Phase 7B),
   `20261012090000_historical_documents`, `20261013090000_historical_document_hardening` (Phase 8),
   `20261014090000_examination_portal_foundation` (Phase 9A), `20261015090000_re_exam_applications` (9B),
-  `20261015093000_re_exam_fee_snapshot_required_fields` (9B assessed-fee NULL hardening).
+  `20261015093000_re_exam_fee_snapshot_required_fields` (9B assessed-fee NULL hardening),
+  `20261016090000_re_exam_payments` (9C payment destinations and payments).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -234,6 +235,16 @@ snapshotted by the server) at `/student/examinations/re-exam`; staff decide at `
 (fee scope, attempt basis, regional amounts, marks rules) are explicit configuration states or blocked
 actions, never guessed. Details: [docs/api/examinations.md](docs/api/examinations.md), ADR-0014,
 [manual-marks-entry.md](docs/architecture/manual-marks-entry.md) (design only).
+
+Re-exam payments (9C): staff prepare versioned payment details per country/region group (India, Nepal,
+Bangladesh, Pakistan, Afghanistan, Europe, Central Asia, Others) at `/admin/settings/re-exam-payments`
+(`reExamPayments.configure`, SUPER_ADMIN); a **different** person approves (QR required); approved
+versions are frozen and replaced, never edited. Students choose a region at
+`/student/examinations/re-exam/[applicationId]/payment`, pay outside Docversity, and submit a transaction
+reference (+ evidence if required); the obligation snapshots amount/currency/fee-rule/destination
+versions (DB trigger re-derives the amount; no conversions). APPROVER verifies at `/admin/re-exam-payments`
+(`reExamPayments.read/.verify`) after checking the university's account; amount and currency must match.
+Payment never decides the application. Details: docs/api/examinations.md (Phase 9C).
 
 ## 11. Student import workflow (Phase 5)
 

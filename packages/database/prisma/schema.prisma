@@ -100,6 +100,57 @@ enum ReExamFeeStatus {
   NOT_CONFIGURED
 }
 
+/// The eight country/region choices of the re-exam Pay Now section (Phase 9C). EUROPE, CENTRAL_ASIA
+/// and OTHERS are region groups, not single countries.
+enum PaymentRegion {
+  INDIA
+  NEPAL
+  BANGLADESH
+  PAKISTAN
+  AFGHANISTAN
+  EUROPE
+  CENTRAL_ASIA
+  OTHERS
+}
+
+/// DRAFT (staff only, editable) → APPROVED (visible to students while active and in effect; frozen) →
+/// RETIRED (final). DRAFT → RETIRED is allowed.
+enum PaymentDestinationStatus {
+  DRAFT
+  APPROVED
+  RETIRED
+}
+
+enum PaymentMethod {
+  UPI
+  BANK_TRANSFER
+  MOBILE_WALLET
+  OTHER
+}
+
+/// Whether a student must attach payment evidence when submitting a transaction reference.
+enum PaymentEvidenceRequirement {
+  OPTIONAL
+  REQUIRED
+}
+
+/// AWAITING_PAYMENT → SUBMITTED → VERIFIED | REJECTED; AWAITING_PAYMENT → VOID (region changed before
+/// paying). "Not configured" is a derived state (no row). Nothing becomes VERIFIED without staff.
+enum ReExamPaymentStatus {
+  AWAITING_PAYMENT
+  SUBMITTED
+  VERIFIED
+  REJECTED
+  VOID
+}
+
+/// Where an obligation's amount came from: the application's assessed fee (same currency), or an
+/// explicitly approved per-attempt amount of the destination (another currency). Never a conversion.
+enum ReExamPaymentAmountSource {
+  FEE_RULE
+  DESTINATION_RATE
+}
+
 enum ResultPublicationStatus {
   DRAFT
   UNDER_REVIEW
@@ -383,6 +434,7 @@ model Student {
   account               StudentAccount?
   profileChangeRequests StudentProfileChangeRequest[]
   reExamApplications    ReExamApplication[]
+  reExamPayments        ReExamPayment[]
 
   @@map("students")
 }
@@ -935,9 +987,11 @@ model StudentAccount {
   createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  student               Student                       @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  profileChangeRequests StudentProfileChangeRequest[]
-  reExamApplications    ReExamApplication[]
+  student                 Student                       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  profileChangeRequests   StudentProfileChangeRequest[]
+  reExamApplications      ReExamApplication[]
+  reExamPaymentsStarted   ReExamPayment[]               @relation("ReExamPaymentCreatedBy")
+  reExamPaymentsSubmitted ReExamPayment[]               @relation("ReExamPaymentSubmittedBy")
 
   @@index([status])
   @@map("student_accounts")
@@ -1119,6 +1173,7 @@ model ReExamFeeRule {
   retiredBy    User?               @relation("ReExamFeeRuleRetiredBy", fields: [retiredByUserId], references: [id], onDelete: Restrict)
   rates        ReExamFeeRate[]
   applications ReExamApplication[]
+  payments     ReExamPayment[]
 
   @@unique([status], map: "re_exam_fee_rules_one_active_key", where: raw("(status = 'ACTIVE'::\"ReExamFeeRuleStatus\")"))
   @@map("re_exam_fee_rules")
@@ -1186,6 +1241,7 @@ model ReExamApplication {
   submittedBy    StudentAccount      @relation(fields: [submittedByAccountId], references: [id], onDelete: Restrict)
   decidedBy      User?               @relation("ReExamApplicationDecidedBy", fields: [decidedByUserId], references: [id], onDelete: Restrict)
   feeRule        ReExamFeeRule?      @relation(fields: [feeRuleId], references: [id], onDelete: Restrict)
+  payments       ReExamPayment[]
 
   /// No second live (SUBMITTED/APPROVED) application for the same registration, examination and subject.
   @@unique([studentRegistrationId, examinationId, subjectId], map: "re_exam_applications_one_live_key", where: raw("(status = ANY (ARRAY['SUBMITTED'::\"ReExamApplicationStatus\", 'APPROVED'::\"ReExamApplicationStatus\"]))"))
@@ -1194,6 +1250,131 @@ model ReExamApplication {
   @@index([studentId])
   @@index([studentRegistrationId, subjectId])
   @@map("re_exam_applications")
+}
+
+/// Where students of one country/region group pay the re-exam fee (Phase 9C): beneficiary, method,
+/// currency, instructions, validity and a private QR image (stored re-encoded, without metadata).
+/// Versioned per region; APPROVED (by someone other than its creator) before students can see it;
+/// frozen once approved (trigger). Replacing a QR = approving a replacement version, which retires the
+/// replaced one. Payment obligations keep pointing at the version they were created with.
+model ReExamPaymentDestination {
+  id                    String                     @id @default(uuid(7)) @db.Uuid
+  region                PaymentRegion
+  /// 1, 2, … per region.
+  version               Int
+  status                PaymentDestinationStatus   @default(DRAFT)
+  /// Students see an APPROVED destination only while it is active and in effect.
+  isActive              Boolean                    @default(false) @map("is_active")
+  /// For region groups only (EUROPE, CENTRAL_ASIA, OTHERS): the country or area it covers, if specific.
+  countryName           String?                    @map("country_name") @db.VarChar(100)
+  beneficiaryName       String                     @map("beneficiary_name") @db.VarChar(200)
+  method                PaymentMethod
+  /// ISO 4217 code.
+  currency              String                     @db.Char(3)
+  instructions          String                     @db.VarChar(2000)
+  evidenceRequirement   PaymentEvidenceRequirement @default(OPTIONAL) @map("evidence_requirement")
+  effectiveFrom         DateTime                   @map("effective_from") @db.Timestamptz(3)
+  effectiveUntil        DateTime?                  @map("effective_until") @db.Timestamptz(3)
+  qrStorageKey          String?                    @map("qr_storage_key") @db.VarChar(255)
+  qrContentType         String?                    @map("qr_content_type") @db.VarChar(32)
+  qrSizeBytes           Int?                       @map("qr_size_bytes")
+  qrSha256              String?                    @map("qr_sha256") @db.Char(64)
+  /// The APPROVED version of the same region this draft will replace when approved.
+  replacesDestinationId String?                    @map("replaces_destination_id") @db.Uuid
+  createdByUserId       String                     @map("created_by_user_id") @db.Uuid
+  updatedByUserId       String                     @map("updated_by_user_id") @db.Uuid
+  approvedAt            DateTime?                  @map("approved_at") @db.Timestamptz(3)
+  approvedByUserId      String?                    @map("approved_by_user_id") @db.Uuid
+  retiredAt             DateTime?                  @map("retired_at") @db.Timestamptz(3)
+  retiredByUserId       String?                    @map("retired_by_user_id") @db.Uuid
+  createdAt             DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdBy    User                           @relation("PaymentDestinationCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedBy    User                           @relation("PaymentDestinationUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+  approvedBy   User?                          @relation("PaymentDestinationApprovedBy", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  retiredBy    User?                          @relation("PaymentDestinationRetiredBy", fields: [retiredByUserId], references: [id], onDelete: Restrict)
+  replaces     ReExamPaymentDestination?      @relation("PaymentDestinationReplacement", fields: [replacesDestinationId], references: [id], onDelete: Restrict)
+  replacements ReExamPaymentDestination[]     @relation("PaymentDestinationReplacement")
+  rates        ReExamPaymentDestinationRate[]
+  payments     ReExamPayment[]
+
+  @@unique([region, version])
+  /// At most one APPROVED destination per region (no ambiguity about which QR a student sees).
+  @@unique([region], map: "re_exam_payment_destinations_one_approved_key", where: raw("(status = 'APPROVED'::\"PaymentDestinationStatus\")"))
+  @@index([status, region])
+  @@map("re_exam_payment_destinations")
+}
+
+/// An explicitly approved amount for one re-exam attempt in a destination's currency, used only when
+/// that currency differs from the application's assessed fee currency. Never computed.
+model ReExamPaymentDestinationRate {
+  destinationId String @map("destination_id") @db.Uuid
+  attemptNumber Int    @map("attempt_number") @db.SmallInt
+  amountMinor   Int    @map("amount_minor")
+
+  destination ReExamPaymentDestination @relation(fields: [destinationId], references: [id], onDelete: Restrict)
+
+  @@id([destinationId, attemptNumber])
+  @@map("re_exam_payment_destination_rates")
+}
+
+/// A payment obligation for one re-exam application at one destination (Phase 9C), with the amount,
+/// currency, fee-rule version and destination version snapshotted when it is created, and the
+/// student's submitted transaction reference / evidence and the staff review. Never deleted; at most
+/// one live obligation per application; a transaction reference satisfies at most one live payment.
+model ReExamPayment {
+  id                             String                    @id @default(uuid(7)) @db.Uuid
+  applicationId                  String                    @map("application_id") @db.Uuid
+  studentId                      String                    @map("student_id") @db.Uuid
+  destinationId                  String                    @map("destination_id") @db.Uuid
+  region                         PaymentRegion
+  destinationVersion             Int                       @map("destination_version")
+  attemptNumber                  Int                       @map("attempt_number") @db.SmallInt
+  feeRuleId                      String                    @map("fee_rule_id") @db.Uuid
+  feeRuleVersion                 Int                       @map("fee_rule_version")
+  amountSource                   ReExamPaymentAmountSource @map("amount_source")
+  amountMinor                    Int                       @map("amount_minor")
+  currency                       String                    @db.Char(3)
+  status                         ReExamPaymentStatus       @default(AWAITING_PAYMENT)
+  createdByAccountId             String                    @map("created_by_account_id") @db.Uuid
+  voidedAt                       DateTime?                 @map("voided_at") @db.Timestamptz(3)
+  voidReason                     String?                   @map("void_reason") @db.VarChar(64)
+  /// As entered by the student (trimmed), and its normalised form (upper-case letters/digits).
+  transactionReference           String?                   @map("transaction_reference") @db.VarChar(64)
+  transactionReferenceNormalized String?                   @map("transaction_reference_normalized") @db.VarChar(64)
+  submittedAt                    DateTime?                 @map("submitted_at") @db.Timestamptz(3)
+  submittedByAccountId           String?                   @map("submitted_by_account_id") @db.Uuid
+  evidenceStorageKey             String?                   @map("evidence_storage_key") @db.VarChar(255)
+  evidenceContentType            String?                   @map("evidence_content_type") @db.VarChar(32)
+  evidenceSizeBytes              Int?                      @map("evidence_size_bytes")
+  evidenceSha256                 String?                   @map("evidence_sha256") @db.Char(64)
+  reviewedAt                     DateTime?                 @map("reviewed_at") @db.Timestamptz(3)
+  reviewedByUserId               String?                   @map("reviewed_by_user_id") @db.Uuid
+  verifiedAmountMinor            Int?                      @map("verified_amount_minor")
+  verifiedCurrency               String?                   @map("verified_currency") @db.Char(3)
+  reviewNote                     String?                   @map("review_note") @db.VarChar(1000)
+  rejectionReason                String?                   @map("rejection_reason") @db.VarChar(1000)
+  createdAt                      DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                      DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  application ReExamApplication        @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  student     Student                  @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  destination ReExamPaymentDestination @relation(fields: [destinationId], references: [id], onDelete: Restrict)
+  feeRule     ReExamFeeRule            @relation(fields: [feeRuleId], references: [id], onDelete: Restrict)
+  createdBy   StudentAccount           @relation("ReExamPaymentCreatedBy", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  submittedBy StudentAccount?          @relation("ReExamPaymentSubmittedBy", fields: [submittedByAccountId], references: [id], onDelete: Restrict)
+  reviewedBy  User?                    @relation("ReExamPaymentReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+
+  /// One live (awaiting, submitted or verified) obligation per application.
+  @@unique([applicationId], map: "re_exam_payments_one_live_key", where: raw("(status = ANY (ARRAY['AWAITING_PAYMENT'::\"ReExamPaymentStatus\", 'SUBMITTED'::\"ReExamPaymentStatus\", 'VERIFIED'::\"ReExamPaymentStatus\"]))"))
+  /// A transaction reference backs at most one submitted or verified payment.
+  @@unique([transactionReferenceNormalized], map: "re_exam_payments_one_reference_key", where: raw("(status = ANY (ARRAY['SUBMITTED'::\"ReExamPaymentStatus\", 'VERIFIED'::\"ReExamPaymentStatus\"]))"))
+  @@index([status, submittedAt(sort: Desc)])
+  @@index([applicationId])
+  @@index([studentId])
+  @@index([transactionReferenceNormalized])
+  @@map("re_exam_payments")
 }
 
 /// The university's separate examination application (Phase 9). Docversity only links to it: the
@@ -1246,6 +1427,11 @@ model User {
   reExamFeeRulesActivated      ReExamFeeRule[]               @relation("ReExamFeeRuleActivatedBy")
   reExamFeeRulesRetired        ReExamFeeRule[]               @relation("ReExamFeeRuleRetiredBy")
   reExamApplicationsDecided    ReExamApplication[]           @relation("ReExamApplicationDecidedBy")
+  paymentDestinationsCreated   ReExamPaymentDestination[]    @relation("PaymentDestinationCreatedBy")
+  paymentDestinationsUpdated   ReExamPaymentDestination[]    @relation("PaymentDestinationUpdatedBy")
+  paymentDestinationsApproved  ReExamPaymentDestination[]    @relation("PaymentDestinationApprovedBy")
+  paymentDestinationsRetired   ReExamPaymentDestination[]    @relation("PaymentDestinationRetiredBy")
+  reExamPaymentsReviewed       ReExamPayment[]               @relation("ReExamPaymentReviewedBy")
   auditLogs                    AuditLog[]
   certificatesGenerated        Certificate[]                 @relation("CertificateGeneratedBy")
   certificatesApproved         Certificate[]                 @relation("CertificateApprovedBy")

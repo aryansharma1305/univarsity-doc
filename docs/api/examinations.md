@@ -104,3 +104,79 @@ catalogue subject that were not rejected or cancelled`, computed under a per-(re
 Audit: `RE_EXAM_FEE_RULE_CREATED/_ACTIVATED/_RETIRED`, `RE_EXAM_APPLICATION_SUBMITTED/_FEE_ASSESSED/
 _CANCELLED/_APPROVED/_REJECTED`, `RE_EXAM_APPLICATIONS_EXPORTED` — IDs, attempt, amounts and versions;
 never decision reasons.
+
+## Phase 9C — country/region payments, QR configuration and manual verification
+
+Contracts: `packages/validation/src/examinations/re-exam-payments.ts` and `payment-common.ts`. Docversity
+never takes money: students pay **outside** Docversity with the university's approved details and submit a
+transaction reference; staff confirm each payment against the university's own account. No gateway,
+refund, settlement or exchange-rate logic exists.
+
+- **Choices:** `INDIA`, `NEPAL`, `BANGLADESH`, `PAKISTAN`, `AFGHANISTAN` (countries) and `EUROPE`,
+  `CENTRAL_ASIA`, `OTHERS` (region groups; an optional specific country may be named).
+- **Payment destinations** (`re_exam_payment_destinations`) are versioned per region: `DRAFT` (staff only,
+  editable) → `APPROVED` (by a **different** person than the preparer, QR required, explicit
+  `confirmApproved: true`; frozen in the database) → `RETIRED`. At most one APPROVED version per region.
+  Students see a destination only while it is APPROVED, switched on and within `effectiveFrom`/
+  `effectiveUntil`. Replacing a QR = approving a replacement draft (`replacesDestinationId`), which retires
+  the replaced version in the same transaction; payments already started keep their version.
+- **QR images:** PNG/JPEG ≤ 2 MB, decoded in full, stored **re-encoded without metadata** under a generated
+  key, SHA-256 checked on every read, served `private, no-store`, `nosniff`, sandboxing CSP. Docversity
+  cannot read what a QR encodes; the approver confirms it is the university's real QR.
+- **Amounts (never computed):** when the destination's currency equals the application's assessed fee
+  currency, the amount is the application's snapshotted fee. Otherwise only an explicitly approved
+  per-attempt amount of that destination applies (`rates`, integer minor units of its currency); no amount
+  → `NO_APPROVED_AMOUNT`. Rates in the active fee rule's own currency are refused.
+- **Payment obligation** (`re_exam_payments`): created when the student chooses a region, snapshotting
+  destination + version, region, attempt, fee rule + version, amount source, amount and currency. The
+  database trigger re-derives the amount on insert, so nothing else can be recorded. One live obligation
+  per application (partial unique index). Lifecycle: `AWAITING_PAYMENT → SUBMITTED → VERIFIED | REJECTED`;
+  `AWAITING_PAYMENT → VOID` when the student switches region before paying. "Not configured" is a derived
+  state (no row). After a rejection the student may start again.
+- **Submission:** transaction reference (6–64 chars of letters, digits and separators; short all-digit
+  values and text naming PIN/OTP/password/CVV are refused) and evidence per the destination's policy
+  (`OPTIONAL`/`REQUIRED`): PDF without scripts/attachments/forms/encryption, or JPEG/PNG stored re-encoded
+  without metadata, ≤ 5 MB. The normalised reference (upper-case letters/digits) can back only one
+  SUBMITTED/VERIFIED payment (`409`). Submissions cannot be edited.
+- **Verification:** `SUBMITTED → VERIFIED` requires `confirmedAgainstUniversityAccount: true` and the
+  amount and currency **received**, which must equal the obligation (partial, excess or other-currency
+  payments are rejected with a reason instead). `→ REJECTED` needs a reason (shown to the student).
+  Decisions run under a row lock (concurrent decisions: one `200`, one `409`) and are final.
+- **Separation:** payment never approves or rejects an application, and an application decision never
+  changes a payment. Applications show the latest payment (`payment` summary) for information. Payments
+  cannot start for rejected/cancelled applications or unassessed fees.
+- **Retention:** pending university policy — nothing is deleted (`RE_EXAM_PAYMENT_RETENTION`).
+
+### Staff
+
+| Method | Path                                               | Permission                 | Purpose                                                                                          |
+| ------ | -------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------ |
+| GET    | `/api/v1/re-exam-payment-destinations`             | `reExamPayments.configure` | All versions + per-region overview + active fee currency                                         |
+| POST   | `/api/v1/re-exam-payment-destinations`             | `reExamPayments.configure` | DRAFT (or replacement draft)                                                                     |
+| GET    | `/api/v1/re-exam-payment-destinations/:id`         | `reExamPayments.configure` | Detail with history                                                                              |
+| PATCH  | `/api/v1/re-exam-payment-destinations/:id`         | `reExamPayments.configure` | Edit a DRAFT                                                                                     |
+| POST   | `/api/v1/re-exam-payment-destinations/:id/qr`      | `reExamPayments.configure` | multipart `file` (DRAFT only)                                                                    |
+| GET    | `/api/v1/re-exam-payment-destinations/:id/qr`      | `reExamPayments.configure` | Stored QR (staff preview)                                                                        |
+| POST   | `/api/v1/re-exam-payment-destinations/:id/approve` | `reExamPayments.configure` | `{ confirmApproved: true }`; not by the preparer                                                 |
+| POST   | `/api/v1/re-exam-payment-destinations/:id/active`  | `reExamPayments.configure` | `{ active }` (APPROVED only)                                                                     |
+| POST   | `/api/v1/re-exam-payment-destinations/:id/retire`  | `reExamPayments.configure` | → RETIRED                                                                                        |
+| GET    | `/api/v1/re-exam-payments`                         | `reExamPayments.read`      | List; `search` (name, registration no., subject code, transaction reference), `status`, `region` |
+| GET    | `/api/v1/re-exam-payments/:id`                     | `reExamPayments.read`      | Detail: obligation snapshot, evidence summary, same-reference warnings, history                  |
+| GET    | `/api/v1/re-exam-payments/:id/evidence`            | `reExamPayments.read`      | Evidence file (checksum-checked; every view audited)                                             |
+| POST   | `/api/v1/re-exam-payments/:id/verify`              | `reExamPayments.verify`    | `{ verifiedAmount, verifiedCurrency, confirmedAgainstUniversityAccount: true, note? }`           |
+| POST   | `/api/v1/re-exam-payments/:id/reject`              | `reExamPayments.verify`    | `{ reason }` (5–1000)                                                                            |
+
+### Student (own applications only; others are `404`)
+
+| Method | Path                                               | Purpose                                                                                                          |
+| ------ | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/student/re-exam-applications/:id/payment` | Pay Now view: identity snapshot, attempt, fee, the eight choices with availability, current and earlier payments |
+| POST   | `/api/v1/student/re-exam-applications/:id/payment` | `{ region }` — create the obligation (or replace an unpaid one); strict, no amounts                              |
+| GET    | `/api/v1/student/re-exam-payments/:id/qr`          | QR of an own AWAITING_PAYMENT obligation while its destination is available                                      |
+| POST   | `/api/v1/student/re-exam-payments/:id/submit`      | multipart `transactionReference` + optional/required `evidence`                                                  |
+
+Start is limited to 30 and submission to 10 requests per account per hour (Redis; fails closed).
+
+Audit: `RE_EXAM_PAYMENT_DESTINATION_CREATED/_UPDATED/_QR_UPLOADED/_APPROVED/_ACTIVATED/_DEACTIVATED/
+_RETIRED`, `RE_EXAM_PAYMENT_STARTED/_VOIDED/_SUBMITTED/_VERIFIED/_REJECTED/_EVIDENCE_VIEWED` — IDs, regions,
+versions, amounts, file hashes and field names; never transaction references, rejection reasons or notes.

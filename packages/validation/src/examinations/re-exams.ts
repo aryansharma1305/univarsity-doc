@@ -6,6 +6,7 @@ import {
   paginatedSchema,
 } from '../academic/common.js';
 import { academicStructureSchema } from '../academic/curricula.js';
+import { reExamPaymentSummarySchema } from './payment-common.js';
 
 /**
  * Re-exam applications (Phase 9B).
@@ -233,6 +234,8 @@ export const reExamApplicationDetailSchema = reExamApplicationRowSchema
     decisionReason: z.string().nullable(),
     decidedBy: personSchema,
     cancelledAt: z.iso.datetime().nullable(),
+    /** The latest payment (Phase 9C), shown for information — it never decides the application. */
+    payment: reExamPaymentSummarySchema.nullable(),
     history: z.array(activityItemSchema),
   })
   .meta({ id: 'ReExamApplicationDetail' });
@@ -345,6 +348,8 @@ export const studentReExamApplicationSchema = z
     /** The reason given by the university for its decision (rejections always have one). */
     decisionReason: z.string().nullable(),
     cancelledAt: z.iso.datetime().nullable(),
+    /** The latest payment (Phase 9C), if one was started. */
+    payment: reExamPaymentSummarySchema.nullable(),
     history: z.array(z.object({ summary: z.string(), createdAt: z.iso.datetime() })),
   })
   .meta({ id: 'StudentReExamApplication' });

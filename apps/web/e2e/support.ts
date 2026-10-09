@@ -26,6 +26,9 @@ export interface E2EFixtures {
   examAdmin: Account;
   examStudents: (StudentAccount & { registrationId: string })[];
   examProgram: { id: string; code: string; sessionId: string };
+  /** Phase 9C: a second SUPER_ADMIN (maker–checker approvals) and an APPROVER (payment review). */
+  paymentChecker: Account;
+  approver: Account;
 }
 
 export interface StudentAccount {

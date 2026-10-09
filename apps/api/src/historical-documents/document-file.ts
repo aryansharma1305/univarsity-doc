@@ -6,6 +6,13 @@ import { AppError } from '../common/app-error.js';
 
 export type DocumentContentType = (typeof HISTORICAL_DOCUMENT_RULES.acceptedTypes)[number];
 
+/** Limits for one kind of upload (historical documents by default; payment files in Phase 9C). */
+export interface InspectionRules {
+  acceptedTypes: readonly string[];
+  maxImagePixels: number;
+  minImageSide: number;
+}
+
 export interface InspectedDocument {
   contentType: DocumentContentType;
   extension: 'pdf' | 'jpg' | 'png';
@@ -135,8 +142,9 @@ export function assertStaticPdf(bytes: Uint8Array): void {
 export async function inspectDocument(
   bytes: Uint8Array,
   declaredType: string,
+  rules: InspectionRules = HISTORICAL_DOCUMENT_RULES,
 ): Promise<InspectedDocument> {
-  const accepted: readonly string[] = HISTORICAL_DOCUMENT_RULES.acceptedTypes;
+  const accepted: readonly string[] = rules.acceptedTypes;
   if (!accepted.includes(declaredType.toLowerCase())) {
     throw invalid('Upload a PDF, JPEG or PNG file.');
   }
@@ -153,15 +161,15 @@ export async function inspectDocument(
   }
   try {
     const image = sharp(bytes, {
-      limitInputPixels: HISTORICAL_DOCUMENT_RULES.maxImagePixels,
+      limitInputPixels: rules.maxImagePixels,
       failOn: 'error',
     });
     const metadata = await image.metadata();
     if ((metadata.pages ?? 1) > 1) throw invalid('Animated or multi-page images are not accepted.');
     const { width, height } = metadata.autoOrient;
-    if (Math.min(width, height) < HISTORICAL_DOCUMENT_RULES.minImageSide) {
+    if (Math.min(width, height) < rules.minImageSide) {
       throw invalid(
-        `The scan is too small to read. Use at least ${String(HISTORICAL_DOCUMENT_RULES.minImageSide)} pixels on each side.`,
+        `The scan is too small to read. Use at least ${String(rules.minImageSide)} pixels on each side.`,
       );
     }
     // Decode every pixel once: truncated or corrupt images fail here.

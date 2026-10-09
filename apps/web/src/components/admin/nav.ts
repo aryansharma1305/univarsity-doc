@@ -9,6 +9,8 @@ import {
   GraduationCapIcon,
   FileBadgeIcon,
   KeyRoundIcon,
+  QrCodeIcon,
+  WalletIcon,
   LibraryIcon,
   LayoutDashboardIcon,
   type LucideIcon,
@@ -26,6 +28,8 @@ export interface AdminNavItem {
     | '/admin/historical-documents'
     | '/admin/examinations'
     | '/admin/re-exam-applications'
+    | '/admin/re-exam-payments'
+    | '/admin/settings/re-exam-payments'
     | '/admin/programs'
     | '/admin/subjects'
     | '/admin/departments'
@@ -85,6 +89,18 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     permission: PERMISSIONS.reExamApplicationsRead,
   },
   {
+    href: '/admin/re-exam-payments',
+    label: 'Re-exam Payments',
+    icon: WalletIcon,
+    permission: PERMISSIONS.reExamPaymentsRead,
+  },
+  {
+    href: '/admin/settings/re-exam-payments',
+    label: 'Payment Settings',
+    icon: QrCodeIcon,
+    permission: PERMISSIONS.reExamPaymentsConfigure,
+  },
+  {
     href: '/admin/programs',
     label: 'Course Management',
     icon: GraduationCapIcon,
@@ -127,6 +143,9 @@ export const SEGMENT_LABELS: Record<string, string> = {
   'examinations/application': 'Examination application',
   're-exam-applications': 'Re-exam Applications',
   're-exam-applications/fees': 'Fee rules',
+  're-exam-payments': 'Re-exam Payments',
+  settings: 'Settings',
+  'settings/re-exam-payments': 'Payment Settings',
   // Context-specific labels: "<parent>/<segment>"; "<parent>/*" labels an id segment in the trail.
   'programs/*': 'Course',
   'students/new': 'New student',

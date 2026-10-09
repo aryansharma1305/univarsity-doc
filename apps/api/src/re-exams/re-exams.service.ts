@@ -28,6 +28,7 @@ import { invalidRelation } from '../common/conflicts.js';
 import { pageArgs, paginationMeta } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { type FeeAssessment, FeeRulesService } from './fee-rules.service.js';
+import { latestPaymentSummary } from './re-exam-payments.service.js';
 
 const ENTITY = 'ReExamApplication';
 const ONE_LIVE_INDEX = 're_exam_applications_one_live_key';
@@ -119,7 +120,8 @@ const CAN_APPLY = new Set(['ACTIVE', 'COMPLETED']);
 /**
  * Phase 9B: re-exam applications. Identity comes from the student's own registration; attempt
  * number and fee are derived by the server under a per-(registration, subject) lock and snapshotted.
- * Decisions are separate from payment (Phase 9C) and recorded with reasons; nothing is deleted.
+ * Decisions are separate from payment (Phase 9C: shown, never decisive) and recorded with reasons;
+ * nothing is deleted.
  */
 @Injectable()
 export class ReExamsService {
@@ -406,6 +408,7 @@ export class ReExamsService {
       decidedAt: app.decidedAt?.toISOString() ?? null,
       decisionReason: app.decisionReason,
       cancelledAt: app.cancelledAt?.toISOString() ?? null,
+      payment: await latestPaymentSummary(this.prisma.client, app.id),
       history: history
         .filter((entry) => STUDENT_SUMMARIES[entry.action as AuditAction])
         .map((entry) => ({
@@ -573,6 +576,7 @@ export class ReExamsService {
       decisionReason: app.decisionReason,
       decidedBy: app.decidedBy,
       cancelledAt: app.cancelledAt?.toISOString() ?? null,
+      payment: await latestPaymentSummary(this.prisma.client, id),
       history: history.map((entry): ActivityItem => ({
         id: entry.id,
         action: entry.action,
