@@ -344,10 +344,14 @@ export function StudentOverview({
             )}
           </PortalCard>
           <PortalCard
-            title="Examinations & Results"
+            title="Examinations"
             icon={ClipboardListIcon}
-            action={{ href: '/student/results', label: 'View status' }}
+            action={{ href: '/student/examinations', label: 'Open examinations' }}
           >
+            <p className="mb-3 text-sm text-navy-950">
+              Examinations are taken in the university’s examination application. Its links and your
+              course’s examination records are on the Examinations page.
+            </p>
             <PortalEmptyState
               icon={ClipboardListIcon}
               title="Results are not available yet"

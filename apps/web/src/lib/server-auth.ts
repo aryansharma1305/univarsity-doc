@@ -7,6 +7,12 @@ import {
   studentCurriculumSchema,
   type StudentDocument,
   studentDocumentListSchema,
+  type StudentExaminations,
+  studentExaminationsSchema,
+  type StudentReExamApplication,
+  studentReExamApplicationListSchema,
+  type StudentReExamOptions,
+  studentReExamOptionsSchema,
   type StudentProfileRequest,
   studentProfileRequestListSchema,
 } from '@docversity/validation';
@@ -120,6 +126,63 @@ export const getStudentCurriculum = cache(async (): Promise<StudentCurriculum | 
     return null;
   }
 });
+
+/** The signed-in student's examination page data (Phase 9A), or `null` when unavailable. */
+export const getStudentExaminations = cache(async (): Promise<StudentExaminations | null> => {
+  const jar = await cookies();
+  if (!STUDENT_COOKIES.some((name) => jar.has(name))) return null;
+  const { API_INTERNAL_URL } = loadWebEnv();
+  try {
+    const response = await fetch(new URL('/api/v1/student/examinations', API_INTERNAL_URL), {
+      headers: { cookie: jar.toString(), accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!response.ok) return null;
+    const parsed = studentExaminationsSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+});
+
+async function studentGet<T>(
+  path: string,
+  parse: (body: unknown) => { success: true; data: T } | { success: false },
+): Promise<T | null> {
+  const jar = await cookies();
+  if (!STUDENT_COOKIES.some((name) => jar.has(name))) return null;
+  const { API_INTERNAL_URL } = loadWebEnv();
+  try {
+    const response = await fetch(new URL(path, API_INTERNAL_URL), {
+      headers: { cookie: jar.toString(), accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!response.ok) return null;
+    const parsed = parse(await response.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What the signed-in student can apply for (Phase 9B), or `null` when unavailable. */
+export const getStudentReExamOptions = cache((): Promise<StudentReExamOptions | null> =>
+  studentGet('/api/v1/student/re-exam/options', (body) =>
+    studentReExamOptionsSchema.safeParse(body),
+  ),
+);
+
+/** The signed-in student's own re-exam applications (Phase 9B), or `null` when unavailable. */
+export const getStudentReExamApplications = cache(
+  async (): Promise<StudentReExamApplication[] | null> =>
+    (
+      await studentGet('/api/v1/student/re-exam-applications', (body) =>
+        studentReExamApplicationListSchema.safeParse(body),
+      )
+    )?.data ?? null,
+);
 
 /** The signed-in student's PUBLISHED documents, or `null` when unavailable. */
 export const getStudentDocuments = cache(async (): Promise<StudentDocument[] | null> => {

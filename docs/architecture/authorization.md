@@ -24,28 +24,33 @@ test fixtures) ensure all six code-defined roles exist as records.
 
 ## Role mapping (initial proposal — confirm with the client)
 
-| Permission             | SUPER_ADMIN | REGISTRAR | EXAM_ADMIN | CERTIFICATE_ADMIN | APPROVER | VIEWER |
-| ---------------------- | :---------: | :-------: | :--------: | :---------------: | :------: | :----: |
-| students.read          |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| students.write         |      ✓      |     ✓     |            |                   |          |        |
-| results.read           |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| results.write          |      ✓      |           |     ✓      |                   |          |        |
-| results.publish        |      ✓      |           |            |                   |    ✓     |        |
-| certificates.read      |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| certificates.generate  |      ✓      |     ✓     |            |         ✓         |          |        |
-| certificates.approve   |      ✓      |           |            |                   |    ✓     |        |
-| certificates.issue     |      ✓      |           |            |                   |    ✓     |        |
-| certificates.revoke    |      ✓      |           |            |                   |    ✓     |        |
-| templates.read         |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| templates.write        |      ✓      |           |            |         ✓         |          |        |
-| imports.read           |      ✓      |     ✓     |            |                   |          |        |
-| imports.students.run   |      ✓      |     ✓     |            |                   |          |        |
-| imports.results.run    |      ✓      |           |     ✓      |                   |          |        |
-| studentAccounts.read   |      ✓      |     ✓     |            |                   |          |        |
-| studentAccounts.manage |      ✓      |     ✓     |            |                   |          |        |
-| audit.read             |      ✓      |     ✓     |            |                   |          |        |
-| users.manage           |      ✓      |           |            |                   |          |        |
-| settings.manage        |      ✓      |           |            |                   |          |        |
+| Permission                | SUPER_ADMIN | REGISTRAR | EXAM_ADMIN | CERTIFICATE_ADMIN | APPROVER | VIEWER |
+| ------------------------- | :---------: | :-------: | :--------: | :---------------: | :------: | :----: |
+| students.read             |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| students.write            |      ✓      |     ✓     |            |                   |          |        |
+| results.read              |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| results.write             |      ✓      |           |     ✓      |                   |          |        |
+| results.publish           |      ✓      |           |            |                   |    ✓     |        |
+| certificates.read         |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| certificates.generate     |      ✓      |     ✓     |            |         ✓         |          |        |
+| certificates.approve      |      ✓      |           |            |                   |    ✓     |        |
+| certificates.issue        |      ✓      |           |            |                   |    ✓     |        |
+| certificates.revoke       |      ✓      |           |            |                   |    ✓     |        |
+| templates.read            |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| templates.write           |      ✓      |           |            |         ✓         |          |        |
+| imports.read              |      ✓      |     ✓     |            |                   |          |        |
+| imports.students.run      |      ✓      |     ✓     |            |                   |          |        |
+| imports.results.run       |      ✓      |           |     ✓      |                   |          |        |
+| studentAccounts.read      |      ✓      |     ✓     |            |                   |          |        |
+| studentAccounts.manage    |      ✓      |     ✓     |            |                   |          |        |
+| audit.read                |      ✓      |     ✓     |            |                   |          |        |
+| examinations.read         |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| examinations.manage       |      ✓      |           |     ✓      |                   |          |        |
+| reExamApplications.read   |      ✓      |     ✓     |     ✓      |                   |    ✓     |        |
+| reExamApplications.decide |      ✓      |           |     ✓      |                   |          |        |
+| reExamFees.manage         |      ✓      |           |            |                   |          |        |
+| users.manage              |      ✓      |           |            |                   |          |        |
+| settings.manage           |      ✓      |           |            |                   |          |        |
 
 Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
 
@@ -63,6 +68,12 @@ Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
 - **Student accounts (Phase 6):** only SUPER_ADMIN and REGISTRAR see portal states and issue/revoke
   activation codes. Students themselves have **no** permissions at all — they are a separate principal
   (see authentication.md).
+- **Examinations (Phase 9A):** every role reads examination records and the external examination
+  application links (no personal data); only SUPER_ADMIN and EXAM_ADMIN configure links and create, open
+  or archive records.
+- **Re-exam applications (Phase 9B):** applications contain personal data, so VIEWER and
+  CERTIFICATE_ADMIN do not read them; REGISTRAR, EXAM_ADMIN and APPROVER read and export; only EXAM_ADMIN
+  decides. Fee rules are financial policy: SUPER_ADMIN only until the university names a finance role.
 - A user's permissions are the union of their roles' permissions. There is no role hierarchy.
 
 ## Guards

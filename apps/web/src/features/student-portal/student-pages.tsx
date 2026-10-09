@@ -369,11 +369,11 @@ export function StudentSettings({ me }: { me: StudentMe }) {
 
 const PLANNED_MODULES = {
   results: {
-    title: 'Examinations & Results',
+    title: 'Results',
     icon: ClipboardListIcon,
     empty: 'Results are not available yet',
     description:
-      'Exam schedules, subject marks, grades and official results are planned. Contact the examination office for current result information.',
+      'Subject marks, grades and official results are planned. Contact the examination office for current result information; examination links are on the Examinations page.',
   },
   notifications: {
     title: 'Notifications',

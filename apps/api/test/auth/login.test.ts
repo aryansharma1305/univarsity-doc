@@ -49,6 +49,7 @@ describe('POST /api/v1/auth/login', () => {
         'certificates.read',
         'curricula.read',
         'departments.read',
+        'examinations.read',
         'programs.read',
         'registrations.read',
         'results.read',

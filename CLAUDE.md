@@ -11,20 +11,21 @@ records, a student portal, and (planned) public verification of results, registr
 One PostgreSQL database serves admin, student and public features — never duplicate student or
 certificate data.
 
-| Phase | Scope                                                                                       | Status (git tag)                                 |
-| ----- | ------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`                          |
-| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`                       |
-| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`                           |
-| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`                    |
-| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`                     |
-| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`                    |
-| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)                                |
-| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | ✅ merged (PR #2)                                |
-| 7B    | Course management, curriculum versions, subject catalogue and explicit student assignment   | ✅ merged (PR #3)                                |
-| 8     | Staff-managed historical certificates and the student document library                      | Review `feature/phase-8-historical-certificates` |
+| Phase | Scope                                                                                       | Status (git tag)                  |
+| ----- | ------------------------------------------------------------------------------------------- | --------------------------------- |
+| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`           |
+| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`        |
+| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`            |
+| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`     |
+| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`      |
+| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`     |
+| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)                 |
+| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | ✅ merged (PR #2)                 |
+| 7B    | Course management, curriculum versions, subject catalogue and explicit student assignment   | ✅ merged (PR #3)                 |
+| 8     | Staff-managed historical certificates and the student document library                      | ✅ merged (PR #4)                 |
+| 9     | External examination links/records, re-exam applications, regional QR payments (9A/9B/9C)   | 9A draft PR; 9B local; 9C planned |
 
-**Not built yet** (do not describe as working): examinations/grading, results entry/import/publication, certificate generation
+**Not built yet** (do not describe as working): examination-taking (done in the university's separate app), grading, results entry/import/publication, certificate generation
 (PDF/QR), legacy QR mapping and bulk migration of historic documents, public verification (the `/verify/*` and `/results` pages are honest
 "not available yet" placeholders), legacy WordPress migration, retention cleanup jobs, email delivery
 (password reset refuses with 503 when no notifier is configured). Plan: [docs/roadmap.md](docs/roadmap.md).
@@ -148,7 +149,9 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261011090000_course_curriculum_management`, `20261011093000_curriculum_history_guards`,
   `20261011094000_preserve_assignment_delete_restrict`,
   `20261011100000_curriculum_activation_period_bounds` (Phase 7B),
-  `20261012090000_historical_documents`, `20261013090000_historical_document_hardening` (Phase 8).
+  `20261012090000_historical_documents`, `20261013090000_historical_document_hardening` (Phase 8),
+  `20261014090000_examination_portal_foundation` (Phase 9A), `20261015090000_re_exam_applications` (9B),
+  `20261015093000_re_exam_fee_snapshot_required_fields` (9B assessed-fee NULL hardening).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -217,6 +220,20 @@ read — never the original. Older image rows get their copy with `pnpm document
 (idempotent; `--dry-run`) and cannot be published until then. Certificate numbers are stored exactly as
 given, with a normalised form (NFKC, upper-case, letters/digits) for search and duplicate warnings.
 Details: [docs/api/historical-documents.md](docs/api/historical-documents.md), ADR-0013.
+
+## 10d. Examinations (Phase 9)
+
+Examinations are taken in the university's **separate** examination application — Docversity never runs,
+schedules, proctors or marks them. `/admin/examinations` keeps examination records tied to a curriculum
+version and one of its semesters/years (`examinations.curriculum_id`, `kind`), and configures the https-only
+links of the external application (`/admin/examinations/application`); students see them at
+`/student/examinations`. Permissions `examinations.read` / `examinations.manage` (EXAM_ADMIN). Students apply
+for re-exams (one subject per application, identity from the registration, attempt and fee derived and
+snapshotted by the server) at `/student/examinations/re-exam`; staff decide at `/admin/re-exam-applications`
+(`reExamApplications.read/.decide`); fee rules are versioned, integer minor units (`reExamFees.manage`). Policy gaps
+(fee scope, attempt basis, regional amounts, marks rules) are explicit configuration states or blocked
+actions, never guessed. Details: [docs/api/examinations.md](docs/api/examinations.md), ADR-0014,
+[manual-marks-entry.md](docs/architecture/manual-marks-entry.md) (design only).
 
 ## 11. Student import workflow (Phase 5)
 

@@ -149,6 +149,37 @@ Support tables without relations: `number_sequences`, `legacy_mappings`.
 |              | `verification_logs`               | Public verification attempts (hashes only)                                                  |
 | Legacy       | `legacy_mappings`                 | Legacy identifier → new record (WordPress migration, old QR URLs)                           |
 
+### Phase 9B snapshot hardening (`20261015093000_re_exam_fee_snapshot_required_fields`)
+
+An additive CHECK explicitly requires currency and amount on assessed fees. PostgreSQL CHECKs accept
+NULL results, so pattern and positive-value comparisons alone cannot enforce these nullable columns.
+The original applied migration is unchanged.
+
+### Phase 9B migration (`20261015090000_re_exam_applications`)
+
+Additive: enums `ReExamFeeScope`, `ReExamFeeRuleStatus`, `ReExamApplicationStatus`, `ReExamFeeStatus`;
+tables `re_exam_fee_rules` (version, scope, ISO currency, attempt basis, lifecycle; partial unique: one
+ACTIVE), `re_exam_fee_rates` (rule, attempt ≥ 1, `amount_minor` > 0 — integer minor units) and
+`re_exam_applications` (student, registration, examination, curriculum line, catalogue subject,
+server-derived attempt + basis, identity snapshot, decision columns, fee snapshot; partial unique: one live
+application per registration + examination + subject). CHECKs keep the fee snapshot all-or-nothing and the
+decision columns consistent with the status. Triggers: `re_exam_fee_rules_guard` (no deletes, DRAFT-only
+edits, DRAFT→ACTIVE (needs a rate)→RETIRED), `re_exam_fee_rates_guard` (rates change only while the rule is
+DRAFT), `re_exam_applications_guard` (created SUBMITTED for a registration of the student that follows the
+examination's curriculum, an OPEN re-examination accepting applications and a subject of its period;
+identity/attempt immutable; fee NOT_CONFIGURED → ASSESSED once while SUBMITTED; SUBMITTED → APPROVED |
+REJECTED | CANCELLED once; never deleted).
+
+### Phase 9A migration (`20261014090000_examination_portal_foundation`)
+
+Additive: enum `ExaminationKind` (REGULAR, RE_EXAMINATION); table `external_exam_applications` (name,
+https website/Android/iOS links, instructions, active flag, creator/updater) with a CHECK allowing only
+`https://` URLs without credentials or whitespace; on `examinations`: nullable `curriculum_id` (composite FK
+`(curriculum_id, program_id)` → `program_curricula(id, program_id)`, so the curriculum always belongs to the
+examination's program), `kind` (default REGULAR) and `re_exam_applications_open` (default false; CHECK:
+re-examinations only). Trigger `examinations_curriculum_guard`: a linked examination's period is within
+the curriculum's periods and the curriculum is not DRAFT. Existing examination rows keep their values.
+
 ### Phase 8 hardening migration (`20261013090000_historical_document_hardening`)
 
 Additive: enum `EmbeddedMetadataCategory` and nullable columns on `historical_documents` —
@@ -253,6 +284,7 @@ distinguishable from genuine foreign-key/unique errors (Prisma surfaces it as `P
 | `program_document_templates_guard`                 | Dated overrides for the same program and document type may not overlap (serialised with an advisory lock).                                                                                                                                                                                                                                                                                                                                                                                            |
 | `profile_change_requests_guard`                    | Requests are created PENDING by an account of the same student; submitted data never changes; a decision (APPROVED/REJECTED/CANCELLED) happens once; requests cannot be deleted.                                                                                                                                                                                                                                                                                                                      |
 | `historical_documents_guard`                       | Documents are created DRAFT; file, registration and replacement link never change; metadata changes only while DRAFT; DRAFT→PUBLISHED/WITHDRAWN, PUBLISHED→WITHDRAWN/SUPERSEDED, WITHDRAWN→PUBLISHED only; SUPERSEDED is final; replacements stay on the same registration; never deleted.                                                                                                                                                                                                            |
+| `examinations_curriculum_guard`                    | An examination linked to a curriculum uses one of its periods (semester or year) and never a DRAFT curriculum version.                                                                                                                                                                                                                                                                                                                                                                                |
 | `historical_documents_hardening_guard`             | The student copy of an image (key, type, size, SHA-256, time, metadata kinds) is set once and never changed; an image document cannot be published without it; the normalised certificate number changes only while DRAFT.                                                                                                                                                                                                                                                                            |
 | `audit_logs_append_only`, `audit_logs_no_truncate` | Audit entries can never be updated, deleted or truncated.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `verification_logs_append_only`                    | Verification entries can never be updated. Deletion stays possible for a future retention policy.                                                                                                                                                                                                                                                                                                                                                                                                     |
