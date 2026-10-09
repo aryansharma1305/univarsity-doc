@@ -36,18 +36,28 @@ export interface ResultProgramSubject {
   id: string;
   curriculumId: string;
   subjectCode: string;
+  academicPeriod: string;
   maxMarks: number | null;
   componentConfiguration?: {
     internalMax?: number | null;
+    internalRequired?: boolean;
     externalMax?: number | null;
+    externalRequired?: boolean;
     practicalMax?: number | null;
+    practicalRequired?: boolean;
     otherMax?: number | null;
+    otherRequired?: boolean;
   } | null;
 }
 
 export interface ResultValidationContext {
   registrations: Map<string, ResultExistingRegistration>;
   curriculumSubjects: Map<string, ResultProgramSubject[]>; // Map<curriculumId, ProgramSubject[]>
+  academicPeriod?: string;
+  examinationContext?: {
+    examinationId: string;
+    attemptNumber: number;
+  };
 }
 
 export function parseResultFieldValues(
@@ -75,8 +85,10 @@ export function parseResultFieldValues(
 
 function parseNumericMark(value: string | null | undefined): number | null {
   if (!value) return null;
-  const parsed = Number(value);
-  if (Number.isNaN(parsed)) return null;
+  const trimmed = value.trim();
+  if (!/^-?\d+(\.\d{1,2})?$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return null;
   return parsed;
 }
 
@@ -96,11 +108,18 @@ export function validateResultRows(
 
     // 1. Validate Registration Number
     const rawRegNum = values.registrationNumber;
+    const rawRegNumCell = mapping.registrationNumber ? row.rawData[mapping.registrationNumber] : null;
     let registrationNumberNormalized: string | null = null;
     let registration: ResultExistingRegistration | null = null;
 
     if (!rawRegNum) {
       errors.push({ field: 'registrationNumber', code: 'REQUIRED', message: 'Registration number is missing.' });
+    } else if (rawRegNumCell?.type === 'number') {
+      errors.push({
+        field: 'registrationNumber',
+        code: 'NUMERIC_REGISTRATION',
+        message: 'Registration number must be formatted as text to preserve leading zeros.',
+      });
     } else {
       registrationNumberNormalized = normalizeRegistrationNumber(rawRegNum);
       registration = context.registrations.get(registrationNumberNormalized) || null;
@@ -146,13 +165,23 @@ export function validateResultRows(
           });
         } else {
           programSubject = matchingSubjects[0];
+          if (context.academicPeriod && programSubject.academicPeriod !== context.academicPeriod) {
+            errors.push({
+              field: 'subjectCode',
+              code: 'SUBJECT_PERIOD_MISMATCH',
+              message: `Subject '${rawSubject}' does not belong to the selected academic period (${context.academicPeriod}).`,
+            });
+          }
         }
       }
     }
 
     // 3. Duplicate checks within file
     if (registrationNumberNormalized && programSubject) {
-      const attemptKey = `${registrationNumberNormalized}:${programSubject.id}`;
+      let attemptKey = `${registrationNumberNormalized}:${programSubject.id}`;
+      if (context.examinationContext) {
+        attemptKey += `:${context.examinationContext.examinationId}:${context.examinationContext.attemptNumber}`;
+      }
       if (seenSubjectAttempts.has(attemptKey)) {
         errors.push({
           field: 'subjectCode',
@@ -164,15 +193,15 @@ export function validateResultRows(
     }
 
     // 4. Validate marks values and max boundaries
-    const marksFields: { key: ResultImportField; maxKey: keyof NonNullable<ResultProgramSubject['componentConfiguration']> | 'maxMarks' }[] = [
-      { key: 'internalMarks', maxKey: 'internalMax' },
-      { key: 'externalMarks', maxKey: 'externalMax' },
-      { key: 'practicalMarks', maxKey: 'practicalMax' },
-      { key: 'otherMarks', maxKey: 'otherMax' },
+    const marksFields: { key: ResultImportField; maxKey: keyof NonNullable<ResultProgramSubject['componentConfiguration']> | 'maxMarks'; requiredKey?: keyof NonNullable<ResultProgramSubject['componentConfiguration']> }[] = [
+      { key: 'internalMarks', maxKey: 'internalMax', requiredKey: 'internalRequired' },
+      { key: 'externalMarks', maxKey: 'externalMax', requiredKey: 'externalRequired' },
+      { key: 'practicalMarks', maxKey: 'practicalMax', requiredKey: 'practicalRequired' },
+      { key: 'otherMarks', maxKey: 'otherMax', requiredKey: 'otherRequired' },
       { key: 'totalMarks', maxKey: 'maxMarks' },
     ];
 
-    for (const { key, maxKey } of marksFields) {
+    for (const { key, maxKey, requiredKey } of marksFields) {
       const markStr = values[key];
       if (markStr) {
         const mark = parseNumericMark(markStr);
@@ -193,7 +222,7 @@ export function validateResultRows(
           if (maxKey === 'maxMarks') {
             max = programSubject.maxMarks;
           } else if (programSubject.componentConfiguration) {
-            max = programSubject.componentConfiguration[maxKey];
+            max = programSubject.componentConfiguration[maxKey] as number | null | undefined;
           }
 
           if (max !== null && max !== undefined && mark > max) {
@@ -203,6 +232,15 @@ export function validateResultRows(
               message: `Marks (${mark}) exceed the configured maximum (${max}) for this component.`,
             });
           }
+        }
+      } else if (programSubject?.componentConfiguration && requiredKey) {
+        const isRequired = programSubject.componentConfiguration[requiredKey];
+        if (isRequired) {
+          errors.push({
+            field: key,
+            code: 'REQUIRED_COMPONENT_MISSING',
+            message: `Marks component '${key}' is required by the curriculum.`,
+          });
         }
       }
     }
