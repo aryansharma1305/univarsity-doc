@@ -90,7 +90,7 @@ const MUTATION_ERRORS = [
   }),
 ];
 
-function MutationDocs(): MethodDecorator {
+export function MutationDocs(): MethodDecorator {
   return (target, key, descriptor) => {
     ApiSecurity('csrf')(target, key, descriptor);
     for (const decorator of MUTATION_ERRORS) decorator(target, key, descriptor);

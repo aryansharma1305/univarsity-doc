@@ -3,6 +3,8 @@ import {
   authUserSchema,
   type StudentMe,
   studentMeSchema,
+  type StudentCurriculum,
+  studentCurriculumSchema,
   type StudentProfileRequest,
   studentProfileRequestListSchema,
 } from '@docversity/validation';
@@ -97,3 +99,22 @@ export const getStudentProfileRequests = cache(
     }
   },
 );
+
+/** The signed-in student's assigned curricula (Course Details), or `null` when unavailable. */
+export const getStudentCurriculum = cache(async (): Promise<StudentCurriculum | null> => {
+  const jar = await cookies();
+  if (!STUDENT_COOKIES.some((name) => jar.has(name))) return null;
+  const { API_INTERNAL_URL } = loadWebEnv();
+  try {
+    const response = await fetch(new URL('/api/v1/student/curriculum', API_INTERNAL_URL), {
+      headers: { cookie: jar.toString(), accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!response.ok) return null;
+    const parsed = studentCurriculumSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+});

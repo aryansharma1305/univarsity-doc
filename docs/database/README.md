@@ -349,3 +349,22 @@ were mutation-checked: removing `results_guard` makes 6 result tests fail.
 curriculum lines, one **placeholder** grading scheme (DRAFT, no rules), two students with registrations
 `DEV-REG-0001` / `DEV-REG-0002`, and one DRAFT examination. Every name says "Development Fixture". It
 creates **no results and no certificates**.
+
+## Phase 7B curriculum versions
+
+`ProgramCurriculum` versions existing `Program` records; `ProgramSubject` is the existing per-period
+placement with a required version link. `Subject` remains the shared catalogue, and registrations have
+an optional explicit version. `semester_number` is retained as the stored period number for both structures.
+Existing results still reference `ProgramSubject`; no result/certificate storage is replaced.
+
+Three append-only migrations introduce/backfill the model, add history guards, and preserve the existing
+foreign-key RESTRICT behavior on referenced placement deletion. Legacy version labels become DRAFT
+versions, with placements attached and ordered; no student registration is assigned by the upgrade.
+Existing result rows and old placement columns remain unchanged. History guards protect catalogue
+identity, result-bearing placements/drafts and result-bearing registrations, including unassigned ones.
+See [ADR-0012](../decisions/ADR-0012-curriculum-versions.md) and the
+[delivery report](../development/phase-7b-course-curriculum.md).
+
+Reproduce the isolated synthetic upgrade check with
+`node packages/database/scripts/verify-curriculum-upgrade.mjs` (local PostgreSQL and root `.env` required).
+It creates and drops its own suffixed database and never upgrades the development database.

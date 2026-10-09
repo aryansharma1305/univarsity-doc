@@ -11,8 +11,26 @@ interface AuditRow {
 const FIELD_LABELS: Record<string, string> = {
   code: 'code',
   name: 'name',
-  level: 'level',
+  level: 'type',
   durationSemesters: 'duration',
+  description: 'description',
+  durationValue: 'duration',
+  durationUnit: 'duration unit',
+  academicStructure: 'academic structure',
+  periodCount: 'number of periods',
+  versionCode: 'version code',
+  structureType: 'academic structure',
+  numberOfPeriods: 'number of periods',
+  effectiveFrom: 'effective from',
+  effectiveTo: 'effective to',
+  category: 'category',
+  defaultCredits: 'default credits',
+  periodNumber: 'semester/year',
+  classification: 'classification',
+  credits: 'credits',
+  maxMarks: 'maximum marks',
+  passMarks: 'passing marks',
+  components: 'assessment components',
   departmentId: 'department',
   startsOn: 'start date',
   endsOn: 'end date',
@@ -34,7 +52,8 @@ function str(value: unknown): string | undefined {
 }
 
 function fields(metadata: Record<string, unknown>): string {
-  const list = Array.isArray(metadata.changedFields) ? (metadata.changedFields as unknown[]) : [];
+  const raw = metadata.changedFields ?? metadata.fields;
+  const list = Array.isArray(raw) ? (raw as unknown[]) : [];
   const labels = list.map((field) => FIELD_LABELS[String(field)] ?? 'other details');
   return labels.length > 0 ? ` (${labels.join(', ')})` : '';
 }
@@ -69,6 +88,7 @@ export function summarizeAudit(row: AuditRow): ActivityItem {
   >;
   const code = str(meta.code);
   const registration = str(meta.registrationNumber);
+  const version = str(meta.versionCode) ?? '';
   const summaries: Record<string, string> = {
     DEPARTMENT_CREATED: `Department ${code ?? ''} created`,
     DEPARTMENT_UPDATED: `Department ${code ?? ''} updated${fields(meta)}`,
@@ -84,6 +104,18 @@ export function summarizeAudit(row: AuditRow): ActivityItem {
     REGISTRATION_CREATED: `Registration ${registration ?? ''} created${viaImport(meta)}`,
     REGISTRATION_UPDATED: `Registration ${registration ?? ''} updated${viaImport(meta)}${fields(meta)}`,
     REGISTRATION_STATUS_CHANGED: `Registration ${registration ?? ''} status changed${status(meta)}`,
+    SUBJECT_CREATED: `Subject ${code ?? ''} created`,
+    SUBJECT_UPDATED: `Subject ${code ?? ''} updated${fields(meta)}`,
+    SUBJECT_STATUS_CHANGED: `Subject ${code ?? ''} status changed${status(meta)}`,
+    CURRICULUM_CREATED: `Curriculum ${version} created for ${code ?? 'a program'}`,
+    CURRICULUM_UPDATED: `Curriculum ${version} of ${code ?? 'a program'} updated${fields(meta)}`,
+    CURRICULUM_ACTIVATED: `Curriculum ${version} of ${code ?? 'a program'} activated`,
+    CURRICULUM_ARCHIVED: `Curriculum ${version} of ${code ?? 'a program'} archived`,
+    CURRICULUM_SUBJECT_ADDED: `Subject ${str(meta.subjectCode) ?? ''} added to curriculum ${version}`,
+    CURRICULUM_SUBJECT_UPDATED: `Subject ${str(meta.subjectCode) ?? ''} updated in curriculum ${version}${fields(meta)}`,
+    CURRICULUM_SUBJECT_REMOVED: `Subject ${str(meta.subjectCode) ?? ''} removed from curriculum ${version}`,
+    CURRICULUM_SUBJECTS_REORDERED: `Subjects reordered in curriculum ${version}`,
+    STUDENT_CURRICULUM_ASSIGNED: `${plural(count(meta, 'assigned'), 'registration')} assigned to curriculum ${version}`,
     STUDENT_IMPORT_COMMITTED: `Student import completed: ${plural(count(meta, 'createdRecords'), 'record')} created, ${plural(count(meta, 'updatedRecords'), 'record')} updated`,
   };
   return {

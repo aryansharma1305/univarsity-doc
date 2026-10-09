@@ -1,6 +1,8 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -19,6 +21,7 @@ import { useCan } from '@/components/providers/session-context';
 import { useDepartments } from '@/features/departments/api';
 import { useListParams } from '@/hooks/use-list-params';
 import { errorMessage } from '@/lib/api';
+import { structureLabel } from '@/features/curricula/labels';
 import { usePrograms, useSaveProgram } from './api';
 import { ProgramDialog } from './program-dialog';
 
@@ -28,6 +31,7 @@ const STATUS_FILTER = [
 ] as const;
 
 export function ProgramsView() {
+  const router = useRouter();
   const canWrite = useCan(PERMISSIONS.programsWrite);
   const { values, page, update } = useListParams(['status', 'department'] as const);
   const query = usePrograms({
@@ -48,14 +52,20 @@ export function ProgramsView() {
     const status = program.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     try {
       await save.mutateAsync({ id: program.id, body: { status } });
-      toast.success(`Program ${program.code} ${status === 'ACTIVE' ? 'activated' : 'deactivated'}`);
+      toast.success(`Course ${program.code} ${status === 'ACTIVE' ? 'activated' : 'deactivated'}`);
     } catch (error) {
       toast.error(errorMessage(error));
     }
   }
 
-  const actionsFor = (program: Program) =>
-    canWrite
+  const actionsFor = (program: Program) => [
+    {
+      label: 'Open course',
+      onSelect: () => {
+        router.push(`/admin/programs/${program.id}`);
+      },
+    },
+    ...(canWrite
       ? [
           {
             label: 'Edit',
@@ -68,30 +78,40 @@ export function ProgramsView() {
             onSelect: () => void toggleStatus(program),
           },
         ]
-      : [];
+      : []),
+  ];
 
   const columns: ColumnDef<Program>[] = [
     {
       header: 'Code',
       cell: ({ row }) => <span className="font-medium text-navy-950">{row.original.code}</span>,
     },
-    { header: 'Name', accessorKey: 'name' },
+    {
+      header: 'Course',
+      cell: ({ row }) => (
+        <Link
+          href={`/admin/programs/${row.original.id}`}
+          className="font-medium text-brand hover:underline"
+        >
+          {row.original.name}
+        </Link>
+      ),
+    },
     {
       header: 'Department',
       cell: ({ row }) => row.original.department?.code ?? <span className="text-meta">—</span>,
     },
     {
-      header: 'Level',
+      header: 'Type',
       cell: ({ row }) => row.original.level ?? <span className="text-meta">—</span>,
     },
     {
-      header: 'Duration',
-      cell: ({ row }) =>
-        row.original.durationSemesters ? (
-          <span className="tabular">{row.original.durationSemesters} semesters</span>
-        ) : (
-          <span className="text-meta">—</span>
-        ),
+      header: 'Structure',
+      cell: ({ row }) => structureLabel(row.original) ?? <span className="text-meta">Not set</span>,
+    },
+    {
+      header: 'Curricula',
+      cell: ({ row }) => <span className="tabular">{row.original.curriculumCount}</span>,
     },
     { header: 'Status', cell: ({ row }) => <RecordStatus status={row.original.status} /> },
     {
@@ -108,8 +128,8 @@ export function ProgramsView() {
   return (
     <>
       <PageHeader
-        title="Programs"
-        description="Degree and course programs offered by the university."
+        title="Course Management"
+        description="Courses (programs), their academic structure and curriculum versions."
         actions={
           canWrite && (
             <Button
@@ -118,14 +138,14 @@ export function ProgramsView() {
               }}
             >
               <PlusIcon aria-hidden="true" />
-              Add program
+              Create course
             </Button>
           )
         }
       />
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <SearchInput
-          label="Search programs"
+          label="Search courses"
           placeholder="Search by code or name"
           value={values.search}
           onChange={(search) => {
@@ -157,9 +177,9 @@ export function ProgramsView() {
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
       ) : query.data.data.length === 0 ? (
         <EmptyState
-          title={filtered ? 'No programs match these filters' : 'No programs yet'}
+          title={filtered ? 'No courses match these filters' : 'No courses yet'}
           description={
-            filtered ? 'Try a different search or filter.' : 'Programs you add will appear here.'
+            filtered ? 'Try a different search or filter.' : 'Courses you create will appear here.'
           }
           action={
             !filtered && canWrite ? (
@@ -168,7 +188,7 @@ export function ProgramsView() {
                   setDialog({ open: true });
                 }}
               >
-                Add program
+                Create course
               </Button>
             ) : undefined
           }
@@ -176,7 +196,7 @@ export function ProgramsView() {
       ) : (
         <>
           <DataTable
-            caption="Programs"
+            caption="Courses"
             columns={columns}
             data={query.data.data}
             getRowId={(row) => row.id}
@@ -184,13 +204,14 @@ export function ProgramsView() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-medium text-navy-950">{program.code}</p>
-                  <p className="text-sm">{program.name}</p>
+                  <Link
+                    href={`/admin/programs/${program.id}`}
+                    className="text-sm font-medium break-words text-brand hover:underline"
+                  >
+                    {program.name}
+                  </Link>
                   <p className="text-meta">
-                    {[
-                      program.department?.code,
-                      program.level,
-                      program.durationSemesters ? `${program.durationSemesters} semesters` : null,
-                    ]
+                    {[program.department?.code, program.level, structureLabel(program)]
                       .filter(Boolean)
                       .join(' · ') || 'No department'}
                   </p>

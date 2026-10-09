@@ -47,11 +47,13 @@ describe('POST /api/v1/auth/login', () => {
       permissions: [
         'academicSessions.read',
         'certificates.read',
+        'curricula.read',
         'departments.read',
         'programs.read',
         'registrations.read',
         'results.read',
         'students.read',
+        'subjects.read',
         'templates.read',
       ],
     });

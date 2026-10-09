@@ -140,3 +140,31 @@ describe('student accounts (Phase 6)', () => {
     expect(ALL_PERMISSIONS.some((permission) => permission.startsWith('student.'))).toBe(false);
   });
 });
+
+describe('course & curriculum management (Phase 7B)', () => {
+  const MUTATIONS = [
+    PERMISSIONS.subjectsWrite,
+    PERMISSIONS.curriculaWrite,
+    PERMISSIONS.curriculaActivate,
+    PERMISSIONS.curriculaArchive,
+    PERMISSIONS.studentCurriculaAssign,
+  ];
+
+  it('lets every staff role read subjects and curricula', () => {
+    for (const role of Object.values(ROLE_NAMES)) {
+      const granted = permissionsForRoles([role]);
+      expect(granted.has(PERMISSIONS.subjectsRead), role).toBe(true);
+      expect(granted.has(PERMISSIONS.curriculaRead), role).toBe(true);
+    }
+  });
+
+  it('lets only SUPER_ADMIN and REGISTRAR change the catalogue, curricula and assignments', () => {
+    for (const role of Object.values(ROLE_NAMES)) {
+      const granted = permissionsForRoles([role]);
+      const expected = role === ROLE_NAMES.superAdmin || role === ROLE_NAMES.registrar;
+      for (const permission of MUTATIONS) {
+        expect(granted.has(permission), `${role} ${permission}`).toBe(expected);
+      }
+    }
+  });
+});

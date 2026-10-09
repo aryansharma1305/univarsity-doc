@@ -6,6 +6,7 @@ import {
   FileSpreadsheetIcon,
   GraduationCapIcon,
   KeyRoundIcon,
+  LibraryIcon,
   LayoutDashboardIcon,
   type LucideIcon,
   UserRoundPenIcon,
@@ -20,6 +21,7 @@ export interface AdminNavItem {
     | '/admin/student-accounts'
     | '/admin/profile-requests'
     | '/admin/programs'
+    | '/admin/subjects'
     | '/admin/departments'
     | '/admin/academic-sessions';
   label: string;
@@ -60,9 +62,15 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   },
   {
     href: '/admin/programs',
-    label: 'Programs',
+    label: 'Course Management',
     icon: GraduationCapIcon,
     permission: PERMISSIONS.programsRead,
+  },
+  {
+    href: '/admin/subjects',
+    label: 'Subject Catalogue',
+    icon: LibraryIcon,
+    permission: PERMISSIONS.subjectsRead,
   },
   {
     href: '/admin/departments',
@@ -81,13 +89,16 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
 export const SEGMENT_LABELS: Record<string, string> = {
   admin: 'Dashboard',
   students: 'Students',
-  programs: 'Programs',
+  programs: 'Course Management',
+  subjects: 'Subject Catalogue',
+  curricula: 'Curricula',
   departments: 'Departments',
   'academic-sessions': 'Academic Sessions',
   imports: 'Imports',
   'student-accounts': 'Student Accounts',
   'profile-requests': 'Profile Requests',
-  // Context-specific labels: "<parent>/<segment>".
+  // Context-specific labels: "<parent>/<segment>"; "<parent>/*" labels an id segment in the trail.
+  'programs/*': 'Course',
   'students/new': 'New student',
   'imports/new': 'New import',
 };

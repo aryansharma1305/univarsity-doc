@@ -67,8 +67,23 @@ export async function seedDevelopmentFixtures(db: PrismaClient): Promise<SeedSum
       create: { code: 'DEV-SESSION-01', name: 'Development Fixture Session', status: 'ACTIVE' },
     });
 
+    // A DRAFT curriculum version (Phase 7B): never activated or assigned by the seed.
+    const curriculum = await tx.programCurriculum.upsert({
+      where: {
+        programId_versionCode: { programId: programA.id, versionCode: CURRICULUM_VERSION },
+      },
+      update: {},
+      create: {
+        programId: programA.id,
+        versionCode: CURRICULUM_VERSION,
+        name: 'Development Fixture Curriculum',
+        structureType: 'SEMESTER_WISE',
+        numberOfPeriods: programA.durationSemesters ?? 8,
+      },
+    });
+
     const programSubjects = [];
-    for (const subject of SUBJECTS) {
+    for (const [index, subject] of SUBJECTS.entries()) {
       const record = await tx.subject.upsert({
         where: { code_version: { code: subject.code, version: 1 } },
         update: {},
@@ -91,9 +106,12 @@ export async function seedDevelopmentFixtures(db: PrismaClient): Promise<SeedSum
           update: {},
           create: {
             programId: programA.id,
+            curriculumId: curriculum.id,
             subjectId: record.id,
             semesterNumber: 1,
+            displayOrder: index,
             curriculumVersion: CURRICULUM_VERSION,
+            classification: 'THEORY',
             credits: subject.credits,
           },
         }),

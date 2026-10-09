@@ -23,7 +23,9 @@ export function AdminBreadcrumbs() {
     label:
       SEGMENT_LABELS[`${segments[index - 1] ?? ''}/${segment}`] ??
       SEGMENT_LABELS[segment] ??
-      (index === segments.length - 1 && customLabel ? customLabel : 'Details'),
+      (index === segments.length - 1 && customLabel
+        ? customLabel
+        : (SEGMENT_LABELS[`${segments[index - 1] ?? ''}/*`] ?? 'Details')),
   }));
 
   return (

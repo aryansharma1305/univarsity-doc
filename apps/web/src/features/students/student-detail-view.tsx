@@ -79,6 +79,14 @@ function RegistrationCard({
           />
           <Detail label="Admission date" value={formatDate(registration.admissionDate)} />
           <Detail label="Completion date" value={formatDate(registration.completionDate)} />
+          <Detail
+            label="Curriculum"
+            value={
+              registration.curriculum
+                ? `${registration.curriculum.versionCode} — ${registration.curriculum.name}${registration.curriculum.status === 'ARCHIVED' ? ' (archived)' : ''}`
+                : 'Not assigned'
+            }
+          />
           <Detail label="Last updated" value={formatDateTime(registration.updatedAt)} />
         </dl>
       </CardContent>

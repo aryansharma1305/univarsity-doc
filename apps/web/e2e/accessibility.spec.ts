@@ -24,6 +24,7 @@ test('admin pages have no serious accessibility violations', async ({ page }) =>
     '/admin/students/new',
     `/admin/students/${fixture.studentId}`,
     '/admin/programs',
+    '/admin/subjects',
     '/admin/departments',
     '/admin/academic-sessions',
   ]) {
