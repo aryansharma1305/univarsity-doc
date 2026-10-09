@@ -49,6 +49,9 @@ test fixtures) ensure all six code-defined roles exist as records.
 | reExamApplications.read   |      ✓      |     ✓     |     ✓      |                   |    ✓     |        |
 | reExamApplications.decide |      ✓      |           |     ✓      |                   |          |        |
 | reExamFees.manage         |      ✓      |           |            |                   |          |        |
+| reExamPayments.configure  |      ✓      |           |            |                   |          |        |
+| reExamPayments.read       |      ✓      |           |            |                   |    ✓     |        |
+| reExamPayments.verify     |      ✓      |           |            |                   |    ✓     |        |
 | users.manage              |      ✓      |           |            |                   |          |        |
 | settings.manage           |      ✓      |           |            |                   |          |        |
 
@@ -74,6 +77,12 @@ Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
 - **Re-exam applications (Phase 9B):** applications contain personal data, so VIEWER and
   CERTIFICATE_ADMIN do not read them; REGISTRAR, EXAM_ADMIN and APPROVER read and export; only EXAM_ADMIN
   decides. Fee rules are financial policy: SUPER_ADMIN only until the university names a finance role.
+- **Re-exam payments (Phase 9C):** configuring payment destinations (`reExamPayments.configure`),
+  reviewing payments (`reExamPayments.read` / `.verify`) and deciding applications
+  (`reExamApplications.decide`) are three separate permissions. Destinations are SUPER_ADMIN only and
+  each approval must come from a different person than the preparer (enforced in the API and by a
+  database CHECK). APPROVER reviews and verifies payments; EXAM_ADMIN decides applications and does not
+  verify payments. Proposal pending the university naming a finance role (policy P6).
 - A user's permissions are the union of their roles' permissions. There is no role hierarchy.
 
 ## Guards

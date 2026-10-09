@@ -42,4 +42,17 @@ export const objectKeys = {
     assertUuid(studentId);
     return `students/${studentId}/photos/${randomUUID()}.jpg`;
   },
+  /**
+   * The QR image of a re-exam payment destination (re-encoded, without metadata). A new key per
+   * upload; approved destinations are frozen, so a referenced QR is never overwritten.
+   */
+  paymentDestinationQr(destinationId: string, extension: 'png' | 'jpg'): string {
+    assertUuid(destinationId);
+    return `payments/destinations/${destinationId}/qr-${randomUUID()}.${extension}`;
+  },
+  /** Evidence a student attached to a re-exam payment submission. */
+  reExamPaymentEvidence(paymentId: string, extension: 'pdf' | 'jpg' | 'png'): string {
+    assertUuid(paymentId);
+    return `payments/evidence/${paymentId}/${randomUUID()}.${extension}`;
+  },
 };

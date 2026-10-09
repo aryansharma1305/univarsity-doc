@@ -225,3 +225,21 @@ describe('re-exam applications (Phase 9B)', () => {
     }
   });
 });
+
+describe('re-exam payments (Phase 9C)', () => {
+  it('separates payment configuration, payment review and academic decisions', () => {
+    const can = (role: string, permission: string) =>
+      (ROLE_PERMISSIONS as Record<string, readonly string[]>)[role]?.includes(permission) ?? false;
+    for (const [role] of Object.entries(ROLE_PERMISSIONS)) {
+      expect(can(role, PERMISSIONS.reExamPaymentsConfigure), role).toBe(
+        role === ROLE_NAMES.superAdmin,
+      );
+      const reviewer = role === ROLE_NAMES.superAdmin || role === ROLE_NAMES.approver;
+      expect(can(role, PERMISSIONS.reExamPaymentsRead), role).toBe(reviewer);
+      expect(can(role, PERMISSIONS.reExamPaymentsVerify), role).toBe(reviewer);
+    }
+    // Whoever decides applications does not verify payments, and vice versa (SUPER_ADMIN aside).
+    expect(can(ROLE_NAMES.examAdmin, PERMISSIONS.reExamPaymentsVerify)).toBe(false);
+    expect(can(ROLE_NAMES.approver, PERMISSIONS.reExamApplicationsDecide)).toBe(false);
+  });
+});

@@ -35,6 +35,18 @@ const examAdmin = {
   password: randomBytes(24).toString('base64url'),
   displayName: 'E2E Exam Admin',
 };
+// Phase 9C: a second SUPER_ADMIN (approves payment details prepared by the first — maker–checker)
+// and an APPROVER (verifies payments).
+const paymentChecker = {
+  email: `e2e.checker.${randomUUID().slice(0, 8)}@example.test`,
+  password: randomBytes(24).toString('base64url'),
+  displayName: 'E2E Payment Checker',
+};
+const approver = {
+  email: `e2e.approver.${randomUUID().slice(0, 8)}@example.test`,
+  password: randomBytes(24).toString('base64url'),
+  displayName: 'E2E Payment Verifier',
+};
 let fixture;
 const profileStudents = [];
 const examStudents = [];
@@ -66,6 +78,21 @@ try {
       roles: { create: { roleId: registrarRole.id } },
     },
   });
+
+  for (const [account, roleName] of [
+    [paymentChecker, 'SUPER_ADMIN'],
+    [approver, 'APPROVER'],
+  ]) {
+    const role = await db.role.findUniqueOrThrow({ where: { name: roleName } });
+    await db.user.create({
+      data: {
+        email: account.email,
+        displayName: account.displayName,
+        passwordHash: await new PasswordService().hashPassword(account.password),
+        roles: { create: { roleId: role.id } },
+      },
+    });
+  }
 
   // An EXAM_ADMIN (examination records and the external examination application links, Phase 9).
   const examAdminRole = await db.role.findUniqueOrThrow({ where: { name: 'EXAM_ADMIN' } });
@@ -204,6 +231,8 @@ writeFileSync(
     fixture,
     profileStudents,
     examAdmin,
+    paymentChecker,
+    approver,
     examStudents,
     examProgram: { id: examProgram.id, code: examProgram.code, sessionId: examSessionId },
   }),

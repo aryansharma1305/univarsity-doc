@@ -17,7 +17,14 @@ import {
 import { Label } from '@docversity/ui/components/label';
 import { Skeleton } from '@docversity/ui/components/skeleton';
 import { Textarea } from '@docversity/ui/components/textarea';
-import { RE_EXAM_ATTEMPT_BASIS_LABEL, type ReExamApplicationDetail } from '@docversity/validation';
+import Link from 'next/link';
+import {
+  formatMoney,
+  PAYMENT_REGION_LABELS,
+  RE_EXAM_ATTEMPT_BASIS_LABEL,
+  RE_EXAM_PAYMENT_STATUS_LABELS,
+  type ReExamApplicationDetail,
+} from '@docversity/validation';
 import { useSetBreadcrumbLabel } from '@/components/admin/breadcrumb-context';
 import { ErrorState } from '@/components/data/states';
 import { useCan } from '@/components/providers/session-context';
@@ -133,6 +140,7 @@ function DecisionDialog({
 export function ReExamApplicationDetailView({ applicationId }: { applicationId: string }) {
   const query = useReExamApplication(applicationId);
   const canDecide = useCan(PERMISSIONS.reExamApplicationsDecide);
+  const canSeePayments = useCan(PERMISSIONS.reExamPaymentsRead);
   const [dialog, setDialog] = useState<'approve' | 'reject' | null>(null);
   useSetBreadcrumbLabel(query.data ? query.data.reference : null);
 
@@ -227,6 +235,36 @@ export function ReExamApplicationDetailView({ applicationId }: { applicationId: 
           />
           <Row label="Reason / note" value={app.decisionReason} />
         </dl>
+      </Section>
+
+      <Section title="Payment (separate from the decision)">
+        {app.payment ? (
+          <dl className="grid gap-3 sm:grid-cols-3">
+            <Row label="Payment status" value={RE_EXAM_PAYMENT_STATUS_LABELS[app.payment.status]} />
+            <Row
+              label="Amount due"
+              value={`${formatMoney(app.payment.amountMinor, app.payment.currency)} · ${PAYMENT_REGION_LABELS[app.payment.region]}`}
+            />
+            <Row
+              label="Submitted"
+              value={app.payment.submittedAt ? formatDateTime(app.payment.submittedAt) : null}
+            />
+          </dl>
+        ) : (
+          <p className="text-sm text-foreground/80">The student has not started a payment.</p>
+        )}
+        <p className="text-xs text-foreground/80">
+          Payments are verified separately by authorised staff. Verification never approves the
+          application, and approving it never marks it paid.
+        </p>
+        {app.payment && canSeePayments && (
+          <Link
+            href={`/admin/re-exam-payments/${app.payment.id}`}
+            className="text-sm font-medium text-brand hover:underline"
+          >
+            Open payment
+          </Link>
+        )}
       </Section>
 
       <Section title="History">

@@ -13,6 +13,8 @@ import {
   studentReExamApplicationListSchema,
   type StudentReExamOptions,
   studentReExamOptionsSchema,
+  type StudentReExamPaymentView,
+  studentReExamPaymentViewSchema,
   type StudentProfileRequest,
   studentProfileRequestListSchema,
 } from '@docversity/validation';
@@ -182,6 +184,16 @@ export const getStudentReExamApplications = cache(
         studentReExamApplicationListSchema.safeParse(body),
       )
     )?.data ?? null,
+);
+
+/** Pay Now view of one of the signed-in student's applications (Phase 9C), or `null`. */
+export const getStudentReExamPayment = cache(
+  (applicationId: string): Promise<StudentReExamPaymentView | null> =>
+    /^[0-9a-f-]{36}$/i.test(applicationId)
+      ? studentGet(`/api/v1/student/re-exam-applications/${applicationId}/payment`, (body) =>
+          studentReExamPaymentViewSchema.safeParse(body),
+        )
+      : Promise.resolve(null),
 );
 
 /** The signed-in student's PUBLISHED documents, or `null` when unavailable. */

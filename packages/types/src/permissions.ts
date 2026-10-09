@@ -61,6 +61,15 @@ export const PERMISSIONS = {
   reExamApplicationsDecide: 'reExamApplications.decide',
   /** Create and activate versioned re-exam fee rules (finance policy; SUPER_ADMIN until agreed). */
   reExamFeesManage: 'reExamFees.manage',
+  /**
+   * Re-exam payment destinations (Phase 9C): beneficiary, currency, amounts, QR and validity per
+   * country/region. Approval needs a second person with this permission (maker–checker).
+   */
+  reExamPaymentsConfigure: 'reExamPayments.configure',
+  /** Submitted re-exam payments and their evidence (financial and personal data). */
+  reExamPaymentsRead: 'reExamPayments.read',
+  /** Confirm or reject a submitted payment after checking the university's own account. */
+  reExamPaymentsVerify: 'reExamPayments.verify',
   templatesRead: 'templates.read',
   templatesWrite: 'templates.write',
   /** Import history, rows and error reports. */
@@ -180,6 +189,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.historicalDocumentsPublish,
     P.historicalDocumentsVerify,
     P.reExamApplicationsRead,
+    P.reExamPaymentsRead,
+    P.reExamPaymentsVerify,
   ],
   /** Read-only. */
   VIEWER: READ_ONLY,
@@ -191,7 +202,8 @@ export const ROLE_DESCRIPTIONS: Readonly<Record<RoleName, string>> = Object.free
   EXAM_ADMIN:
     'Maintains examination records and the examination application links; prepares results.',
   CERTIFICATE_ADMIN: 'Prepares certificates and maintains document templates.',
-  APPROVER: 'Publishes results and approves, issues or revokes certificates.',
+  APPROVER:
+    'Publishes results, approves, issues or revokes certificates, and verifies re-exam payments.',
   VIEWER: 'Read-only access.',
 });
 

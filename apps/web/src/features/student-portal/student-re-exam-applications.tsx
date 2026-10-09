@@ -8,6 +8,7 @@ import { ClipboardListIcon } from 'lucide-react';
 import { StatusBadge } from '@docversity/ui';
 import {
   formatMoney,
+  RE_EXAM_PAYMENT_STATUS_LABELS,
   RE_EXAM_FEE_BLOCKED_MESSAGES,
   RE_EXAM_FEE_SCOPE_LABELS,
   RE_EXAM_STATUS_LABELS,
@@ -93,6 +94,14 @@ function ApplicationCard({ app }: { app: StudentReExamApplication }) {
           <dt className="text-muted-foreground">Submitted</dt>
           <dd className="font-medium text-navy-950">{formatDateTime(app.submittedAt)}</dd>
         </div>
+        <div>
+          <dt className="text-muted-foreground">Payment</dt>
+          <dd className="font-medium break-words text-navy-950">
+            {app.payment
+              ? `${RE_EXAM_PAYMENT_STATUS_LABELS[app.payment.status]} · ${formatMoney(app.payment.amountMinor, app.payment.currency)}`
+              : 'Not started'}
+          </dd>
+        </div>
         {app.decisionReason && (
           <div className="sm:col-span-2">
             <dt className="text-muted-foreground">
@@ -118,6 +127,18 @@ function ApplicationCard({ app }: { app: StudentReExamApplication }) {
           ))}
         </ol>
       </div>
+      {(app.status === 'SUBMITTED' || app.status === 'APPROVED') &&
+        app.fee.status === 'ASSESSED' &&
+        app.payment?.status !== 'VERIFIED' && (
+          <div className="border-t border-border pt-4">
+            <Link
+              href={`/student/examinations/re-exam/${app.id}/payment`}
+              className="inline-flex h-9 items-center rounded-md bg-brand px-3 text-sm font-medium text-white hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              {app.payment && app.payment.status !== 'REJECTED' ? 'View payment' : 'Pay now'}
+            </Link>
+          </div>
+        )}
       {app.status === 'SUBMITTED' && (
         <div className="flex flex-wrap gap-2 border-t border-border pt-4">
           {app.fee.status === 'NOT_CONFIGURED' && (

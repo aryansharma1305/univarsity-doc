@@ -149,6 +149,29 @@ Support tables without relations: `number_sequences`, `legacy_mappings`.
 |              | `verification_logs`               | Public verification attempts (hashes only)                                                  |
 | Legacy       | `legacy_mappings`                 | Legacy identifier → new record (WordPress migration, old QR URLs)                           |
 
+### Phase 9C review hardening (`20261016093000_re_exam_payment_destination_editor_check`)
+
+An additive CHECK requires an APPROVED destination's approver to differ from its last editor
+(`updated_by_user_id`, set by every draft edit and QR upload), so nobody can change a colleague's draft
+and approve their own change. The earlier 9C migration is unchanged.
+
+### Phase 9C migration (`20261016090000_re_exam_payments`)
+
+Additive: enums `PaymentRegion`, `PaymentDestinationStatus`, `PaymentMethod`, `PaymentEvidenceRequirement`,
+`ReExamPaymentStatus`, `ReExamPaymentAmountSource`; tables `re_exam_payment_destinations` (versioned per
+region; partial unique: one APPROVED per region; CHECKs: ISO currency, country only for region groups,
+validity order, QR fields all-or-nothing, APPROVED needs a QR and an approver ≠ creator, only APPROVED can
+be active), `re_exam_payment_destination_rates` (approved amount per attempt, integer minor units) and
+`re_exam_payments` (obligation snapshot + submission + review; CHECKs tie every column group to the status
+and require a verified amount/currency equal to the obligation; partial unique: one live obligation per
+application, one SUBMITTED/VERIFIED payment per normalised transaction reference). Triggers:
+`re_exam_payment_destinations_guard` (no deletes, DRAFT-only edits, replacement of the same region's
+APPROVED version only, final decisions), `re_exam_payment_destination_rates_guard` (DRAFT only),
+`re_exam_payments_guard` (created AWAITING_PAYMENT for the student's own assessed SUBMITTED/APPROVED
+application at an approved, active, in-effect destination with the amount re-derived from the fee snapshot
+or the destination's rate; immutable snapshot; non-editable submissions; final decisions; no deletes). No
+existing table or row changes (verified on the local database after a backup).
+
 ### Phase 9B snapshot hardening (`20261015093000_re_exam_fee_snapshot_required_fields`)
 
 An additive CHECK explicitly requires currency and amount on assessed fees. PostgreSQL CHECKs accept
