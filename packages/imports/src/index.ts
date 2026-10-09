@@ -63,3 +63,4 @@ export {
   readWorksheetRows,
   type SourceRow,
 } from './workbook.js';
+export * from './result-rows.js';
