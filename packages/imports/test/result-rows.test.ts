@@ -48,12 +48,12 @@ describe('validateResultRows', () => {
   function createRow(
     rowNumber: number,
     data: Record<string, string>,
-    numericFields: string[] = []
+    cellOverrides: Record<string, any> = {}
   ): { rowNumber: number; rawData: RawRowData } {
     const rawData: RawRowData = {};
     for (const [col, value] of Object.entries(data)) {
-      if (numericFields.includes(col)) {
-        rawData[col] = { type: 'number', value: Number(value) } as any;
+      if (cellOverrides[col]) {
+        rawData[col] = cellOverrides[col];
       } else {
         rawData[col] = { type: 'string', value };
       }
@@ -70,11 +70,20 @@ describe('validateResultRows', () => {
   });
 
   it('should return ERROR for numeric registration number cells', () => {
-    const rows = [createRow(2, { A: '12345', B: 'SUB1', C: '25', D: '60' }, ['A'])];
+    const rows = [createRow(2, { A: '12345', B: 'SUB1', C: '25', D: '60' }, { A: { type: 'number', value: 12345 } })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
     expect(outcomes[0].status).toBe('ERROR');
     expect(outcomes[0].errors).toContainEqual(
       expect.objectContaining({ field: 'registrationNumber', code: 'NUMERIC_REGISTRATION' })
+    );
+  });
+
+  it('should return ERROR for formula-based registration number', () => {
+    const rows = [createRow(2, { A: 'REG1', B: 'SUB1', C: '25', D: '60' }, { A: { type: 'formula', formula: 'A1', result: 'REG1' } })];
+    const outcomes = validateResultRows(rows, mapping, mockContext);
+    expect(outcomes[0].status).toBe('ERROR');
+    expect(outcomes[0].errors).toContainEqual(
+      expect.objectContaining({ field: 'registrationNumber', code: 'FORMULA_REGISTRATION' })
     );
   });
 
@@ -124,6 +133,15 @@ describe('validateResultRows', () => {
     );
   });
 
+  it('should return ERROR for extremely large magnitude marks', () => {
+    const rows = [createRow(2, { A: 'REG1', B: 'SUB1', E: '10500' })];
+    const outcomes = validateResultRows(rows, mapping, mockContext);
+    expect(outcomes[0].status).toBe('ERROR');
+    expect(outcomes[0].errors).toContainEqual(
+      expect.objectContaining({ field: 'totalMarks', code: 'INVALID_NUMBER' })
+    );
+  });
+
   it('should return ERROR if required components are missing even if grade is present', () => {
     // SUB1 requires C (internal) and D (external). Provide grade only.
     const rows = [createRow(2, { A: 'REG1', B: 'SUB1', F: 'A' })]; 
@@ -132,7 +150,22 @@ describe('validateResultRows', () => {
     const codes = outcomes[0].errors.map(e => e.field);
     expect(codes).toContain('internalMarks');
     expect(codes).toContain('externalMarks');
-    expect(outcomes[0].errors[0].code).toBe('REQUIRED_COMPONENT_MISSING');
+    expect(codes).toContain('grade');
+    expect(outcomes[0].errors).toContainEqual(
+      expect.objectContaining({ field: 'internalMarks', code: 'REQUIRED_COMPONENT_MISSING' })
+    );
+    expect(outcomes[0].errors).toContainEqual(
+      expect.objectContaining({ field: 'grade', code: 'GRADE_ONLY_IMPORT_NOT_ALLOWED' })
+    );
+  });
+
+  it('should return ERROR for missing both marks and grades', () => {
+    const rows = [createRow(2, { A: 'REG1', B: 'SUB1' })]; 
+    const outcomes = validateResultRows(rows, mapping, mockContext);
+    expect(outcomes[0].status).toBe('ERROR');
+    expect(outcomes[0].errors).toContainEqual(
+      expect.objectContaining({ field: 'totalMarks', code: 'NO_MARKS' })
+    );
   });
 
   it('should detect duplicates with examination context', () => {

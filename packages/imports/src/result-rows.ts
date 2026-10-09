@@ -53,7 +53,7 @@ export interface ResultProgramSubject {
 export interface ResultValidationContext {
   registrations: Map<string, ResultExistingRegistration>;
   curriculumSubjects: Map<string, ResultProgramSubject[]>; // Map<curriculumId, ProgramSubject[]>
-  academicPeriod?: string;
+  academicPeriod: string;
   examinationContext?: {
     examinationId: string;
     attemptNumber: number;
@@ -88,7 +88,7 @@ function parseNumericMark(value: string | null | undefined): number | null {
   const trimmed = value.trim();
   if (!/^-?\d+(\.\d{1,2})?$/.test(trimmed)) return null;
   const parsed = Number(trimmed);
-  if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return null;
+  if (Number.isNaN(parsed) || !Number.isFinite(parsed) || Math.abs(parsed) >= 10000) return null;
   return parsed;
 }
 
@@ -119,6 +119,12 @@ export function validateResultRows(
         field: 'registrationNumber',
         code: 'NUMERIC_REGISTRATION',
         message: 'Registration number must be formatted as text to preserve leading zeros.',
+      });
+    } else if (rawRegNumCell?.type === 'formula') {
+      errors.push({
+        field: 'registrationNumber',
+        code: 'FORMULA_REGISTRATION',
+        message: 'Registration number cannot be computed by a formula.',
       });
     } else {
       registrationNumberNormalized = normalizeRegistrationNumber(rawRegNum);
@@ -245,15 +251,23 @@ export function validateResultRows(
       }
     }
 
-    // At least one mark or grade should be provided
+    // At least one mark component should be provided
     const hasAnyMark = marksFields.some((f) => values[f.key] != null);
     const hasGrade = values.grade != null;
-    if (!hasAnyMark && !hasGrade) {
-      errors.push({
-        field: 'totalMarks',
-        code: 'NO_MARKS_OR_GRADE',
-        message: 'A row must contain at least one marks component or a grade.',
-      });
+    if (!hasAnyMark) {
+      if (hasGrade) {
+        errors.push({
+          field: 'grade',
+          code: 'GRADE_ONLY_IMPORT_NOT_ALLOWED',
+          message: 'Grade-only imports are not approved. A row must contain at least one marks component.',
+        });
+      } else {
+        errors.push({
+          field: 'totalMarks',
+          code: 'NO_MARKS',
+          message: 'A row must contain at least one marks component.',
+        });
+      }
     }
 
     outcomes.push({
