@@ -109,10 +109,13 @@ test('a student activates with a university code, sees only their own record, si
       await expect(page.getByText('Official records are read-only')).toBeVisible();
       await expect(page.getByRole('button', { name: /Edit/ })).toHaveCount(0);
     }
-    if (
-      ['/student/results', '/student/documents', '/student/notifications'].includes(route ?? '')
-    ) {
+    if (['/student/results', '/student/notifications'].includes(route ?? '')) {
       await expect(page.getByText(/are not available yet/)).toBeVisible();
+      await expect(page.locator('main input, main form')).toHaveCount(0);
+    }
+    if (route === '/student/documents') {
+      // Phase 8: a real library; this student has nothing published, and students never upload.
+      await expect(page.getByText('No documents published yet')).toBeVisible();
       await expect(page.locator('main input, main form')).toHaveCount(0);
     }
     await capture(page, `student-${route?.split('/').at(-1)}-desktop`);

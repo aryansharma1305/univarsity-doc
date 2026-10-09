@@ -25,6 +25,11 @@ export const objectKeys = {
    * A student's staged profile photo (normalised JPEG). On approval the same immutable object
    * becomes the official photo, so it is never overwritten.
    */
+  /** A staff-uploaded historical document of one registration (original bytes, fixed extension). */
+  historicalDocument(registrationId: string, extension: 'pdf' | 'jpg' | 'png'): string {
+    assertUuid(registrationId);
+    return `documents/${registrationId}/${randomUUID()}.${extension}`;
+  },
   profileRequestPhoto(studentId: string): string {
     assertUuid(studentId);
     return `students/${studentId}/photos/${randomUUID()}.jpg`;

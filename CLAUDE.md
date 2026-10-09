@@ -11,20 +11,21 @@ records, a student portal, and (planned) public verification of results, registr
 One PostgreSQL database serves admin, student and public features — never duplicate student or
 certificate data.
 
-| Phase | Scope                                                                                       | Status (git tag)                              |
-| ----- | ------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`                       |
-| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`                    |
-| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`                        |
-| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`                 |
-| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`                  |
-| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`                 |
-| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)                             |
-| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | ✅ merged (PR #2)                             |
-| 7B    | Course management, curriculum versions, subject catalogue and explicit student assignment   | Review `feature/course-curriculum-management` |
+| Phase | Scope                                                                                       | Status (git tag)                                 |
+| ----- | ------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`                          |
+| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`                       |
+| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`                           |
+| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`                    |
+| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`                     |
+| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`                    |
+| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)                                |
+| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | ✅ merged (PR #2)                                |
+| 7B    | Course management, curriculum versions, subject catalogue and explicit student assignment   | ✅ merged (PR #3)                                |
+| 8     | Staff-managed historical certificates and the student document library                      | Review `feature/phase-8-historical-certificates` |
 
 **Not built yet** (do not describe as working): examinations/grading, results entry/import/publication, certificate generation
-(PDF/QR), historic certificate upload, public verification (the `/verify/*` and `/results` pages are honest
+(PDF/QR), legacy QR mapping and bulk migration of historic documents, public verification (the `/verify/*` and `/results` pages are honest
 "not available yet" placeholders), legacy WordPress migration, retention cleanup jobs, email delivery
 (password reset refuses with 503 when no notifier is configured). Plan: [docs/roadmap.md](docs/roadmap.md).
 
@@ -47,7 +48,7 @@ packages/ui       shadcn/ui-based components + theme tokens (consumed as source 
 packages/config   Shared TS and ESLint configs
 packages/documents Placeholder (official document layouts later)
 references/stitch Unmodified design export — visual reference only, never production code
-docs/             Architecture, API, database, security docs, ADR-0001…0012
+docs/             Architecture, API, database, security docs, ADR-0001…0013
 ```
 
 Packages are compiled to `dist/` and consumed via their `exports`; Turborepo builds dependencies first.
@@ -146,7 +147,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261010090000_student_profile_change_requests` (Phase 7),
   `20261011090000_course_curriculum_management`, `20261011093000_curriculum_history_guards`,
   `20261011094000_preserve_assignment_delete_restrict`,
-  `20261011100000_curriculum_activation_period_bounds` (Phase 7B).
+  `20261011100000_curriculum_activation_period_bounds` (Phase 7B),
+  `20261012090000_historical_documents` (Phase 8).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -203,6 +205,14 @@ is frozen; retiring a subject preserves its history. Students see only their own
 `ResultItem` foundations remain authoritative. See [docs/api/curricula.md](docs/api/curricula.md),
 [docs/development/phase-7b-course-curriculum.md](docs/development/phase-7b-course-curriculum.md), ADR-0012.
 
+## 10c. Historical documents (Phase 8)
+
+Staff upload historic certificates/marksheets (PDF/JPEG/PNG, content-checked, original bytes kept with
+SHA-256) for one registration at `/admin/historical-documents`; students see only their own PUBLISHED
+documents at `/student/documents` and can never upload or change them. Lifecycle DRAFT → PUBLISHED →
+WITHDRAWN/SUPERSEDED, never deleted; corrections are replacements. Authenticity review is separate and
+never by the uploader. Details: [docs/api/historical-documents.md](docs/api/historical-documents.md), ADR-0013.
+
 ## 11. Student import workflow (Phase 5)
 
 `/admin/imports` → download template → upload `.xlsx` → worker reads the workbook → choose worksheet and
@@ -233,7 +243,7 @@ staff, `/student-auth/csrf` for students). Downloads are streamed after a permis
 - Never log or audit passwords, session IDs, CSRF tokens, reset tokens, activation codes, S3 or database
   credentials. Activation codes exist in plain text only in the issuing response.
 - Never trust the frontend for authorization; never return internal errors or stack traces.
-- Uploaded historic documents (future) are evidence, never "cryptographically verified" credentials.
+- Uploaded historic documents (`historical_documents`, Phase 8) are evidence, never "cryptographically verified" credentials; visibility to the student and authenticity review are separate.
 
 ## 14. Development workflow and Git
 

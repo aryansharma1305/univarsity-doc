@@ -56,7 +56,8 @@ describe('student dashboard and read-only pages', () => {
     expect(screen.getByRole('heading', { name: 'TEST-REG-1' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Quick actions' })).toBeInTheDocument();
     expect(screen.getByText('Results are not available yet')).toBeInTheDocument();
-    expect(screen.getByText('Documents are not available yet')).toBeInTheDocument();
+    // Phase 8: documents are real; with none published the card says so honestly.
+    expect(screen.getByText('No documents published yet')).toBeInTheDocument();
     // Recent activity lists exactly one real event: the stored activation timestamp.
     const activity = screen.getByRole('list', { name: 'Recent activity' });
     expect(activity.querySelectorAll('li')).toHaveLength(1);
@@ -65,7 +66,7 @@ describe('student dashboard and read-only pages', () => {
     expect(screen.queryByText('No activity available')).not.toBeInTheDocument();
     // Planned quick actions carry a "Soon" label; working ones do not.
     expect(screen.getByRole('link', { name: /My Results.*Soon/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /My Documents.*Soon/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /My Documents/ })).not.toHaveTextContent('Soon');
     expect(screen.getByRole('link', { name: /My Profile/ })).not.toHaveTextContent('Soon');
     expect(screen.queryByText(/65%|Rahul|WhatsApp|SGPA|CGPA/)).not.toBeInTheDocument();
   });
@@ -122,7 +123,7 @@ describe('student dashboard and read-only pages', () => {
     expect(screen.queryByRole('button', { name: /Change password/ })).not.toBeInTheDocument();
   });
 
-  it.each(['results', 'documents', 'notifications'] as const)(
+  it.each(['results', 'notifications'] as const)(
     'marks %s as planned without download actions',
     (module) => {
       render(<StudentUnavailable module={module} />);

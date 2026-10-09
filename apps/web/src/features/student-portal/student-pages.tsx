@@ -10,7 +10,6 @@ import {
   BookOpenIcon,
   CheckCircle2Icon,
   ClipboardListIcon,
-  FileTextIcon,
   HistoryIcon,
   LockKeyholeIcon,
   PencilLineIcon,
@@ -375,13 +374,6 @@ const PLANNED_MODULES = {
     empty: 'Results are not available yet',
     description:
       'Exam schedules, subject marks, grades and official results are planned. Contact the examination office for current result information.',
-  },
-  documents: {
-    title: 'My Documents',
-    icon: FileTextIcon,
-    empty: 'Documents are not available yet',
-    description:
-      'Admission letters, certificates and transcripts will be listed here when document services are enabled. There are no documents available to view or download through this portal yet.',
   },
   notifications: {
     title: 'Notifications',

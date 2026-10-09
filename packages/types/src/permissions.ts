@@ -43,6 +43,14 @@ export const PERMISSIONS = {
   certificatesApprove: 'certificates.approve',
   certificatesIssue: 'certificates.issue',
   certificatesRevoke: 'certificates.revoke',
+  /** Historical documents (Phase 8): list, view and download staff-uploaded certificates. */
+  historicalDocumentsRead: 'historicalDocuments.read',
+  /** Upload historical documents, edit drafts and prepare replacements. */
+  historicalDocumentsUpload: 'historicalDocuments.upload',
+  /** Publish to (or withdraw from) the student's document library. */
+  historicalDocumentsPublish: 'historicalDocuments.publish',
+  /** Record the official authenticity review (never by the uploader). */
+  historicalDocumentsVerify: 'historicalDocuments.verify',
   templatesRead: 'templates.read',
   templatesWrite: 'templates.write',
   /** Import history, rows and error reports. */
@@ -122,6 +130,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.curriculaActivate,
     P.curriculaArchive,
     P.studentCurriculaAssign,
+    P.historicalDocumentsRead,
+    P.historicalDocumentsUpload,
+    P.historicalDocumentsPublish,
+    P.historicalDocumentsVerify,
     P.certificatesGenerate,
     P.auditRead,
   ],
@@ -131,7 +143,13 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
    */
   EXAM_ADMIN: [...READ_ONLY, P.resultsWrite, P.importsResultsRun],
   /** Prepares certificates and maintains templates; cannot approve/issue (maker–checker). */
-  CERTIFICATE_ADMIN: [...READ_ONLY, P.certificatesGenerate, P.templatesWrite],
+  CERTIFICATE_ADMIN: [
+    ...READ_ONLY,
+    P.certificatesGenerate,
+    P.templatesWrite,
+    P.historicalDocumentsRead,
+    P.historicalDocumentsUpload,
+  ],
   /** The "checker": publishes results and approves/issues/revokes certificates; edits nothing. */
   APPROVER: [
     ...READ_ONLY,
@@ -139,6 +157,9 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.certificatesApprove,
     P.certificatesIssue,
     P.certificatesRevoke,
+    P.historicalDocumentsRead,
+    P.historicalDocumentsPublish,
+    P.historicalDocumentsVerify,
   ],
   /** Read-only. */
   VIEWER: READ_ONLY,
