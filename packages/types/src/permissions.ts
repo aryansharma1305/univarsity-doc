@@ -55,6 +55,12 @@ export const PERMISSIONS = {
   examinationsRead: 'examinations.read',
   /** Configure external examination application links; create/open/archive examination records. */
   examinationsManage: 'examinations.manage',
+  /** Re-exam applications (Phase 9B): list, view and export (personal data — not for VIEWER). */
+  reExamApplicationsRead: 'reExamApplications.read',
+  /** Approve or reject re-exam applications (never implied by payment). */
+  reExamApplicationsDecide: 'reExamApplications.decide',
+  /** Create and activate versioned re-exam fee rules (finance policy; SUPER_ADMIN until agreed). */
+  reExamFeesManage: 'reExamFees.manage',
   templatesRead: 'templates.read',
   templatesWrite: 'templates.write',
   /** Import history, rows and error reports. */
@@ -141,12 +147,20 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.historicalDocumentsVerify,
     P.certificatesGenerate,
     P.auditRead,
+    P.reExamApplicationsRead,
   ],
   /**
    * Prepares results and will run result imports (Phase 8); cannot publish (maker–checker).
    * Student imports are deliberately NOT granted.
    */
-  EXAM_ADMIN: [...READ_ONLY, P.resultsWrite, P.importsResultsRun, P.examinationsManage],
+  EXAM_ADMIN: [
+    ...READ_ONLY,
+    P.resultsWrite,
+    P.importsResultsRun,
+    P.examinationsManage,
+    P.reExamApplicationsRead,
+    P.reExamApplicationsDecide,
+  ],
   /** Prepares certificates and maintains templates; cannot approve/issue (maker–checker). */
   CERTIFICATE_ADMIN: [
     ...READ_ONLY,
@@ -165,6 +179,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.historicalDocumentsRead,
     P.historicalDocumentsPublish,
     P.historicalDocumentsVerify,
+    P.reExamApplicationsRead,
   ],
   /** Read-only. */
   VIEWER: READ_ONLY,

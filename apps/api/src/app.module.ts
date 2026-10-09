@@ -12,6 +12,7 @@ import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { ExaminationsModule } from './examinations/examinations.module.js';
+import { ReExamsModule } from './re-exams/re-exams.module.js';
 import { HistoricalDocumentsModule } from './historical-documents/historical-documents.module.js';
 import { ImportsModule } from './imports/imports.module.js';
 import { QueueModule } from './queue/queue.module.js';
@@ -43,6 +44,7 @@ export class AppModule {
         StudentProfileModule,
         HistoricalDocumentsModule,
         ExaminationsModule,
+        ReExamsModule,
         HealthModule,
       ],
       providers: [

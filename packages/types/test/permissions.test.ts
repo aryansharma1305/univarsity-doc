@@ -208,3 +208,20 @@ describe('examinations (Phase 9A)', () => {
     }
   });
 });
+
+describe('re-exam applications (Phase 9B)', () => {
+  it('keeps personal application data away from VIEWER and decisions with EXAM_ADMIN only', () => {
+    const can = (role: string, permission: string) =>
+      (ROLE_PERMISSIONS as Record<string, readonly string[]>)[role]?.includes(permission) ?? false;
+    expect(can(ROLE_NAMES.viewer, PERMISSIONS.reExamApplicationsRead)).toBe(false);
+    for (const role of [ROLE_NAMES.registrar, ROLE_NAMES.examAdmin, ROLE_NAMES.approver]) {
+      expect(can(role, PERMISSIONS.reExamApplicationsRead), role).toBe(true);
+    }
+    for (const [role] of Object.entries(ROLE_PERMISSIONS)) {
+      expect(can(role, PERMISSIONS.reExamApplicationsDecide), role).toBe(
+        role === ROLE_NAMES.superAdmin || role === ROLE_NAMES.examAdmin,
+      );
+      expect(can(role, PERMISSIONS.reExamFeesManage), role).toBe(role === ROLE_NAMES.superAdmin);
+    }
+  });
+});

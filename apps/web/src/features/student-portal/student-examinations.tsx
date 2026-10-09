@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import {
   CalendarDaysIcon,
+  ClipboardPenLineIcon,
   ClipboardCheckIcon,
   DownloadIcon,
   ExternalLinkIcon,
@@ -102,6 +104,25 @@ export function StudentExaminationsPage({ data }: { data: StudentExaminations | 
       ) : (
         <div className="flex flex-col gap-5">
           <ExamApplications apps={data.applications} />
+          <PortalCard
+            title="Re-examinations"
+            icon={ClipboardPenLineIcon}
+            action={{
+              href: '/student/examinations/re-exam/applications',
+              label: 'My applications',
+            }}
+          >
+            <p className="mb-3 text-sm text-navy-950">
+              Apply for a re-examination of a subject when the university has opened applications
+              for your course. Your details are taken from your registration.
+            </p>
+            <Link
+              href="/student/examinations/re-exam"
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              Apply for a re-examination
+            </Link>
+          </PortalCard>
           {data.registrations.map((registration) => (
             <PortalCard
               key={registration.registrationId}
