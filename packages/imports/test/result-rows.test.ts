@@ -53,7 +53,7 @@ describe('validateResultRows', () => {
   function createRow(
     rowNumber: number,
     data: Record<string, string>,
-    cellOverrides: Record<string, any> = {},
+    cellOverrides: RawRowData = {},
   ): { rowNumber: number; rawData: RawRowData } {
     const rawData: RawRowData = {};
     for (const [col, value] of Object.entries(data)) {
@@ -70,8 +70,8 @@ describe('validateResultRows', () => {
     const rows = [createRow(2, { A: 'REG1', B: 'SUB1', C: '25', D: '60', E: '85', F: 'A' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
     expect(outcomes).toHaveLength(1);
-    expect(outcomes[0].status).toBe('VALID');
-    expect(outcomes[0].errors).toHaveLength(0);
+    expect(outcomes[0]?.status).toBe('VALID');
+    expect(outcomes[0]?.errors).toHaveLength(0);
   });
 
   it('should return ERROR for numeric registration number cells', () => {
@@ -83,8 +83,8 @@ describe('validateResultRows', () => {
       ),
     ];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.status).toBe('ERROR');
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'registrationNumber', code: 'NUMERIC_REGISTRATION' }),
     );
   });
@@ -98,8 +98,8 @@ describe('validateResultRows', () => {
       ),
     ];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.status).toBe('ERROR');
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'registrationNumber', code: 'FORMULA_REGISTRATION' }),
     );
   });
@@ -107,8 +107,8 @@ describe('validateResultRows', () => {
   it('should return ERROR for missing registration number', () => {
     const rows = [createRow(2, { B: 'SUB1', E: '85' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.status).toBe('ERROR');
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'registrationNumber', code: 'REQUIRED' }),
     );
   });
@@ -116,14 +116,14 @@ describe('validateResultRows', () => {
   it('should return ERROR for student with no curriculum assigned', () => {
     const rows = [createRow(2, { A: 'REG2', B: 'SUB1', E: '85' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
+    expect(outcomes[0]?.status).toBe('ERROR');
   });
 
   it('should return ERROR for academic period mismatch', () => {
     const rows = [createRow(2, { A: 'REG1', B: 'SUB2', C: '25', D: '60', E: '85' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.status).toBe('ERROR');
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'subjectCode', code: 'SUBJECT_PERIOD_MISMATCH' }),
     );
   });
@@ -131,21 +131,21 @@ describe('validateResultRows', () => {
   it('should return ERROR when marks exceed configured max', () => {
     const rows = [createRow(2, { A: 'REG1', B: 'SUB1', C: '35', D: '75', E: '105' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    expect(outcomes[0].errors[0].code).toBe('EXCEEDS_MAX_MARKS');
+    expect(outcomes[0]?.status).toBe('ERROR');
+    expect(outcomes[0]?.errors[0]?.code).toBe('EXCEEDS_MAX_MARKS');
   });
 
   it('should return ERROR for negative marks or invalid numeric strings or precision', () => {
     const rows = [createRow(2, { A: 'REG1', B: 'SUB1', C: '-5', D: 'NaN_Value', E: '12.345' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.status).toBe('ERROR');
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'internalMarks', code: 'NEGATIVE_MARKS_NOT_ALLOWED' }),
     );
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'externalMarks', code: 'INVALID_NUMBER' }),
     );
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'totalMarks', code: 'INVALID_NUMBER' }), // 12.345 fails regex
     );
   });
@@ -153,8 +153,8 @@ describe('validateResultRows', () => {
   it('should return ERROR for extremely large magnitude marks', () => {
     const rows = [createRow(2, { A: 'REG1', B: 'SUB1', E: '10500' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.status).toBe('ERROR');
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'totalMarks', code: 'INVALID_NUMBER' }),
     );
   });
@@ -163,15 +163,15 @@ describe('validateResultRows', () => {
     // SUB1 requires C (internal) and D (external). Provide grade only.
     const rows = [createRow(2, { A: 'REG1', B: 'SUB1', F: 'A' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    const codes = outcomes[0].errors.map((e) => e.field);
+    expect(outcomes[0]?.status).toBe('ERROR');
+    const codes = outcomes[0]?.errors.map((e) => e.field);
     expect(codes).toContain('internalMarks');
     expect(codes).toContain('externalMarks');
     expect(codes).toContain('grade');
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'internalMarks', code: 'REQUIRED_COMPONENT_MISSING' }),
     );
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'grade', code: 'GRADE_ONLY_IMPORT_NOT_ALLOWED' }),
     );
   });
@@ -179,8 +179,8 @@ describe('validateResultRows', () => {
   it('should return ERROR for missing both marks and grades', () => {
     const rows = [createRow(2, { A: 'REG1', B: 'SUB1' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    expect(outcomes[0].errors).toContainEqual(
+    expect(outcomes[0]?.status).toBe('ERROR');
+    expect(outcomes[0]?.errors).toContainEqual(
       expect.objectContaining({ field: 'totalMarks', code: 'NO_MARKS' }),
     );
   });
@@ -195,9 +195,9 @@ describe('validateResultRows', () => {
       createRow(3, { A: 'REG1', B: 'SUB1', C: '20', D: '50' }),
     ];
     const outcomes = validateResultRows(rows, mapping, ctx);
-    expect(outcomes[0].status).toBe('VALID');
-    expect(outcomes[1].status).toBe('ERROR');
-    expect(outcomes[1].errors).toContainEqual(
+    expect(outcomes[0]?.status).toBe('VALID');
+    expect(outcomes[1]?.status).toBe('ERROR');
+    expect(outcomes[1]?.errors).toContainEqual(
       expect.objectContaining({ field: 'subjectCode', code: 'DUPLICATE_ROW' }),
     );
   });
@@ -219,8 +219,19 @@ describe('validateResultRows', () => {
   it('should throw ERROR for invalid examination context identity', () => {
     const invalidContext = {
       ...mockContext,
-      examinationContext: { examinationId: '', attemptNumber: undefined as any },
+      examinationContext: { examinationId: '', attemptNumber: 0 },
     };
+    expect(() => validateResultRows([], mapping, invalidContext)).toThrow(
+      'Examination context is invalid.',
+    );
+  });
+
+  it('rejects a missing attempt number even when the examination ID is valid', () => {
+    const invalidContext = {
+      ...mockContext,
+      examinationContext: { examinationId: 'exam-1', attemptNumber: 1 },
+    };
+    Reflect.deleteProperty(invalidContext.examinationContext, 'attemptNumber');
     expect(() => validateResultRows([], mapping, invalidContext)).toThrow(
       'Examination context is invalid.',
     );
@@ -230,8 +241,9 @@ describe('validateResultRows', () => {
     // Blank marks should trigger 'REQUIRED_COMPONENT_MISSING' on required components, but NOT 'INVALID_NUMBER'
     const rows = [createRow(2, { A: 'REG1', B: 'SUB1', C: ' ', D: '0', F: 'A' })];
     const outcomes = validateResultRows(rows, mapping, mockContext);
-    expect(outcomes[0].status).toBe('ERROR');
-    const errors = outcomes[0].errors;
+    expect(outcomes[0]?.status).toBe('ERROR');
+    const errors = outcomes[0]?.errors;
+    if (!errors) throw new Error('Expected a validation outcome');
 
     // Internal should be missing
     expect(errors).toContainEqual(

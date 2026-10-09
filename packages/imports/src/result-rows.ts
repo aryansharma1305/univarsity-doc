@@ -4,7 +4,6 @@ import {
   normalizeImportValue,
   normalizeRegistrationNumber,
 } from '@docversity/validation';
-import type { SourceCell } from './cells.js';
 import type { RawRowData } from './student-rows.js';
 
 export type ResultFieldValues = Partial<Record<ResultImportField, string | null>>;
@@ -67,12 +66,12 @@ export function parseResultFieldValues(
   const values: ResultFieldValues = {};
   for (const [field, colKey] of Object.entries(mapping)) {
     if (!colKey) continue;
-    const cell = rawData[colKey] as SourceCell | undefined;
+    const cell = rawData[colKey];
     if (cell && cell.type !== 'blank' && cell.type !== 'error') {
       let strValue = '';
       if (cell.type === 'string' || cell.type === 'date') strValue = cell.value;
       else if (cell.type === 'number' || cell.type === 'boolean') strValue = String(cell.value);
-      else if (cell.type === 'formula') strValue = cell.result || '';
+      else strValue = cell.result ?? '';
 
       if (strValue) {
         const normalized = normalizeImportValue(strValue);
@@ -99,6 +98,14 @@ export function validateResultRows(
 ): ResultRowOutcome[] {
   if (!context.academicPeriod || context.academicPeriod.trim() === '') {
     throw new Error('Academic period context is missing, empty, or invalid.');
+  }
+
+  if (
+    ![...context.curriculumSubjects.values()].some((subjects) =>
+      subjects.some((subject) => subject.academicPeriod === context.academicPeriod),
+    )
+  ) {
+    throw new Error('Academic period does not exist in the loaded curriculum structure.');
   }
 
   if (context.examinationContext) {
@@ -156,7 +163,7 @@ export function validateResultRows(
       });
     } else {
       registrationNumberNormalized = normalizeRegistrationNumber(rawRegNum);
-      registration = context.registrations.get(registrationNumberNormalized) || null;
+      registration = context.registrations.get(registrationNumberNormalized) ?? null;
       if (!registration) {
         errors.push({
           severity: 'error',
@@ -187,7 +194,7 @@ export function validateResultRows(
           message: `Student '${rawRegNum}' does not have an assigned curriculum version.`,
         });
       } else {
-        const curriculumSubjects = context.curriculumSubjects.get(registration.curriculumId) || [];
+        const curriculumSubjects = context.curriculumSubjects.get(registration.curriculumId) ?? [];
         const isPeriodValidForCurriculum = curriculumSubjects.some(
           (s) => s.academicPeriod === context.academicPeriod,
         );
@@ -219,7 +226,7 @@ export function validateResultRows(
               message: `Subject code '${rawSubject}' is ambiguous in the curriculum.`,
             });
           } else {
-            programSubject = matchingSubjects[0] || null;
+            programSubject = matchingSubjects[0] ?? null;
             if (programSubject && programSubject.academicPeriod !== context.academicPeriod) {
               errors.push({
                 severity: 'error',
@@ -336,13 +343,13 @@ export function validateResultRows(
     outcomes.push({
       rowNumber: row.rowNumber,
       status: errors.length > 0 ? 'ERROR' : warnings.length > 0 ? 'WARNING' : 'VALID',
-      registrationId: registration?.id || null,
+      registrationId: registration?.id ?? null,
       rawData: row.rawData,
       normalizedData: {
         values,
         registrationNumberNormalized,
-        registrationId: registration?.id || null,
-        programSubjectId: programSubject?.id || null,
+        registrationId: registration?.id ?? null,
+        programSubjectId: programSubject?.id ?? null,
       },
       errors,
       warnings,

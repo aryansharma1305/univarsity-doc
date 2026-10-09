@@ -18,7 +18,6 @@ import {
   type ImportRowFilter,
   type ImportRowSummary,
   STUDENT_IMPORT_FIELDS,
-  studentImportField,
 } from '@docversity/validation';
 import { DataTable } from '@/components/data/data-table';
 import { Pagination } from '@/components/data/pagination';
@@ -33,7 +32,9 @@ export interface RowFilterOption {
 }
 
 function IssueText({ issue }: { issue: ImportIssue }) {
-  const label = issue.field ? studentImportField(issue.field).label : null;
+  const label = issue.field
+    ? (STUDENT_IMPORT_FIELDS.find((field) => field.key === issue.field)?.label ?? issue.field)
+    : null;
   return (
     <span className={issue.severity === 'error' ? 'text-danger-text' : 'text-warning-text'}>
       <span className="font-medium">{issue.severity === 'error' ? 'Error' : 'Warning'}:</span>{' '}
@@ -166,7 +167,8 @@ function RowDetailSheet({
                         {row.changes.map((change) => (
                           <tr key={change.field} className="border-t border-border">
                             <th scope="row" className="px-3 py-2 text-left font-medium">
-                              {studentImportField(change.field).label}
+                              {STUDENT_IMPORT_FIELDS.find((field) => field.key === change.field)
+                                ?.label ?? change.field}
                             </th>
                             <td className="px-3 py-2 break-words">{change.from ?? '—'}</td>
                             <td className="px-3 py-2 break-words">{change.to ?? '—'}</td>
