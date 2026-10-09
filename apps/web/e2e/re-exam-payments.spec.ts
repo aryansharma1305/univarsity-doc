@@ -143,7 +143,10 @@ test('India payment details: prepared, approved by a second person, paid by the 
   await reviewer
     .getByLabel(/Search by student, registration number/)
     .fill(alpha.registrationNumber);
+  // Wait for the search to apply (list state lives in the URL) before following the result.
+  await expect(reviewer).toHaveURL(/[?&]search=/);
   await reviewer.getByRole('link', { name: /^RX-/ }).first().click();
+  await expect(reviewer).toHaveURL(/\/admin\/re-exam-payments\/[0-9a-f-]{36}$/);
   await expect(
     reviewer.getByRole('heading', { level: 1, name: 'E2E Examinee Alpha' }),
   ).toBeVisible();
@@ -169,7 +172,9 @@ test('India payment details: prepared, approved by a second person, paid by the 
   await decider
     .getByLabel('Search by student name or registration number')
     .fill(alpha.registrationNumber);
+  await expect(decider).toHaveURL(/[?&]search=/);
   await decider.getByRole('link', { name: /^RX-/ }).first().click();
+  await expect(decider).toHaveURL(/\/admin\/re-exam-applications\/[0-9a-f-]{36}$/);
   await expect(decider.getByText('Approved').first()).toBeVisible();
   await expect(
     decider.getByRole('heading', { name: 'Payment (separate from the decision)' }),

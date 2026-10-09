@@ -115,7 +115,7 @@ refund, settlement or exchange-rate logic exists.
 - **Choices:** `INDIA`, `NEPAL`, `BANGLADESH`, `PAKISTAN`, `AFGHANISTAN` (countries) and `EUROPE`,
   `CENTRAL_ASIA`, `OTHERS` (region groups; an optional specific country may be named).
 - **Payment destinations** (`re_exam_payment_destinations`) are versioned per region: `DRAFT` (staff only,
-  editable) → `APPROVED` (by a **different** person than the preparer, QR required, explicit
+  editable) → `APPROVED` (by a **different** person than the preparer and the last editor of the draft, QR required, explicit
   `confirmApproved: true`; frozen in the database) → `RETIRED`. At most one APPROVED version per region.
   Students see a destination only while it is APPROVED, switched on and within `effectiveFrom`/
   `effectiveUntil`. Replacing a QR = approving a replacement draft (`replacesDestinationId`), which retires
@@ -157,7 +157,7 @@ refund, settlement or exchange-rate logic exists.
 | PATCH  | `/api/v1/re-exam-payment-destinations/:id`         | `reExamPayments.configure` | Edit a DRAFT                                                                                     |
 | POST   | `/api/v1/re-exam-payment-destinations/:id/qr`      | `reExamPayments.configure` | multipart `file` (DRAFT only)                                                                    |
 | GET    | `/api/v1/re-exam-payment-destinations/:id/qr`      | `reExamPayments.configure` | Stored QR (staff preview)                                                                        |
-| POST   | `/api/v1/re-exam-payment-destinations/:id/approve` | `reExamPayments.configure` | `{ confirmApproved: true }`; not by the preparer                                                 |
+| POST   | `/api/v1/re-exam-payment-destinations/:id/approve` | `reExamPayments.configure` | `{ confirmApproved: true }`; not by the preparer or last editor                                  |
 | POST   | `/api/v1/re-exam-payment-destinations/:id/active`  | `reExamPayments.configure` | `{ active }` (APPROVED only)                                                                     |
 | POST   | `/api/v1/re-exam-payment-destinations/:id/retire`  | `reExamPayments.configure` | → RETIRED                                                                                        |
 | GET    | `/api/v1/re-exam-payments`                         | `reExamPayments.read`      | List; `search` (name, registration no., subject code, transaction reference), `status`, `region` |

@@ -35,6 +35,7 @@ type Student = Awaited<ReturnType<typeof enrolledStudent>> & { accountId: string
 let app: INestApplication;
 let maker: Staff;
 let checker: Staff;
+let thirdAdmin: Staff;
 let registrar: Staff;
 let examAdmin: Staff;
 let approver: Staff;
@@ -66,15 +67,17 @@ const receiptPng = () =>
 
 beforeAll(async () => {
   app = await createTestApp(realConfig());
-  [maker, checker, registrar, examAdmin, approver, approver2, viewer] = await Promise.all([
-    staff(app, ['SUPER_ADMIN']),
-    staff(app, ['SUPER_ADMIN']),
-    staff(app, ['REGISTRAR']),
-    staff(app, ['EXAM_ADMIN']),
-    staff(app, ['APPROVER']),
-    staff(app, ['APPROVER']),
-    staff(app, ['VIEWER']),
-  ]);
+  [maker, checker, thirdAdmin, registrar, examAdmin, approver, approver2, viewer] =
+    await Promise.all([
+      staff(app, ['SUPER_ADMIN']),
+      staff(app, ['SUPER_ADMIN']),
+      staff(app, ['SUPER_ADMIN']),
+      staff(app, ['REGISTRAR']),
+      staff(app, ['EXAM_ADMIN']),
+      staff(app, ['APPROVER']),
+      staff(app, ['APPROVER']),
+      staff(app, ['VIEWER']),
+    ]);
   fixture = await academicFixture(app, registrar, { periods: 1, subjectsPerPeriod: 12 });
   reExamId = (
     await examination(examAdmin, fixture, {
@@ -398,6 +401,69 @@ describe('payment destinations', () => {
       'CENTRAL_ASIA',
       'OTHERS',
     ]);
+  });
+
+  it('refuses approval by whoever last changed the draft (details or QR)', async () => {
+    await retireRegion('AFGHANISTAN');
+    const draft = paymentDestinationDetailSchema.parse(
+      (
+        await expectStatus(
+          maker.post('re-exam-payment-destinations', draftBody('AFGHANISTAN')),
+          201,
+        )
+      ).body,
+    );
+    await expectStatus(uploadQr(maker, draft.id, await testQr('AFGHANISTAN')), 200);
+    // The checker changes the beneficiary, then tries to approve their own change.
+    await expectStatus(
+      checker.patch(`re-exam-payment-destinations/${draft.id}`, {
+        beneficiaryName: 'Synthetic changed beneficiary',
+      }),
+      200,
+    );
+    expect(
+      errorOf(
+        await expectStatus(
+          checker.post(`re-exam-payment-destinations/${draft.id}/approve`, {
+            confirmApproved: true,
+          }),
+          409,
+        ),
+      ).message,
+    ).toMatch(/prepared or last changed/);
+    // Replacing the QR counts as a change too.
+    await expectStatus(uploadQr(thirdAdmin, draft.id, await testQr('AFGHANISTAN-2')), 200);
+    await expectStatus(
+      thirdAdmin.post(`re-exam-payment-destinations/${draft.id}/approve`, {
+        confirmApproved: true,
+      }),
+      409,
+    );
+    // The database refuses it as well.
+    await expect(
+      testDb().reExamPaymentDestination.update({
+        where: { id: draft.id },
+        data: {
+          status: 'APPROVED',
+          isActive: true,
+          approvedAt: new Date(),
+          approvedByUserId: thirdAdmin.user.id,
+        },
+      }),
+    ).rejects.toThrow(/approver_not_editor_check/);
+    // Someone who neither prepared nor changed it may approve.
+    const approved = paymentDestinationDetailSchema.parse(
+      (
+        await expectStatus(
+          checker.post(`re-exam-payment-destinations/${draft.id}/approve`, {
+            confirmApproved: true,
+          }),
+          200,
+        )
+      ).body,
+    );
+    expect(approved.status).toBe('APPROVED');
+    await retireRegion('AFGHANISTAN');
   });
 
   it('accepts a specific country for region groups only', async () => {

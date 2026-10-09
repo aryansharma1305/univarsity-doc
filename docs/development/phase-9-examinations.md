@@ -68,7 +68,7 @@ Branch `feature/phase-9c-reexam-payments` from `main` `baea394` (9A + 9B + Phase
   per-attempt amounts only for a currency other than the active fee rule's, instructions, receipt
   OPTIONAL/REQUIRED, validity, optional specific country for groups);
   `/admin/settings/re-exam-payments/[id]`: QR upload (stored re-encoded), approval by a **different**
-  person with an explicit confirmation, switch on/off, retire, "Prepare replacement" (new QR) — approving it
+  person (not the preparer or last editor) with an explicit confirmation, switch on/off, retire, "Prepare replacement" (new QR) — approving it
   retires the old version atomically.
 - **Staff — review** `/admin/re-exam-payments` (`reExamPayments.read`, APPROVER): search by name,
   registration number, subject or transaction reference; filter status/region;
@@ -115,8 +115,9 @@ _RETIRED`, `RE_EXAM_PAYMENT_STARTED/_VOIDED/_SUBMITTED/_VERIFIED/_REJECTED/_EVID
   "not configured", block new obligations and hide the QR.
 
 **Staff controls:** RBAC matrix (configure / read / verify vs REGISTRAR, EXAM_ADMIN, APPROVER, VIEWER;
-anonymous `401`; staff session refused on student routes); maker–checker (preparer's approval `409`, also a
-database CHECK; approval needs the confirmation and a QR); approved versions frozen (API `409`, database
+anonymous `401`; staff session refused on student routes); maker–checker (approval by the preparer or by whoever last edited the draft or its QR is `409`, also
+database CHECKs — the last-editor rule was added in release review as migration
+`20261016093000_re_exam_payment_destination_editor_check`; approval needs the confirmation and a QR); approved versions frozen (API `409`, database
 trigger); verification needs `confirmedAgainstUniversityAccount: true` and the exact amount and currency
 (999 INR or 1000 USD → `409`); two reviewers acting at once (verify + reject) → exactly one `200`, one
 `409`; decisions final and payments undeletable in the database; transaction references never written to
@@ -165,9 +166,15 @@ horizontal scroll.
 
 **Quality gates and totals:** `pnpm format:check`, `pnpm lint` (0 errors; the existing TanStack Table
 React Compiler warning remains), `pnpm typecheck`, `pnpm build --force` and `pnpm db:check` ("No difference
-detected") pass. `pnpm test --force`: **582 tests in 78 files** — API 268 (37 files; 9C adds 9 tests),
+detected") pass. `pnpm test --force`: **583 tests in 78 files** — API 269 (37 files; 9C adds 10 tests),
 web 79 (6 new), database 93, imports 77, validation 35 (5 new), types 19 (1 new), worker 7, storage 4
 (1 new). `pnpm test:e2e`: **37 / 37 passed** (2 new 9C tests: desktop flow and 390 px screens).
+
+Release review (before merge): `graphify-out/` was restored to `main` (regenerate after merging); the
+maker–checker rule was extended to the last editor (migration
+`20261016093000_re_exam_payment_destination_editor_check`, API check, UI hint, regression test); the e2e
+spec waits for list searches to apply before following a result. All gates and 37/37 browser tests were
+re-run on the final code.
 
 Local browser runs note: the login limiter counts sign-ins per IP for 15 minutes (100); one full run uses
 40, so back-to-back local runs can exhaust it (CI starts with an empty Redis). Only the disposable

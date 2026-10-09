@@ -152,7 +152,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261012090000_historical_documents`, `20261013090000_historical_document_hardening` (Phase 8),
   `20261014090000_examination_portal_foundation` (Phase 9A), `20261015090000_re_exam_applications` (9B),
   `20261015093000_re_exam_fee_snapshot_required_fields` (9B assessed-fee NULL hardening),
-  `20261016090000_re_exam_payments` (9C payment destinations and payments).
+  `20261016090000_re_exam_payments` (9C payment destinations and payments),
+  `20261016093000_re_exam_payment_destination_editor_check` (9C: approver ≠ last editor).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -238,7 +239,7 @@ actions, never guessed. Details: [docs/api/examinations.md](docs/api/examination
 
 Re-exam payments (9C): staff prepare versioned payment details per country/region group (India, Nepal,
 Bangladesh, Pakistan, Afghanistan, Europe, Central Asia, Others) at `/admin/settings/re-exam-payments`
-(`reExamPayments.configure`, SUPER_ADMIN); a **different** person approves (QR required); approved
+(`reExamPayments.configure`, SUPER_ADMIN); a **different** person than the preparer and last editor approves (QR required); approved
 versions are frozen and replaced, never edited. Students choose a region at
 `/student/examinations/re-exam/[applicationId]/payment`, pay outside Docversity, and submit a transaction
 reference (+ evidence if required); the obligation snapshots amount/currency/fee-rule/destination

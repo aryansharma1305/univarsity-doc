@@ -438,7 +438,8 @@ export class PaymentDestinationsService {
   }
 
   /**
-   * DRAFT → APPROVED by someone other than its creator. A replacement retires the version it replaces
+   * DRAFT → APPROVED by someone other than its creator or last editor. A replacement retires the
+   * version it replaces
    * in the same transaction; otherwise the region must not already have an approved version.
    */
   async approve(
@@ -457,9 +458,10 @@ export class PaymentDestinationsService {
       if (row.status !== 'DRAFT') {
         throw conflict(`These payment details are already ${row.status.toLowerCase()}.`);
       }
-      if (row.createdByUserId === actorUserId) {
+      // Maker–checker: neither the preparer nor whoever last changed the draft (details or QR).
+      if (row.createdByUserId === actorUserId || row.updatedByUserId === actorUserId) {
         throw conflict(
-          'Payment details must be approved by a different authorised staff member than the one who prepared them.',
+          'Payment details must be approved by a different authorised staff member than the one who prepared or last changed them.',
         );
       }
       if (!row.qrStorageKey) throw conflict('Upload the QR image before approving.');

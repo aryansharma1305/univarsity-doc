@@ -54,7 +54,7 @@ FX/regional amounts; the manual-marks rules.
 ## Addendum (Phase 9C implementation, 2026-10-10)
 
 - Decision 5 is implemented with **maker–checker approval** of payment destinations (the approver must
-  differ from the preparer, also enforced by a database CHECK) and **versioned, frozen** destinations:
+  differ from the preparer and from whoever last changed the draft, also enforced by database CHECKs) and **versioned, frozen** destinations:
   replacing a QR means approving a replacement version, which retires the old one atomically while
   existing payments keep pointing at their version.
 - An obligation's amount is the application's own assessed fee when the currencies match, otherwise only

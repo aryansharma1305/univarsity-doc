@@ -211,7 +211,7 @@ export function PaymentDestinationDetailView({ destinationId }: { destinationId:
   if (query.isError) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
   const d = query.data;
   const state = DESTINATION_STATE[d.state];
-  const ownDraft = d.createdBy?.id === user.id;
+  const ownDraft = d.createdBy?.id === user.id || d.updatedBy?.id === user.id;
   const failed = toggle.error ?? retire.error ?? replace.error;
 
   return (
@@ -234,7 +234,7 @@ export function PaymentDestinationDetailView({ destinationId }: { destinationId:
                 disabled={!d.qr || ownDraft}
                 title={
                   ownDraft
-                    ? 'Another authorised staff member must approve details you prepared.'
+                    ? 'Another authorised staff member must approve details you prepared or changed.'
                     : undefined
                 }
                 onClick={() => {
@@ -313,7 +313,8 @@ export function PaymentDestinationDetailView({ destinationId }: { destinationId:
       )}
       {d.status === 'DRAFT' && ownDraft && (
         <p className="text-sm text-foreground/80">
-          You prepared this draft, so another authorised staff member must approve it.
+          You prepared or last changed this draft, so another authorised staff member must approve
+          it.
         </p>
       )}
 
