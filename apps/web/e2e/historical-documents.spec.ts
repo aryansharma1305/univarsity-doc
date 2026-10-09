@@ -194,7 +194,8 @@ test('staff upload, publish, replace and withdraw; the student sees only their p
     .getByRole('dialog', { name: 'Publish to the student?' })
     .getByRole('button', { name: 'Publish document' })
     .click();
-  await expect(staff.getByText('Published to student').first()).toBeVisible();
+  // Wait for the publish itself: the version list also shows the (still published) original.
+  await expect(staff.getByText('Published. The student can now see this document.')).toBeVisible();
   await portal.reload();
   await expect(
     portal.getByRole('article', { name: 'E2E Bachelor degree certificate (corrected)' }),
@@ -328,4 +329,181 @@ test.describe('mobile', () => {
     await capture(portal, 'student-documents-mobile');
     await portal.context().close();
   });
+});
+
+/** Synthetic identifying values written into the test scan's EXIF. None may reach the student. */
+const EXIF_VALUES = ['E2E-Cam', 'E2E-Model', 'E2E Scanner Operator', 'SN-E2E-0042'];
+
+/**
+ * A hand-built EXIF (APP1) segment — big-endian TIFF with camera make/model, operator (Artist),
+ * body serial number and GPS latitude/longitude — as a camera or scanner app would write it.
+ */
+function exifSegment(): Buffer {
+  type Field = [tag: number, type: 2 | 4 | 5, value: string | number | number[]];
+  const ifd0: Field[] = [
+    [0x010f, 2, 'E2E-Cam'],
+    [0x0110, 2, 'E2E-Model'],
+    [0x013b, 2, 'E2E Scanner Operator'],
+    [0x8769, 4, 0],
+    [0x8825, 4, 0],
+  ];
+  const exif: Field[] = [[0xa431, 2, 'SN-E2E-0042']];
+  const gps: Field[] = [
+    [1, 2, 'N'],
+    [2, 5, [28, 1, 36, 1, 50, 1]],
+    [3, 2, 'E'],
+    [4, 5, [77, 1, 12, 1, 32, 1]],
+  ];
+  const ifds = [ifd0, exif, gps];
+  const offsets: number[] = [];
+  let end = 8;
+  for (const fields of ifds) {
+    offsets.push(end);
+    end += 2 + fields.length * 12 + 4;
+  }
+  const [, exifOffset = 0, gpsOffset = 0] = offsets;
+  ifd0[3] = [0x8769, 4, exifOffset];
+  ifd0[4] = [0x8825, 4, gpsOffset];
+  const head = Buffer.alloc(end);
+  head.write('MM', 0, 'latin1');
+  head.writeUInt16BE(42, 2);
+  head.writeUInt32BE(8, 4);
+  const data: Buffer[] = [];
+  let dataOffset = end;
+  ifds.forEach((fields, index) => {
+    let p = offsets[index] ?? 0;
+    head.writeUInt16BE(fields.length, p);
+    p += 2;
+    for (const [tag, type, value] of fields) {
+      let bytes: Buffer;
+      let count: number;
+      if (type === 2) {
+        bytes = Buffer.from(`${String(value)}\0`, 'latin1');
+        count = bytes.length;
+      } else if (type === 4) {
+        bytes = Buffer.alloc(4);
+        bytes.writeUInt32BE(value as number);
+        count = 1;
+      } else {
+        const numbers = value as number[];
+        bytes = Buffer.alloc(numbers.length * 4);
+        numbers.forEach((n, k) => bytes.writeUInt32BE(n, k * 4));
+        count = numbers.length / 2;
+      }
+      head.writeUInt16BE(tag, p);
+      head.writeUInt16BE(type, p + 2);
+      head.writeUInt32BE(count, p + 4);
+      if (bytes.length <= 4) {
+        bytes.copy(head, p + 8);
+      } else {
+        const padded = bytes.length % 2 ? Buffer.concat([bytes, Buffer.from([0])]) : bytes;
+        head.writeUInt32BE(dataOffset, p + 8);
+        data.push(padded);
+        dataOffset += padded.length;
+      }
+      p += 12;
+    }
+    head.writeUInt32BE(0, p);
+  });
+  const payload = Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), head, ...data]);
+  const length = Buffer.alloc(2);
+  length.writeUInt16BE(payload.length + 2);
+  return Buffer.concat([Buffer.from([0xff, 0xe1]), length, payload]);
+}
+
+/** A synthetic certificate scan (JPEG drawn in the browser) carrying the EXIF segment above. */
+async function scanWithExif(page: Page): Promise<Buffer> {
+  const dataUrl = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 1200;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('no canvas');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, 900, 1200);
+    context.fillStyle = '#111827';
+    context.font = 'bold 48px sans-serif';
+    context.fillText('E2E SYNTHETIC CERTIFICATE', 60, 400);
+    context.fillText('No. E2E/IMG/0001', 60, 500);
+    return canvas.toDataURL('image/jpeg', 0.92);
+  });
+  const jpeg = Buffer.from(dataUrl.split(',')[1] ?? '', 'base64');
+  // Insert after SOI and the JFIF APP0 segment.
+  const app0End = 4 + jpeg.readUInt16BE(4);
+  return Buffer.concat([jpeg.subarray(0, app0End), exifSegment(), jpeg.subarray(app0End)]);
+}
+
+test('image scans: staff see a location warning; students get a copy without embedded metadata', async ({
+  browser,
+}) => {
+  const { registrar, profileStudents } = fixtures();
+  const student = profileStudents[0];
+  if (!student) throw new Error('missing fixture');
+  const staff = await staffPage(browser, registrar);
+  const scan = await scanWithExif(staff);
+  expect(scan.includes(Buffer.from('SN-E2E-0042'))).toBe(true);
+
+  await uploadDocument(staff, {
+    registrationNumber: student.registrationNumber,
+    title: 'E2E Provisional certificate scan',
+    type: 'Provisional certificate',
+    file: { name: 'provisional.jpg', mimeType: 'image/jpeg', buffer: scan },
+  });
+  await staff.getByRole('textbox', { name: /Certificate number/ }).fill(' E2E/IMG/0001 ');
+  await staff.getByRole('button', { name: 'Upload as draft' }).click();
+  await expect(staff).toHaveURL(/\/admin\/historical-documents\/[0-9a-f-]{36}$/);
+  const alert = staff.getByRole('alert').filter({ hasText: 'location (GPS) metadata' });
+  await expect(alert).toBeVisible();
+  await expect(alert).toContainText('Camera or scanner details');
+  await expect(alert).toContainText('Students receive a separate copy');
+  for (const value of EXIF_VALUES) await expect(staff.getByText(value)).toHaveCount(0);
+  await expect(staff.getByText('including 1 leading and 1 trailing space')).toBeVisible();
+  await expect(staff.getByRole('link', { name: 'Open student copy' })).toBeVisible();
+  await expectNoSeriousA11yViolations(staff);
+  await capture(staff, 'historical-detail-image-metadata-desktop');
+  const id = staff.url().split('/').at(-1) ?? '';
+
+  // Staff: the original is unchanged evidence; the student variant has no metadata.
+  const original = Buffer.from(
+    await (await staff.request.get(`/api/v1/historical-documents/${id}/file`)).body(),
+  );
+  expect(original.equals(scan)).toBe(true);
+
+  await staff.getByRole('button', { name: 'Publish to student' }).click();
+  const publish = staff.getByRole('dialog', { name: 'Publish to the student?' });
+  await expect(publish).toContainText(
+    'embedded metadata (such as location or device details) removed',
+  );
+  await publish.getByRole('button', { name: 'Publish document' }).click();
+  await expect(staff.getByText('Published. The student can now see this document.')).toBeVisible();
+
+  const portal = await studentPage(browser, student);
+  await portal.goto('/student/documents');
+  await expect(
+    portal.getByRole('article', { name: 'E2E Provisional certificate scan' }),
+  ).toBeVisible();
+  for (const disposition of ['inline', 'attachment']) {
+    const response = await portal.request.get(
+      `/api/v1/student/documents/${id}/file?disposition=${disposition}`,
+    );
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toBe('image/jpeg');
+    const bytes = Buffer.from(await response.body());
+    expect(bytes.subarray(0, 2).toString('hex')).toBe('ffd8');
+    expect(bytes.includes(Buffer.from('Exif\0\0', 'latin1'))).toBe(false);
+    for (const value of EXIF_VALUES) expect(bytes.includes(Buffer.from(value))).toBe(false);
+    expect(bytes.equals(scan)).toBe(false);
+  }
+  await expectNoSeriousA11yViolations(portal);
+  await capture(portal, 'student-documents-image-desktop');
+  await portal.context().close();
+
+  const mobile = await staffPage(browser, registrar, 390);
+  await mobile.goto(`/admin/historical-documents/${id}`);
+  await expect(mobile.getByRole('heading', { level: 1 })).toBeVisible();
+  await expectNoHorizontalOverflow(mobile);
+  await expectNoSeriousA11yViolations(mobile);
+  await capture(mobile, 'historical-detail-image-metadata-mobile');
+  await mobile.context().close();
+  await staff.context().close();
 });

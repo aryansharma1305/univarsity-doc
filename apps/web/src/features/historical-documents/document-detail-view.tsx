@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   AlertTriangleIcon,
   DownloadIcon,
+  EyeIcon,
   ExternalLinkIcon,
   EyeOffIcon,
   FilePenLineIcon,
@@ -18,8 +19,10 @@ import { Button } from '@docversity/ui/components/button';
 import { Card, CardContent } from '@docversity/ui/components/card';
 import { Skeleton } from '@docversity/ui/components/skeleton';
 import {
+  EMBEDDED_METADATA_LABELS,
   HISTORICAL_DOCUMENT_TYPE_LABELS,
   type HistoricalDocumentDetail,
+  type HistoricalDocumentVersion,
   PROVENANCE_LABELS,
 } from '@docversity/validation';
 import { useSetBreadcrumbLabel } from '@/components/admin/breadcrumb-context';
@@ -35,7 +38,7 @@ import {
   WithdrawDialog,
 } from './document-dialogs';
 import { AuthenticityBadge, DocumentStatusBadge } from './documents-view';
-import { fileKind, fileSize } from './labels';
+import { fileKind, fileSize, versionLabel } from './labels';
 
 function Detail({
   label,
@@ -69,6 +72,29 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/**
+ * A certificate number exactly as recorded. Leading/trailing spaces are kept by design (the
+ * university-provided value is never rewritten), so they are made visible and stated in words.
+ */
+function ExactNumber({ value }: { value: string | null }) {
+  if (value === null) return <>Not known</>;
+  const leading = value.length - value.trimStart().length;
+  const trailing = value.length - value.trimEnd().length;
+  return (
+    <>
+      <span className="rounded bg-muted px-1 font-mono text-xs break-all whitespace-pre-wrap">
+        {value}
+      </span>
+      {(leading > 0 || trailing > 0) && (
+        <span className="mt-1 block text-xs text-foreground/80">
+          Recorded exactly as provided, including {String(leading)} leading and {String(trailing)}{' '}
+          trailing space{leading + trailing === 1 ? '' : 's'}.
+        </span>
+      )}
+    </>
+  );
+}
+
 function Preview({ document }: { document: HistoricalDocumentDetail }) {
   const [failed, setFailed] = useState(false);
   const isImage = document.file.contentType !== 'application/pdf';
@@ -76,7 +102,7 @@ function Preview({ document }: { document: HistoricalDocumentDetail }) {
     <div className="flex flex-col gap-3">
       {isImage && !failed ? (
         <Image
-          src={documentFileUrl(document.id, 'inline')}
+          src={documentFileUrl(document.id, 'inline', 'original')}
           alt={`Scan: ${document.title}`}
           width={600}
           height={800}
@@ -96,20 +122,141 @@ function Preview({ document }: { document: HistoricalDocumentDetail }) {
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="outline" size="sm">
           <a
-            href={documentFileUrl(document.id, 'inline')}
+            href={documentFileUrl(document.id, 'inline', 'original')}
             target="_blank"
             rel="noopener noreferrer"
           >
             <ExternalLinkIcon aria-hidden="true" />
-            Open preview
+            Open original
           </a>
         </Button>
         <Button asChild variant="outline" size="sm">
-          <a href={documentFileUrl(document.id, 'attachment')}>
+          <a href={documentFileUrl(document.id, 'attachment', 'original')}>
             <DownloadIcon aria-hidden="true" />
             Download original
           </a>
         </Button>
+        {document.studentCopy.status === 'READY' && (
+          <Button asChild variant="outline" size="sm">
+            <a
+              href={documentFileUrl(document.id, 'inline', 'student')}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <EyeIcon aria-hidden="true" />
+              Open student copy
+            </a>
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The replacement chain; every entry is named by revision and reference, never by title alone. */
+function Versions({ document }: { document: HistoricalDocumentDetail }) {
+  return (
+    <ol className="divide-y divide-border rounded-lg border border-border">
+      {document.versions.map((version) => {
+        const isThis = version.id === document.id;
+        return (
+          <li
+            key={version.id}
+            aria-current={isThis ? 'page' : undefined}
+            className={`flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${isThis ? 'bg-muted/60' : ''}`}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-navy-950">
+                {isThis ? (
+                  <span>{versionLabel(version)} (this document)</span>
+                ) : (
+                  <Link
+                    href={`/admin/historical-documents/${version.id}`}
+                    className="text-brand hover:underline"
+                  >
+                    {versionLabel(version)}
+                  </Link>
+                )}
+              </p>
+              <p className="text-meta break-words">
+                {version.title}
+                {version.certificateNumber ? ` · No. ${version.certificateNumber}` : ''}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <DocumentStatusBadge status={version.status} />
+              <span className="text-meta">
+                {version.publishedAt
+                  ? `Published ${formatDateTime(version.publishedAt)}`
+                  : `Uploaded ${formatDateTime(version.createdAt)}`}
+              </span>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** An inline link inside running text: always underlined, so it never relies on colour alone. */
+function versionLink(version: HistoricalDocumentVersion) {
+  return (
+    <Link
+      href={`/admin/historical-documents/${version.id}`}
+      className="text-brand underline underline-offset-2"
+    >
+      {versionLabel(version)}
+    </Link>
+  );
+}
+
+/** What the uploaded image carries, and what students receive instead. Kinds only, never values. */
+function MetadataNotice({ document }: { document: HistoricalDocumentDetail }) {
+  if (document.studentCopy.status === 'PENDING') {
+    return (
+      <div
+        role="status"
+        className="flex gap-3 rounded-lg border border-warning/40 bg-warning-soft p-3 text-sm text-navy-950"
+      >
+        <AlertTriangleIcon
+          aria-hidden="true"
+          className="mt-0.5 size-4 shrink-0 text-warning-text"
+        />
+        <p>
+          <span className="font-semibold">Student copy not created yet.</span> This scan was
+          uploaded before embedded metadata was removed for students. It cannot be published, and
+          students are not sent the file, until the student-copy backfill has run.
+        </p>
+      </div>
+    );
+  }
+  const { categories } = document.embeddedMetadata;
+  if (!document.embeddedMetadata.inspected || categories.length === 0) return null;
+  const location = categories.includes('LOCATION');
+  return (
+    <div
+      role={location ? 'alert' : 'status'}
+      className={`flex gap-3 rounded-lg border p-3 text-sm text-navy-950 ${location ? 'border-warning/40 bg-warning-soft' : 'border-border bg-muted/60'}`}
+    >
+      <AlertTriangleIcon
+        aria-hidden="true"
+        className={`mt-0.5 size-4 shrink-0 ${location ? 'text-warning-text' : 'text-foreground/70'}`}
+      />
+      <div>
+        <p className="font-semibold">
+          {location
+            ? 'This scan contains location (GPS) metadata'
+            : 'This scan contains embedded metadata'}
+        </p>
+        <ul className="mt-1 list-disc pl-5">
+          {categories.map((category) => (
+            <li key={category}>{EMBEDDED_METADATA_LABELS[category]}</li>
+          ))}
+        </ul>
+        <p className="mt-1">
+          The original is kept unchanged as evidence and is available only to authorised staff.
+          Students receive a separate copy with all embedded metadata removed.
+        </p>
       </div>
     </div>
   );
@@ -141,7 +288,10 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
         <CardContent className="flex flex-col gap-4 p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <p className="text-meta">{HISTORICAL_DOCUMENT_TYPE_LABELS[doc.documentType]}</p>
+              <p className="text-meta">
+                {HISTORICAL_DOCUMENT_TYPE_LABELS[doc.documentType]} ·{' '}
+                <span className="tabular">{doc.reference}</span> · Revision {doc.revision}
+              </p>
               <h1 className="text-page-title break-words text-navy-950">{doc.title}</h1>
               <p className="mt-1 text-sm break-words">
                 <Link
@@ -211,6 +361,12 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
                 canPublish &&
                 !blockedByReplacement && (
                   <Button
+                    disabled={doc.studentCopy.status === 'PENDING'}
+                    title={
+                      doc.studentCopy.status === 'PENDING'
+                        ? 'The student copy must be created first'
+                        : undefined
+                    }
                     onClick={() => {
                       setDialog('publish');
                     }}
@@ -227,6 +383,27 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
               authenticity.
             </p>
           )}
+          {(doc.replaces ?? doc.replacedBy) && (
+            <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/60 p-3 text-sm text-navy-950">
+              {doc.replacedBy && (
+                <p>
+                  <span className="font-semibold">
+                    {doc.status === 'SUPERSEDED'
+                      ? 'This is an earlier version.'
+                      : 'A replacement is in progress.'}
+                  </span>{' '}
+                  {doc.status === 'SUPERSEDED' ? 'Current version: ' : 'Replacement: '}
+                  {versionLink(doc.replacedBy)} ({doc.replacedBy.status.toLowerCase()})
+                </p>
+              )}
+              {doc.replaces && (
+                <p>
+                  Replaces {versionLink(doc.replaces)} ({doc.replaces.status.toLowerCase()})
+                </p>
+              )}
+            </div>
+          )}
+          <MetadataNotice document={doc} />
           {doc.sameNumberElsewhere.length > 0 && (
             <div
               role="alert"
@@ -322,13 +499,24 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
       <div className="grid gap-5 lg:grid-cols-2">
         <Section title="Document">
           <dl className="grid gap-3 sm:grid-cols-2">
-            <Detail label="Certificate number" value={doc.certificateNumber ?? 'Not known'} />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <dt className="text-meta">Certificate number (as recorded)</dt>
+              <dd className="text-sm break-words text-navy-950">
+                <ExactNumber value={doc.certificateNumber} />
+              </dd>
+            </div>
             <Detail
               label="Issue date"
               value={doc.issuedOn ? formatDate(doc.issuedOn) : 'Not known'}
             />
+            <Detail label="Document ID" value={doc.id} mono />
             <Detail
-              label="File"
+              label="Search form of the number"
+              value={doc.certificateNumberNormalized}
+              mono
+            />
+            <Detail
+              label="Original file (evidence)"
               value={`${fileKind(doc.file.contentType)} · ${fileSize(doc.file.sizeBytes)}`}
             />
             <Detail label="Uploaded file name" value={doc.file.originalFilename} />
@@ -336,7 +524,20 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
               label="Uploaded"
               value={`${formatDateTime(doc.createdAt)}${doc.uploadedBy ? ` by ${doc.uploadedBy.displayName}` : ''}`}
             />
-            <Detail label="SHA-256" value={doc.file.sha256} mono />
+            <Detail label="Original SHA-256" value={doc.file.sha256} mono />
+            <Detail
+              label="What the student receives"
+              value={
+                doc.studentCopy.status === 'NOT_REQUIRED'
+                  ? 'This PDF, as uploaded'
+                  : doc.studentCopy.status === 'READY'
+                    ? `A copy without embedded metadata · ${fileSize(doc.studentCopy.sizeBytes ?? 0)}`
+                    : 'Nothing yet — the student copy has not been created'
+              }
+            />
+            {doc.studentCopy.sha256 && (
+              <Detail label="Student copy SHA-256" value={doc.studentCopy.sha256} mono />
+            )}
           </dl>
           <Preview document={doc} />
         </Section>
@@ -352,36 +553,14 @@ export function DocumentDetailView({ documentId }: { documentId: string }) {
             />
             {doc.provenanceNote && <Detail label="Note" value={doc.provenanceNote} />}
           </dl>
-          {(doc.replaces ?? doc.replacedBy) && (
-            <div className="flex flex-col gap-1 border-t border-border pt-3 text-sm">
-              {doc.replaces && (
-                <p>
-                  Replaces{' '}
-                  <Link
-                    href={`/admin/historical-documents/${doc.replaces.id}`}
-                    className="text-brand hover:underline"
-                  >
-                    {doc.replaces.title}
-                  </Link>{' '}
-                  ({doc.replaces.status.toLowerCase()})
-                </p>
-              )}
-              {doc.replacedBy && (
-                <p>
-                  Replaced by{' '}
-                  <Link
-                    href={`/admin/historical-documents/${doc.replacedBy.id}`}
-                    className="text-brand hover:underline"
-                  >
-                    {doc.replacedBy.title}
-                  </Link>{' '}
-                  ({doc.replacedBy.status.toLowerCase()})
-                </p>
-              )}
-            </div>
-          )}
         </Section>
       </div>
+
+      {doc.versions.length > 1 && (
+        <Section title="Versions">
+          <Versions document={doc} />
+        </Section>
+      )}
 
       <Section title="History">
         <ol className="divide-y divide-border rounded-lg border border-border">

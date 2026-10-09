@@ -64,6 +64,10 @@ export function HistoricalDocumentsView() {
             {HISTORICAL_DOCUMENT_TYPE_LABELS[row.original.documentType]}
             {row.original.certificateNumber ? ` · No. ${row.original.certificateNumber}` : ''}
           </p>
+          <p className="text-meta">
+            <span className="tabular">{row.original.reference}</span>
+            {row.original.isReplacement ? ' · Replacement' : ''}
+          </p>
         </div>
       ),
     },
@@ -198,6 +202,11 @@ export function HistoricalDocumentsView() {
                 <p className="text-meta">
                   {HISTORICAL_DOCUMENT_TYPE_LABELS[doc.documentType]}
                   {doc.issuedOn ? ` · Issued ${formatDate(doc.issuedOn)}` : ''}
+                </p>
+                <p className="text-meta">
+                  <span className="tabular">{doc.reference}</span>
+                  {doc.certificateNumber ? ` · No. ${doc.certificateNumber}` : ''}
+                  {doc.isReplacement ? ' · Replacement' : ''}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <DocumentStatusBadge status={doc.status} />

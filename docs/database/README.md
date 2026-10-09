@@ -149,6 +149,20 @@ Support tables without relations: `number_sequences`, `legacy_mappings`.
 |              | `verification_logs`               | Public verification attempts (hashes only)                                                  |
 | Legacy       | `legacy_mappings`                 | Legacy identifier → new record (WordPress migration, old QR URLs)                           |
 
+### Phase 8 hardening migration (`20261013090000_historical_document_hardening`)
+
+Additive: enum `EmbeddedMetadataCategory` and nullable columns on `historical_documents` —
+`certificate_number_normalized` (indexed; search and duplicate-warning form of the raw
+`certificate_number`), `student_copy_storage_key`/`_content_type`/`_size_bytes`/`_sha256`/`_created_at`
+(the metadata-free copy students receive for JPEG/PNG documents, a separate private object) and
+`embedded_metadata` (kinds of metadata found in the original image — never values). Existing values are
+not changed; the normalised number is filled for existing rows inside one atomic statement (the Phase 8
+guard is suspended only for that derived-column fill, because SUPERSEDED rows are read-only). CHECKs:
+number and normalised form exist together (no control characters, normalised form non-empty without
+whitespace); the student copy is all-or-nothing, images only, same format, a different object than the
+original. Trigger `historical_documents_hardening_guard`: the student copy is set once and then
+immutable; an image cannot become PUBLISHED without it; the normalised number is frozen after DRAFT.
+
 ### Phase 8 migration (`20261012090000_historical_documents`)
 
 Additive: enums `HistoricalDocumentType`, `HistoricalDocumentStatus`, `DocumentAuthenticity`,
@@ -239,6 +253,7 @@ distinguishable from genuine foreign-key/unique errors (Prisma surfaces it as `P
 | `program_document_templates_guard`                 | Dated overrides for the same program and document type may not overlap (serialised with an advisory lock).                                                                                                                                                                                                                                                                                                                                                                                            |
 | `profile_change_requests_guard`                    | Requests are created PENDING by an account of the same student; submitted data never changes; a decision (APPROVED/REJECTED/CANCELLED) happens once; requests cannot be deleted.                                                                                                                                                                                                                                                                                                                      |
 | `historical_documents_guard`                       | Documents are created DRAFT; file, registration and replacement link never change; metadata changes only while DRAFT; DRAFT→PUBLISHED/WITHDRAWN, PUBLISHED→WITHDRAWN/SUPERSEDED, WITHDRAWN→PUBLISHED only; SUPERSEDED is final; replacements stay on the same registration; never deleted.                                                                                                                                                                                                            |
+| `historical_documents_hardening_guard`             | The student copy of an image (key, type, size, SHA-256, time, metadata kinds) is set once and never changed; an image document cannot be published without it; the normalised certificate number changes only while DRAFT.                                                                                                                                                                                                                                                                            |
 | `audit_logs_append_only`, `audit_logs_no_truncate` | Audit entries can never be updated, deleted or truncated.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `verification_logs_append_only`                    | Verification entries can never be updated. Deletion stays possible for a future retention policy.                                                                                                                                                                                                                                                                                                                                                                                                     |
 

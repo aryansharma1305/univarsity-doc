@@ -5,6 +5,7 @@ import {
   HISTORICAL_DOCUMENT_TYPE_LABELS,
   HISTORICAL_DOCUMENT_TYPES,
   type HistoricalDocumentStatus,
+  type HistoricalDocumentVersion,
   PROVENANCE_LABELS,
   DOCUMENT_PROVENANCES,
 } from '@docversity/validation';
@@ -53,4 +54,9 @@ export function fileKind(contentType: string): string {
     : contentType === 'image/png'
       ? 'PNG image'
       : 'JPEG image';
+}
+
+/** "Revision 2 · HD-1B97-2390": identifies a version even when titles are identical. */
+export function versionLabel(version: Pick<HistoricalDocumentVersion, 'revision' | 'reference'>) {
+  return `Revision ${String(version.revision)} · ${version.reference}`;
 }

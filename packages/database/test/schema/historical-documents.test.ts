@@ -211,3 +211,117 @@ describe('historical documents (historical_documents_guard)', () => {
     ).toBe(1);
   });
 });
+
+describe('Phase 8 hardening (student copies, certificate numbers)', () => {
+  async function imageDraft() {
+    const registrationId = (await f.registration()).id;
+    const uploader = await staffUser();
+    const doc = await db.historicalDocument.create({
+      data: {
+        studentRegistrationId: registrationId,
+        documentType: 'MARKSHEET',
+        title: 'Synthetic scan',
+        provenance: 'UNIVERSITY_ARCHIVE',
+        storageKey: `documents/${registrationId}/${uid()}.jpg`,
+        contentType: 'image/jpeg',
+        sizeBytes: 100,
+        sha256: sha(),
+        originalFilename: 'scan.jpg',
+        uploadedByUserId: uploader.id,
+      },
+    });
+    return { doc, uploader };
+  }
+  const copyFields = (key: string) => ({
+    studentCopyStorageKey: key,
+    studentCopyContentType: 'image/jpeg',
+    studentCopySizeBytes: 90,
+    studentCopySha256: sha(),
+    studentCopyCreatedAt: new Date(),
+    embeddedMetadata: ['LOCATION' as const],
+  });
+
+  it('never publishes an image without its student copy', async () => {
+    const { doc, uploader } = await imageDraft();
+    await expectDbError(publish(doc.id, uploader.id), /needs its metadata-free student copy/);
+    await db.historicalDocument.update({
+      where: { id: doc.id },
+      data: copyFields(`documents/${uid()}/copy.jpg`),
+    });
+    await publish(doc.id, uploader.id);
+  });
+
+  it('sets the student copy once, all fields together, for images only', async () => {
+    const { doc } = await imageDraft();
+    await expectDbError(
+      db.historicalDocument.update({
+        where: { id: doc.id },
+        data: { studentCopyStorageKey: 'documents/x/copy.jpg' },
+      }),
+      /historical_documents_student_copy_check/,
+    );
+    await expectDbError(
+      db.historicalDocument.update({
+        where: { id: doc.id },
+        data: { ...copyFields(doc.storageKey) },
+      }),
+      /historical_documents_student_copy_check/,
+    );
+    await db.historicalDocument.update({
+      where: { id: doc.id },
+      data: copyFields(`documents/${uid()}/copy.jpg`),
+    });
+    await expectDbError(
+      db.historicalDocument.update({
+        where: { id: doc.id },
+        data: { studentCopySha256: sha() },
+      }),
+      /student copy of document .* is immutable/,
+    );
+    await expectDbError(
+      db.historicalDocument.update({ where: { id: doc.id }, data: { embeddedMetadata: [] } }),
+      /student copy of document .* is immutable/,
+    );
+    const { doc: pdf } = await draft();
+    await expectDbError(
+      db.historicalDocument.update({
+        where: { id: pdf.id },
+        data: { ...copyFields(`documents/${uid()}/copy.jpg`) },
+      }),
+      /historical_documents_student_copy_check/,
+    );
+  });
+
+  it('keeps the exact number with its normalised form, frozen after publication', async () => {
+    const { doc, uploader } = await draft();
+    await expectDbError(
+      db.historicalDocument.update({
+        where: { id: doc.id },
+        data: { certificateNumber: ' LEG/1 ' },
+      }),
+      /historical_documents_certificate_number_check/,
+    );
+    await expectDbError(
+      db.historicalDocument.update({
+        where: { id: doc.id },
+        data: { certificateNumber: 'LEG\n1', certificateNumberNormalized: 'LEG1' },
+      }),
+      /historical_documents_certificate_number_check/,
+    );
+    await db.historicalDocument.update({
+      where: { id: doc.id },
+      data: { certificateNumber: ' LEG/1 ', certificateNumberNormalized: 'LEG1' },
+    });
+    expect(
+      (await db.historicalDocument.findUniqueOrThrow({ where: { id: doc.id } })).certificateNumber,
+    ).toBe(' LEG/1 ');
+    await publish(doc.id, uploader.id);
+    await expectDbError(
+      db.historicalDocument.update({
+        where: { id: doc.id },
+        data: { certificateNumberNormalized: 'OTHER' },
+      }),
+      /can only change while it is a draft/,
+    );
+  });
+});

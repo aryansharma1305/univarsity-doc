@@ -86,13 +86,38 @@ export const HISTORICAL_DOCUMENT_RULES = {
   minImageSide: 300,
 } as const;
 
+/**
+ * The searchable form of a certificate number, used for search and duplicate warnings only — never
+ * shown or stored in place of the number as printed. Unicode NFKC (folds full-width and other
+ * compatibility forms), upper-cased, keeping only letters and digits: "ACC/CERT/1001 ",
+ * "acc-cert 1001" and "ＡＣＣ／ＣＥＲＴ／１００１" all become "ACCCERT1001".
+ */
+export function normalizeCertificateNumber(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toUpperCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+/**
+ * The certificate number exactly as provided — never trimmed or rewritten. Blank means "none";
+ * line breaks, tabs and invisible formatting characters (e.g. bidi overrides) are refused rather
+ * than silently removed, so what staff see is what was recorded.
+ */
 const certificateNumberSchema = z.preprocess(
   (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
   z
     .string()
-    .trim()
     .max(64, 'Use at most 64 characters.')
-    .regex(/^[\p{L}\p{N}][\p{L}\p{N} ./_\-:#]*$/u, 'Enter the number exactly as printed.')
+    .refine(
+      (value) => !/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(value),
+      'Remove line breaks, tabs and invisible formatting characters.',
+    )
+    .refine((value) => /[\p{L}\p{N}]/u.test(value), 'Enter the number exactly as printed.')
+    .refine(
+      (value) => normalizeCertificateNumber(value).length <= 128,
+      'Use at most 64 characters.',
+    )
     .nullable()
     .optional(),
 );
@@ -164,6 +189,40 @@ export const reviewAuthenticitySchema = z
 
 export const documentDispositionSchema = z.enum(['inline', 'attachment']).default('attachment');
 
+/**
+ * Staff file variant: the evidential `original` exactly as uploaded, or the `student` copy — the
+ * file students receive (for images a separate copy without embedded metadata; for PDFs the original).
+ */
+export const documentVariantSchema = z.enum(['original', 'student']).default('original');
+
+/** Kinds of embedded metadata found in an uploaded image. Values themselves are never stored. */
+export const EMBEDDED_METADATA_CATEGORIES = [
+  'LOCATION',
+  'DEVICE',
+  'PERSON',
+  'TEXT',
+  'OTHER',
+] as const;
+export const embeddedMetadataCategorySchema = z.enum(EMBEDDED_METADATA_CATEGORIES);
+
+export const EMBEDDED_METADATA_LABELS: Record<EmbeddedMetadataCategory, string> = {
+  LOCATION: 'Location (GPS coordinates or place names)',
+  DEVICE: 'Camera or scanner details (make, model, serial number)',
+  PERSON: 'Names of people (author, operator, owner, copyright)',
+  TEXT: 'Descriptions, comments or other embedded text',
+  OTHER: 'Other technical metadata',
+};
+
+/**
+ * Short human reference for a document, e.g. "HD-1B97-2390": the random tail of its UUIDv7 (the
+ * head is a timestamp and is shared by documents uploaded close together). Display only; the full
+ * document ID is authoritative.
+ */
+export function documentReference(id: string): string {
+  const tail = id.replace(/-/g, '').slice(-8).toUpperCase();
+  return `HD-${tail.slice(0, 4)}-${tail.slice(4)}`;
+}
+
 const fileInfoSchema = z.object({
   contentType: z.enum(HISTORICAL_DOCUMENT_RULES.acceptedTypes),
   sizeBytes: z.number().int(),
@@ -176,6 +235,10 @@ const personSchema = z.object({ id: z.uuid(), displayName: z.string() }).nullabl
 export const historicalDocumentRowSchema = z
   .object({
     id: z.uuid(),
+    /** Short display reference (see `documentReference`). */
+    reference: z.string(),
+    /** True when this document replaces an earlier one. */
+    isReplacement: z.boolean(),
     documentType: historicalDocumentTypeSchema,
     title: z.string(),
     certificateNumber: z.string().nullable(),
@@ -207,15 +270,38 @@ export const historicalDocumentQuerySchema = listQuerySchema(
   },
 );
 
-const linkSchema = z.object({
+/** One document of a replacement chain, identified by more than its (possibly identical) title. */
+const versionSchema = z.object({
   id: z.uuid(),
+  reference: z.string(),
+  /** 1 for the first document of a chain, 2 for its replacement, and so on. */
+  revision: z.number().int().positive(),
   title: z.string(),
+  certificateNumber: z.string().nullable(),
   status: historicalDocumentStatusSchema,
   createdAt: z.iso.datetime(),
+  publishedAt: z.iso.datetime().nullable(),
+});
+
+/** What students receive. Images: a separate copy without embedded metadata; PDFs: the original. */
+const studentCopySchema = z.object({
+  status: z.enum(['READY', 'PENDING', 'NOT_REQUIRED']),
+  sizeBytes: z.number().int().nullable(),
+  sha256: z.string().nullable(),
+  createdAt: z.iso.datetime().nullable(),
 });
 
 export const historicalDocumentDetailSchema = historicalDocumentRowSchema
   .extend({
+    revision: z.number().int().positive(),
+    /** Searchable form of `certificateNumber` (see `normalizeCertificateNumber`); never displayed as the number. */
+    certificateNumberNormalized: z.string().nullable(),
+    studentCopy: studentCopySchema,
+    /** Kinds of metadata embedded in the uploaded image (`inspected` is false for PDFs and older uploads). */
+    embeddedMetadata: z.object({
+      inspected: z.boolean(),
+      categories: z.array(embeddedMetadataCategorySchema),
+    }),
     provenance: documentProvenanceSchema,
     provenanceNote: z.string().nullable(),
     legacySourceSystem: z.string().nullable(),
@@ -229,8 +315,10 @@ export const historicalDocumentDetailSchema = historicalDocumentRowSchema
     authenticityNote: z.string().nullable(),
     authenticityReviewedAt: z.iso.datetime().nullable(),
     authenticityReviewedBy: personSchema,
-    replaces: linkSchema.nullable(),
-    replacedBy: linkSchema.nullable(),
+    replaces: versionSchema.nullable(),
+    replacedBy: versionSchema.nullable(),
+    /** Every document of the replacement chain, oldest first (includes this one). */
+    versions: z.array(versionSchema),
     /** Other documents with the same certificate number (possible duplicates or misfiling). */
     sameNumberElsewhere: z.array(
       z.object({
@@ -247,6 +335,7 @@ export const historicalDocumentDetailSchema = historicalDocumentRowSchema
 export const studentDocumentSchema = z
   .object({
     id: z.uuid(),
+    reference: z.string(),
     documentType: historicalDocumentTypeSchema,
     title: z.string(),
     certificateNumber: z.string().nullable(),
@@ -258,6 +347,8 @@ export const studentDocumentSchema = z
     publishedAt: z.iso.datetime(),
     authenticity: documentAuthenticitySchema,
     authenticityReviewedAt: z.iso.datetime().nullable(),
+    /** False while the student copy of an image is still being prepared (no file is served yet). */
+    available: z.boolean(),
   })
   .meta({ id: 'StudentDocument' });
 
@@ -277,6 +368,9 @@ export type UpdateHistoricalDocumentInput = z.input<typeof updateHistoricalDocum
 export type WithdrawHistoricalDocument = z.infer<typeof withdrawHistoricalDocumentSchema>;
 export type ReviewAuthenticity = z.infer<typeof reviewAuthenticitySchema>;
 export type DocumentDisposition = z.infer<typeof documentDispositionSchema>;
+export type DocumentVariant = z.infer<typeof documentVariantSchema>;
+export type EmbeddedMetadataCategory = z.infer<typeof embeddedMetadataCategorySchema>;
+export type HistoricalDocumentVersion = HistoricalDocumentDetail['versions'][number];
 export type HistoricalDocumentRow = z.infer<typeof historicalDocumentRowSchema>;
 export type HistoricalDocumentList = z.infer<typeof historicalDocumentListSchema>;
 export type HistoricalDocumentQuery = z.infer<typeof historicalDocumentQuerySchema>;

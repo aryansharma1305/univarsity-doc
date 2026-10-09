@@ -23,6 +23,7 @@
     "db:check": "pnpm --filter @docversity/database run db:check",
     "db:status": "pnpm --filter @docversity/database run db:status",
     "admin:create": "turbo run build --filter=@docversity/api && pnpm --filter @docversity/api run admin:create",
+    "documents:backfill-student-copies": "turbo run build --filter=@docversity/api && pnpm --filter @docversity/api run documents:backfill-student-copies",
     "queue:check": "pnpm --filter @docversity/worker run queue:check",
     "clean": "turbo run clean && rm -rf node_modules/.cache"
   },

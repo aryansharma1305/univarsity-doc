@@ -1,6 +1,6 @@
 # ADR-0013: Historical documents are staff-managed evidence, separate from issued credentials
 
-- **Status:** Accepted
+- **Status:** Accepted (amended 2026-10-09 before merge — see Amendment 1)
 - **Date:** 2026-10-09
 
 ## Context
@@ -32,7 +32,36 @@ call these documents evidence, not trusted digital credentials.
 
 ## Consequences
 
-- Image metadata (EXIF) in uploaded scans is kept with the original; files are only shown to authorised
-  staff and their own student.
+- ~~Image metadata (EXIF) in uploaded scans is kept with the original; files are only shown to authorised
+  staff and their own student.~~ Superseded by amendment 1: the original keeps it (staff-only evidence),
+  students receive a copy without it.
 - Bulk migration of legacy documents (manifest + files) is future work on the import subsystem.
 - Withdrawn/superseded files stay in private storage indefinitely until a retention policy is agreed.
+
+## Amendment 1 (2026-10-09, pre-merge hardening)
+
+Manual acceptance showed that student downloads of image scans exposed embedded GPS coordinates, a camera
+serial number and a scanner operator's name, that certificate numbers were trimmed, and that a
+replacement with the same title was ambiguous.
+
+7. **Students receive a metadata-free copy of every image document; the original stays evidence.**
+   At upload (or via an idempotent backfill for older rows) a separate object is re-encoded from the
+   decoded pixels with `sharp`: orientation applied, sRGB, no resizing, JPEG quality 95 without chroma
+   subsampling (PNG lossless), DPI kept in JFIF/pHYs. It is verified at creation and on every read
+   (SHA-256 + a structural allow-list of JPEG segments/PNG chunks). Student endpoints serve only the copy
+   for images and never fall back to the original; the database refuses to publish an image without one
+   and freezes the copy once set. Staff see only the kinds of metadata found (location warning), never
+   values. _Rejected:_ lossless byte-level stripping of metadata segments (orientation would then need a
+   rewritten EXIF block, and unknown segments could survive); serving the original to students.
+8. **Certificate numbers have two forms.** The raw value is stored exactly as provided (invisible/control
+   characters are refused, not removed). A separate normalised column (NFKC, upper-case, letters and
+   digits) drives search and the same-number warning only.
+9. **Versions are identified by reference and revision**, not by title: every document has a short
+   reference (random tail of its UUIDv7) and a revision number within its replacement chain; the staff
+   detail lists the whole chain.
+
+Additional consequences: PDF documents are still delivered as uploaded; their document-information/XMP
+metadata and images embedded inside them are not sanitised (documented risk, decision pending). Rows
+created before the hardening migration keep their trimmed certificate numbers. Re-encoding JPEG once at
+q95 4:4:4 is visually lossless for scans (tests require ≥ 40 dB PSNR) but not bit-identical — the
+bit-identical file is the original, available to authorised staff.

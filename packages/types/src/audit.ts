@@ -59,6 +59,7 @@ export const AUDIT_ACTIONS = {
   historicalDocumentReplaced: 'HISTORICAL_DOCUMENT_REPLACED',
   historicalDocumentAuthenticityReviewed: 'HISTORICAL_DOCUMENT_AUTHENTICITY_REVIEWED',
   historicalDocumentDownloaded: 'HISTORICAL_DOCUMENT_DOWNLOADED',
+  historicalDocumentStudentCopyCreated: 'HISTORICAL_DOCUMENT_STUDENT_COPY_CREATED',
   studentProfileRequestSubmitted: 'STUDENT_PROFILE_REQUEST_SUBMITTED',
   studentProfileRequestCancelled: 'STUDENT_PROFILE_REQUEST_CANCELLED',
   studentProfileRequestApproved: 'STUDENT_PROFILE_REQUEST_APPROVED',

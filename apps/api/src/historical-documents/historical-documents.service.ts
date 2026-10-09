@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { type Prisma, uniqueConstraintName } from '@docversity/database';
 import { type ObjectStorage, ObjectNotFoundError, objectKeys } from '@docversity/storage';
@@ -6,11 +6,15 @@ import { AUDIT_ACTIONS, type AuditAction } from '@docversity/types';
 import {
   type ActivityItem,
   type DocumentDisposition,
+  type DocumentVariant,
+  documentReference,
   ERROR_CODES,
   type HistoricalDocumentDetail,
   type HistoricalDocumentList,
   type HistoricalDocumentQuery,
   type HistoricalDocumentRow,
+  type HistoricalDocumentVersion,
+  normalizeCertificateNumber,
   normalizeRegistrationNumber,
   type ReplaceHistoricalDocument,
   type ReviewAuthenticity,
@@ -28,6 +32,13 @@ import { PrismaService } from '../database/prisma.service.js';
 import { OBJECT_STORAGE } from '../storage/storage.module.js';
 import { inspectDocument, sniffContentType } from './document-file.js';
 import type { UploadedDocument } from './document-upload.interceptor.js';
+import {
+  assertNoEmbeddedMetadata,
+  createStudentCopy,
+  type ImageContentType,
+  type StudentCopy,
+  StudentCopyError,
+} from './student-copy.js';
 
 const ENTITY = 'HistoricalDocument';
 const ONE_FILE_INDEX = 'historical_documents_one_file_per_registration_key';
@@ -52,16 +63,24 @@ const detailInclude = {
   publishedBy: person,
   withdrawnBy: person,
   reviewedBy: person,
-  replaces: { select: { id: true, title: true, status: true, createdAt: true } },
-  replacements: {
-    where: { status: { not: 'WITHDRAWN' as const } },
-    select: { id: true, title: true, status: true, createdAt: true },
-    take: 1,
-  },
 } as const;
 
+/** Fields of one document in a replacement chain. */
+const versionSelect = {
+  id: true,
+  title: true,
+  certificateNumber: true,
+  status: true,
+  createdAt: true,
+  publishedAt: true,
+  replacesDocumentId: true,
+} as const;
+type VersionRecord = Prisma.HistoricalDocumentGetPayload<{ select: typeof versionSelect }>;
+
+/** Replacement chains are short; this bounds the walk if data were ever inconsistent. */
+const MAX_CHAIN = 100;
+
 type RowRecord = Prisma.HistoricalDocumentGetPayload<{ include: typeof rowInclude }>;
-type DetailRecord = Prisma.HistoricalDocumentGetPayload<{ include: typeof detailInclude }>;
 
 export interface DocumentFile {
   bytes: Uint8Array;
@@ -78,7 +97,11 @@ const SUMMARIES: Partial<Record<AuditAction, string>> = {
   HISTORICAL_DOCUMENT_REPLACED: 'Replaced by a newer document',
   HISTORICAL_DOCUMENT_AUTHENTICITY_REVIEWED: 'Authenticity reviewed',
   HISTORICAL_DOCUMENT_DOWNLOADED: 'Downloaded',
+  HISTORICAL_DOCUMENT_STUDENT_COPY_CREATED: 'Student copy created (embedded metadata removed)',
 };
+
+const isImage = (contentType: string): contentType is ImageContentType =>
+  contentType === 'image/jpeg' || contentType === 'image/png';
 
 /** Display-only file name: no path, no control characters, bounded length. */
 export function cleanFilename(name: string, fallback: string): string {
@@ -98,6 +121,8 @@ const EXTENSIONS: Record<string, string> = {
 function toRow(row: RowRecord): HistoricalDocumentRow {
   return {
     id: row.id,
+    reference: documentReference(row.id),
+    isReplacement: row.replacesDocumentId !== null,
     documentType: row.documentType,
     title: row.title,
     certificateNumber: row.certificateNumber,
@@ -122,20 +147,28 @@ function toRow(row: RowRecord): HistoricalDocumentRow {
   };
 }
 
-const link = (doc: {
-  id: string;
-  title: string;
-  status: DetailRecord['status'];
-  createdAt: Date;
-}) => ({
-  id: doc.id,
-  title: doc.title,
-  status: doc.status,
-  createdAt: doc.createdAt.toISOString(),
-});
-
 const notEditable = (message: string) =>
   new AppError(HttpStatus.CONFLICT, ERROR_CODES.documentNotEditable, message);
+
+const notReady = (message: string) =>
+  new AppError(HttpStatus.CONFLICT, ERROR_CODES.documentNotReady, message);
+
+const unavailable = () =>
+  new AppError(
+    HttpStatus.SERVICE_UNAVAILABLE,
+    ERROR_CODES.serviceUnavailable,
+    'The document is temporarily unavailable.',
+  );
+
+const sha256Of = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+
+/** The certificate number exactly as given plus its searchable form (both, or neither). */
+function certificateNumberFields(value: string | null | undefined) {
+  if (value === undefined) return {};
+  return value === null
+    ? { certificateNumber: null, certificateNumberNormalized: null }
+    : { certificateNumber: value, certificateNumberNormalized: normalizeCertificateNumber(value) };
+}
 
 /**
  * Phase 8: historical documents uploaded by staff for a registration and published to its student.
@@ -145,6 +178,8 @@ const notEditable = (message: string) =>
  */
 @Injectable()
 export class HistoricalDocumentsService {
+  private readonly logger = new Logger(HistoricalDocumentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -167,6 +202,15 @@ export class HistoricalDocumentsService {
               OR: [
                 { title: { contains: query.search, mode: 'insensitive' } },
                 { certificateNumber: { contains: query.search, mode: 'insensitive' } },
+                ...(normalizeCertificateNumber(query.search)
+                  ? [
+                      {
+                        certificateNumberNormalized: {
+                          contains: normalizeCertificateNumber(query.search),
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   registration: {
                     registrationNumberNormalized: {
@@ -200,23 +244,73 @@ export class HistoricalDocumentsService {
     return { data: rows.map(toRow), meta: paginationMeta(query, total) };
   }
 
+  /**
+   * The whole replacement chain of a document (oldest first) with revision numbers: the first
+   * document of a chain is revision 1, its replacement revision 2, and so on. A withdrawn
+   * replacement attempt keeps its revision number; references tell same-numbered attempts apart.
+   */
+  private async versions(
+    docId: string,
+    replacesId: string | null,
+  ): Promise<(HistoricalDocumentVersion & { parentId: string | null })[]> {
+    let rootId = docId;
+    let parent = replacesId;
+    for (let steps = 0; parent && steps < MAX_CHAIN; steps += 1) {
+      rootId = parent;
+      const up = await this.prisma.client.historicalDocument.findUnique({
+        where: { id: parent },
+        select: { replacesDocumentId: true },
+      });
+      parent = up?.replacesDocumentId ?? null;
+    }
+    const root = await this.prisma.client.historicalDocument.findUnique({
+      where: { id: rootId },
+      select: versionSelect,
+    });
+    if (!root) return [];
+    const collected: { record: VersionRecord; revision: number }[] = [
+      { record: root, revision: 1 },
+    ];
+    let frontier = [root.id];
+    for (let revision = 2; frontier.length > 0 && revision <= MAX_CHAIN; revision += 1) {
+      const children = await this.prisma.client.historicalDocument.findMany({
+        where: { replacesDocumentId: { in: frontier } },
+        select: versionSelect,
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+      collected.push(...children.map((record) => ({ record, revision })));
+      frontier = children.map((child) => child.id);
+    }
+    return collected.map(({ record, revision }) => ({
+      id: record.id,
+      reference: documentReference(record.id),
+      revision,
+      title: record.title,
+      certificateNumber: record.certificateNumber,
+      status: record.status,
+      createdAt: record.createdAt.toISOString(),
+      publishedAt: record.publishedAt?.toISOString() ?? null,
+      parentId: record.replacesDocumentId,
+    }));
+  }
+
   async detail(id: string): Promise<HistoricalDocumentDetail> {
     const doc = await this.prisma.client.historicalDocument.findUnique({
       where: { id },
       include: detailInclude,
     });
     if (!doc) throw Errors.notFound();
-    const [history, sameNumber] = await Promise.all([
+    const [history, sameNumber, versions] = await Promise.all([
       this.prisma.client.auditLog.findMany({
         where: { entityType: ENTITY, entityId: id },
         orderBy: { createdAt: 'asc' },
         include: { actor: { select: { displayName: true } } },
         take: 100,
       }),
-      doc.certificateNumber
+      doc.certificateNumberNormalized
         ? this.prisma.client.historicalDocument.findMany({
             where: {
-              certificateNumber: { equals: doc.certificateNumber, mode: 'insensitive' },
+              certificateNumberNormalized: doc.certificateNumberNormalized,
               id: { not: id },
               studentRegistrationId: { not: doc.studentRegistrationId },
             },
@@ -228,10 +322,34 @@ export class HistoricalDocumentsService {
             take: 10,
           })
         : Promise.resolve([]),
+      this.versions(doc.id, doc.replacesDocumentId),
     ]);
-    const replacement = doc.replacements[0];
+    const chain = versions.map(({ parentId, ...version }) => ({ version, parentId }));
+    const self = chain.find(({ version }) => version.id === doc.id)?.version;
+    const replaces = chain.find(({ version }) => version.id === doc.replacesDocumentId)?.version;
+    // The live (non-withdrawn) direct replacement; at most one exists (unique index).
+    const replacedBy = chain.find(
+      ({ version, parentId }) => parentId === doc.id && version.status !== 'WITHDRAWN',
+    )?.version;
+    const image = isImage(doc.contentType);
     return {
       ...toRow(doc),
+      revision: self?.revision ?? 1,
+      certificateNumberNormalized: doc.certificateNumberNormalized,
+      studentCopy: !image
+        ? { status: 'NOT_REQUIRED', sizeBytes: null, sha256: null, createdAt: null }
+        : doc.studentCopyStorageKey
+          ? {
+              status: 'READY',
+              sizeBytes: doc.studentCopySizeBytes,
+              sha256: doc.studentCopySha256,
+              createdAt: doc.studentCopyCreatedAt?.toISOString() ?? null,
+            }
+          : { status: 'PENDING', sizeBytes: null, sha256: null, createdAt: null },
+      embeddedMetadata: {
+        inspected: image && doc.studentCopyStorageKey !== null,
+        categories: doc.embeddedMetadata,
+      },
       provenance: doc.provenance,
       provenanceNote: doc.provenanceNote,
       legacySourceSystem: doc.legacySourceSystem,
@@ -245,8 +363,9 @@ export class HistoricalDocumentsService {
       authenticityNote: doc.authenticityNote,
       authenticityReviewedAt: doc.authenticityReviewedAt?.toISOString() ?? null,
       authenticityReviewedBy: doc.reviewedBy,
-      replaces: doc.replaces ? link(doc.replaces) : null,
-      replacedBy: replacement ? link(replacement) : null,
+      replaces: replaces ?? null,
+      replacedBy: replacedBy ?? null,
+      versions: chain.map(({ version }) => version),
       sameNumberElsewhere: sameNumber.map((other) => ({
         id: other.id,
         registrationNumber: other.registration.registrationNumber,
@@ -256,7 +375,12 @@ export class HistoricalDocumentsService {
         id: entry.id,
         action: entry.action,
         summary: SUMMARIES[entry.action as AuditAction] ?? entry.action,
-        actor: entry.actor?.displayName ?? (entry.actorUserId ? null : 'Student'),
+        // Student downloads carry no staff actor; other actor-less entries are system steps.
+        actor:
+          entry.actor?.displayName ??
+          (entry.actorUserId === null && entry.action === AUDIT_ACTIONS.historicalDocumentDownloaded
+            ? 'Student'
+            : null),
         createdAt: entry.createdAt.toISOString(),
       })),
     };
@@ -266,6 +390,11 @@ export class HistoricalDocumentsService {
   // Staff: upload, replace, edit
   // ------------------------------------------------------------------------------------------
 
+  /**
+   * Validates the upload, prepares the student copy of an image (before anything is stored, so a
+   * failure stores nothing), then stores the untouched original and the copy as separate private
+   * objects. Returns the database fields for both.
+   */
   private async storeFile(registrationId: string, file: UploadedDocument | undefined) {
     if (!file || file.size === 0) {
       throw Errors.validation([{ path: 'file', message: 'Choose a PDF, JPEG or PNG document.' }]);
@@ -276,10 +405,34 @@ export class HistoricalDocumentsService {
       file.buffer.byteLength,
     );
     const inspected = await inspectDocument(bytes, file.mimetype);
+    let copy: StudentCopy | null = null;
+    if (isImage(inspected.contentType)) {
+      try {
+        copy = await createStudentCopy(bytes, inspected.contentType);
+      } catch (error) {
+        if (!(error instanceof StudentCopyError)) throw error;
+        throw new AppError(
+          HttpStatus.BAD_REQUEST,
+          ERROR_CODES.unsupportedFile,
+          'The scan could not be prepared for students. Upload a standard JPEG or PNG scan.',
+          { details: [{ path: 'file', message: 'The scan could not be prepared for students.' }] },
+        );
+      }
+    }
     const key = objectKeys.historicalDocument(registrationId, inspected.extension);
+    const copyKey = copy
+      ? objectKeys.historicalDocumentStudentCopy(registrationId, copy.extension)
+      : null;
+    const stored: string[] = [];
     try {
       await this.storage.putObject(key, bytes, { contentType: inspected.contentType });
+      stored.push(key);
+      if (copy && copyKey) {
+        await this.storage.putObject(copyKey, copy.bytes, { contentType: copy.contentType });
+        stored.push(copyKey);
+      }
     } catch {
+      await this.deleteObjects(stored);
       throw new AppError(
         HttpStatus.SERVICE_UNAVAILABLE,
         ERROR_CODES.serviceUnavailable,
@@ -287,20 +440,37 @@ export class HistoricalDocumentsService {
       );
     }
     return {
-      key,
-      contentType: inspected.contentType,
-      sizeBytes: bytes.byteLength,
-      sha256: createHash('sha256').update(bytes).digest('hex'),
-      originalFilename: cleanFilename(file.originalname, `document.${inspected.extension}`),
+      keys: stored,
+      fields: {
+        storageKey: key,
+        contentType: inspected.contentType,
+        sizeBytes: bytes.byteLength,
+        sha256: sha256Of(bytes),
+        originalFilename: cleanFilename(file.originalname, `document.${inspected.extension}`),
+        ...(copy && copyKey
+          ? {
+              studentCopyStorageKey: copyKey,
+              studentCopyContentType: copy.contentType,
+              studentCopySizeBytes: copy.sizeBytes,
+              studentCopySha256: copy.sha256,
+              studentCopyCreatedAt: new Date(),
+              embeddedMetadata: copy.embeddedMetadata,
+            }
+          : {}),
+      },
     };
   }
 
-  /** Maps unique-index violations to clear conflicts and removes the just-stored object. */
-  private async recordOrCleanUp<T>(key: string, write: () => Promise<T>): Promise<T> {
+  private async deleteObjects(keys: string[]): Promise<void> {
+    await Promise.all(keys.map((key) => this.storage.deleteObject(key).catch(() => undefined)));
+  }
+
+  /** Maps unique-index violations to clear conflicts and removes the just-stored objects. */
+  private async recordOrCleanUp<T>(keys: string[], write: () => Promise<T>): Promise<T> {
     try {
       return await write();
     } catch (error) {
-      await this.storage.deleteObject(key).catch(() => undefined);
+      await this.deleteObjects(keys);
       const index = uniqueConstraintName(error);
       if (index === ONE_FILE_INDEX) {
         throw new AppError(
@@ -317,6 +487,23 @@ export class HistoricalDocumentsService {
     }
   }
 
+  /** Audit metadata of a stored upload: IDs, sizes, hashes and metadata KINDS — never values. */
+  private uploadAudit(
+    fields: Awaited<ReturnType<HistoricalDocumentsService['storeFile']>>['fields'],
+  ) {
+    return {
+      contentType: fields.contentType,
+      sizeBytes: fields.sizeBytes,
+      sha256: fields.sha256,
+      ...(fields.studentCopySha256
+        ? {
+            studentCopySha256: fields.studentCopySha256,
+            embeddedMetadata: fields.embeddedMetadata ?? [],
+          }
+        : {}),
+    };
+  }
+
   async upload(
     input: UploadHistoricalDocument,
     file: UploadedDocument | undefined,
@@ -330,7 +517,7 @@ export class HistoricalDocumentsService {
       throw invalidRelation('studentRegistrationId', 'Choose an existing registration.');
     }
     const stored = await this.storeFile(registration.id, file);
-    const id = await this.recordOrCleanUp(stored.key, () =>
+    const id = await this.recordOrCleanUp(stored.keys, () =>
       this.prisma.client.$transaction(async (tx) => {
         const doc = await tx.historicalDocument.create({
           data: {
@@ -339,11 +526,7 @@ export class HistoricalDocumentsService {
             title: input.title,
             provenance: input.provenance,
             ...this.metadata(input),
-            storageKey: stored.key,
-            contentType: stored.contentType,
-            sizeBytes: stored.sizeBytes,
-            sha256: stored.sha256,
-            originalFilename: stored.originalFilename,
+            ...stored.fields,
             uploadedByUserId: actorUserId,
           },
         });
@@ -357,9 +540,7 @@ export class HistoricalDocumentsService {
               registrationId: registration.id,
               registrationNumber: registration.registrationNumber,
               documentType: doc.documentType,
-              contentType: stored.contentType,
-              sizeBytes: stored.sizeBytes,
-              sha256: stored.sha256,
+              ...this.uploadAudit(stored.fields),
             },
           },
           tx,
@@ -374,9 +555,7 @@ export class HistoricalDocumentsService {
     return {
       ...(input.documentType !== undefined ? { documentType: input.documentType } : {}),
       ...(input.title !== undefined ? { title: input.title } : {}),
-      ...(input.certificateNumber !== undefined
-        ? { certificateNumber: input.certificateNumber }
-        : {}),
+      ...certificateNumberFields(input.certificateNumber),
       ...(input.issuedOn !== undefined ? { issuedOn: fromDateOnly(input.issuedOn) ?? null } : {}),
       ...(input.provenance !== undefined ? { provenance: input.provenance } : {}),
       ...(input.provenanceNote !== undefined
@@ -416,7 +595,7 @@ export class HistoricalDocumentsService {
       );
     }
     const stored = await this.storeFile(original.studentRegistrationId, file);
-    const id = await this.recordOrCleanUp(stored.key, () =>
+    const id = await this.recordOrCleanUp(stored.keys, () =>
       this.prisma.client.$transaction(async (tx) => {
         const doc = await tx.historicalDocument.create({
           data: {
@@ -424,6 +603,7 @@ export class HistoricalDocumentsService {
             documentType: original.documentType,
             title: original.title,
             certificateNumber: original.certificateNumber,
+            certificateNumberNormalized: original.certificateNumberNormalized,
             issuedOn: original.issuedOn,
             provenance: original.provenance,
             provenanceNote: original.provenanceNote,
@@ -431,11 +611,7 @@ export class HistoricalDocumentsService {
             legacyRecordId: original.legacyRecordId,
             legacyVerificationUrl: original.legacyVerificationUrl,
             ...this.metadata(input),
-            storageKey: stored.key,
-            contentType: stored.contentType,
-            sizeBytes: stored.sizeBytes,
-            sha256: stored.sha256,
-            originalFilename: stored.originalFilename,
+            ...stored.fields,
             uploadedByUserId: actorUserId,
             replacesDocumentId: original.id,
           },
@@ -449,9 +625,7 @@ export class HistoricalDocumentsService {
             metadata: {
               registrationId: original.studentRegistrationId,
               replacesDocumentId: original.id,
-              contentType: stored.contentType,
-              sizeBytes: stored.sizeBytes,
-              sha256: stored.sha256,
+              ...this.uploadAudit(stored.fields),
             },
           },
           tx,
@@ -525,6 +699,11 @@ export class HistoricalDocumentsService {
       const doc = await this.lock(tx, id);
       if (doc.status !== 'DRAFT' && doc.status !== 'WITHDRAWN') {
         throw notEditable(`This document is already ${doc.status.toLowerCase()}.`);
+      }
+      if (isImage(doc.contentType) && !doc.studentCopyStorageKey) {
+        throw notReady(
+          'This scan does not have its student copy yet (embedded metadata removed), so it cannot be published. Run the student-copy backfill, then publish.',
+        );
       }
       const liveReplacement = await tx.historicalDocument.findFirst({
         where: { replacesDocumentId: id, status: { not: 'WITHDRAWN' } },
@@ -653,49 +832,111 @@ export class HistoricalDocumentsService {
   // Files
   // ------------------------------------------------------------------------------------------
 
-  private async read(
+  private async readObject(key: string): Promise<Uint8Array> {
+    try {
+      return await this.storage.getObject(key, { maxBytes: MAX_READ_BYTES });
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) throw Errors.notFound();
+      throw unavailable();
+    }
+  }
+
+  private fileOf(
+    id: string,
+    bytes: Uint8Array,
+    contentType: string,
+    disposition: DocumentDisposition,
+  ): DocumentFile {
+    return {
+      bytes,
+      contentType,
+      // The random tail of the UUIDv7 (same as the display reference); never the uploaded name.
+      filename: `historical-document-${id.replace(/-/g, '').slice(-8)}.${EXTENSIONS[contentType] ?? 'bin'}`,
+      disposition,
+    };
+  }
+
+  /** The evidential original exactly as uploaded (staff only). */
+  private async original(
+    doc: { id: string; storageKey: string; contentType: string },
+    disposition: DocumentDisposition,
+  ): Promise<DocumentFile> {
+    const bytes = await this.readObject(doc.storageKey);
+    // Serve only what the stored bytes really are (defence in depth against a tampered object).
+    if (sniffContentType(bytes) !== doc.contentType) throw Errors.notFound();
+    return this.fileOf(doc.id, bytes, doc.contentType, disposition);
+  }
+
+  /**
+   * What a student receives: for images ONLY the metadata-free student copy, checked against its
+   * recorded checksum and the structural allow-list on every read; for PDFs the original, checked
+   * against its checksum. There is no fallback: a missing copy is "not ready" (409), a missing or
+   * altered object is an error — the original image is never served in its place.
+   */
+  private async studentDelivery(
     doc: {
       id: string;
       storageKey: string;
       contentType: string;
+      sha256: string;
+      studentCopyStorageKey: string | null;
+      studentCopyContentType: string | null;
+      studentCopySha256: string | null;
     },
     disposition: DocumentDisposition,
   ): Promise<DocumentFile> {
+    if (!isImage(doc.contentType)) {
+      const bytes = await this.readObject(doc.storageKey);
+      if (sha256Of(bytes) !== doc.sha256 || sniffContentType(bytes) !== doc.contentType) {
+        this.logger.error(`Integrity check failed for historical document ${doc.id} (original)`);
+        throw unavailable();
+      }
+      return this.fileOf(doc.id, bytes, doc.contentType, disposition);
+    }
+    if (!doc.studentCopyStorageKey || !doc.studentCopySha256 || !doc.studentCopyContentType) {
+      throw notReady('This document is still being prepared for viewing. Please try again later.');
+    }
     let bytes: Uint8Array;
     try {
-      bytes = await this.storage.getObject(doc.storageKey, { maxBytes: MAX_READ_BYTES });
-    } catch (error) {
-      if (error instanceof ObjectNotFoundError) throw Errors.notFound();
-      throw new AppError(
-        HttpStatus.SERVICE_UNAVAILABLE,
-        ERROR_CODES.serviceUnavailable,
-        'The document is temporarily unavailable.',
-      );
+      bytes = await this.storage.getObject(doc.studentCopyStorageKey, { maxBytes: MAX_READ_BYTES });
+    } catch {
+      this.logger.error(`Student copy of historical document ${doc.id} could not be read`);
+      throw unavailable();
     }
-    // Serve only what the stored bytes really are (defence in depth against a tampered object).
-    if (sniffContentType(bytes) !== doc.contentType) throw Errors.notFound();
-    return {
-      bytes,
-      contentType: doc.contentType,
-      filename: `historical-document-${doc.id.slice(0, 8)}.${EXTENSIONS[doc.contentType] ?? 'bin'}`,
-      disposition,
-    };
+    try {
+      if (sha256Of(bytes) !== doc.studentCopySha256)
+        throw new StudentCopyError('checksum mismatch');
+      if (sniffContentType(bytes) !== doc.studentCopyContentType) {
+        throw new StudentCopyError('unexpected content type');
+      }
+      assertNoEmbeddedMetadata(bytes, doc.studentCopyContentType as ImageContentType);
+    } catch (error) {
+      this.logger.error(
+        `Student copy of historical document ${doc.id} failed its check: ${(error as Error).message}`,
+      );
+      throw unavailable();
+    }
+    return this.fileOf(doc.id, bytes, doc.studentCopyContentType, disposition);
   }
 
   async staffFile(
     id: string,
     disposition: DocumentDisposition,
+    variant: DocumentVariant,
     actorUserId: string,
   ): Promise<DocumentFile> {
     const doc = await this.prisma.client.historicalDocument.findUnique({ where: { id } });
     if (!doc) throw Errors.notFound();
-    const file = await this.read(doc, disposition);
+    const file =
+      variant === 'original'
+        ? await this.original(doc, disposition)
+        : await this.studentDelivery(doc, disposition);
     await this.audit.writeAuditEvent({
       actorUserId,
       action: AUDIT_ACTIONS.historicalDocumentDownloaded,
       entityType: ENTITY,
       entityId: id,
-      metadata: { principal: 'staff', disposition },
+      metadata: { principal: 'staff', disposition, variant },
     });
     return file;
   }
@@ -718,20 +959,26 @@ export class HistoricalDocumentsService {
       orderBy: [{ issuedOn: { sort: 'desc', nulls: 'last' } }, { publishedAt: 'desc' }],
     });
     return {
-      data: docs.map((doc) => ({
-        id: doc.id,
-        documentType: doc.documentType,
-        title: doc.title,
-        certificateNumber: doc.certificateNumber,
-        issuedOn: toDateOnly(doc.issuedOn),
-        registrationNumber: doc.registration.registrationNumber,
-        program: doc.registration.program,
-        contentType: doc.contentType as 'application/pdf',
-        sizeBytes: doc.sizeBytes,
-        publishedAt: (doc.publishedAt ?? doc.createdAt).toISOString(),
-        authenticity: doc.authenticity,
-        authenticityReviewedAt: doc.authenticityReviewedAt?.toISOString() ?? null,
-      })),
+      data: docs.map((doc) => {
+        const image = isImage(doc.contentType);
+        return {
+          id: doc.id,
+          reference: documentReference(doc.id),
+          documentType: doc.documentType,
+          title: doc.title,
+          certificateNumber: doc.certificateNumber,
+          issuedOn: toDateOnly(doc.issuedOn),
+          registrationNumber: doc.registration.registrationNumber,
+          program: doc.registration.program,
+          contentType: doc.contentType as 'application/pdf',
+          // The size of the file the student receives (the copy, for images).
+          sizeBytes: image ? (doc.studentCopySizeBytes ?? doc.sizeBytes) : doc.sizeBytes,
+          publishedAt: (doc.publishedAt ?? doc.createdAt).toISOString(),
+          authenticity: doc.authenticity,
+          authenticityReviewedAt: doc.authenticityReviewedAt?.toISOString() ?? null,
+          available: !image || doc.studentCopyStorageKey !== null,
+        };
+      }),
     };
   }
 
@@ -746,13 +993,13 @@ export class HistoricalDocumentsService {
       where: { id, status: 'PUBLISHED', registration: { studentId } },
     });
     if (!doc) throw Errors.notFound();
-    const file = await this.read(doc, disposition);
+    const file = await this.studentDelivery(doc, disposition);
     await this.audit.writeAuditEvent({
       actorUserId: null,
       action: AUDIT_ACTIONS.historicalDocumentDownloaded,
       entityType: ENTITY,
       entityId: id,
-      metadata: { principal: 'student', studentId, accountId, disposition },
+      metadata: { principal: 'student', studentId, accountId, disposition, variant: 'student' },
     });
     return file;
   }

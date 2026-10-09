@@ -15,9 +15,16 @@ export const documentKeys = {
   detail: (id: string) => ['historical-documents', 'detail', id] as const,
 };
 
-/** Same-origin file URL; the API checks the staff permission and audits every access. */
-export function documentFileUrl(id: string, disposition: 'inline' | 'attachment') {
-  return `/api/v1/historical-documents/${id}/file?disposition=${disposition}`;
+/**
+ * Same-origin file URL; the API checks the staff permission and audits every access. `original` is
+ * the evidential upload; `student` is exactly what the student receives.
+ */
+export function documentFileUrl(
+  id: string,
+  disposition: 'inline' | 'attachment',
+  variant: 'original' | 'student' = 'original',
+) {
+  return `/api/v1/historical-documents/${id}/file?disposition=${disposition}&variant=${variant}`;
 }
 
 /** Multipart body: text fields (empty values omitted) plus the file. */

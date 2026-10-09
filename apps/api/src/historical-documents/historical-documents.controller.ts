@@ -30,6 +30,8 @@ import { PERMISSIONS } from '@docversity/types';
 import {
   type DocumentDisposition,
   documentDispositionSchema,
+  type DocumentVariant,
+  documentVariantSchema,
   errorResponseSchema,
   type HistoricalDocumentDetail,
   historicalDocumentDetailSchema,
@@ -271,17 +273,25 @@ export class HistoricalDocumentsController {
 
   @Get(':id/file')
   @RequirePermissions(PERMISSIONS.historicalDocumentsRead)
-  @ApiOperation({ summary: 'Preview (inline) or download (attachment) the original file; audited' })
+  @ApiOperation({
+    summary: 'Preview (inline) or download (attachment) a document file; audited',
+    description:
+      '`variant=original` (default): the evidential original exactly as uploaded. `variant=student`: exactly what the student receives — for images the separate copy without embedded metadata (409 DOCUMENT_NOT_READY until it exists), for PDFs the original.',
+  })
   @ApiQuery({ name: 'disposition', enum: ['inline', 'attachment'], required: false })
+  @ApiQuery({ name: 'variant', enum: ['original', 'student'], required: false })
   @ApiProduces('application/pdf', 'image/jpeg', 'image/png')
+  @ApiResponse({ status: 409, description: 'Student copy not created yet', ...error })
   async file(
     @CurrentAuth() auth: AuthContext,
     @Param('id', UuidParamPipe) id: string,
     @Query('disposition', new ZodValidationPipe(documentDispositionSchema))
     disposition: DocumentDisposition,
+    @Query('variant', new ZodValidationPipe(documentVariantSchema))
+    variant: DocumentVariant,
     @Res({ passthrough: true }) res: Response,
   ): Promise<StreamableFile> {
-    return send(res, await this.service.staffFile(id, disposition, auth.user.id));
+    return send(res, await this.service.staffFile(id, disposition, variant, auth.user.id));
   }
 }
 
@@ -306,13 +316,19 @@ export class StudentDocumentsController {
 
   @Get(':id/file')
   @ApiOperation({
-    summary: 'Preview or download one of the student’s published documents; audited',
+    summary:
+      'Preview or download one of the student’s published documents (images: the copy without embedded metadata); audited',
   })
   @ApiQuery({ name: 'disposition', enum: ['inline', 'attachment'], required: false })
   @ApiProduces('application/pdf', 'image/jpeg', 'image/png')
   @ApiResponse({
     status: 404,
     description: 'Not found, not published, or not this student’s',
+    ...error,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'The metadata-free copy of an image is still being prepared (nothing is served)',
     ...error,
   })
   async file(

@@ -27,7 +27,7 @@ import { Field, SelectField } from '@/components/forms/fields';
 import { applyServerErrors } from '@/components/forms/server-errors';
 import { ApiError, errorMessage } from '@/lib/api';
 import { documentForm, documentsApi, useDocumentMutation } from './api';
-import { PROVENANCE_OPTIONS, TYPE_OPTIONS } from './labels';
+import { PROVENANCE_OPTIONS, TYPE_OPTIONS, versionLabel } from './labels';
 import { checkDocumentFile } from './upload-view';
 
 interface DialogProps {
@@ -85,8 +85,11 @@ export function PublishDialog({ document, open, onOpenChange }: DialogProps) {
             {document.student.fullName} ({document.registration.registrationNumber}) will be able to
             view and download it in their document library.
             {document.replaces?.status === 'PUBLISHED'
-              ? ' The document it replaces will be marked superseded and hidden from the student.'
+              ? ` The document it replaces (${versionLabel(document.replaces)}) will be marked superseded and hidden from the student.`
               : ''}{' '}
+            {document.studentCopy.status === 'READY'
+              ? 'The student receives a copy of the scan with embedded metadata (such as location or device details) removed; the original stays unchanged for staff. '
+              : ''}
             Publishing does not confirm authenticity.
           </DialogDescription>
         </DialogHeader>
@@ -456,8 +459,9 @@ function ReplaceForm({
             documentForm(
               {
                 ...(title.trim() !== document.title ? { title: title.trim() } : {}),
-                ...(number.trim() !== (document.certificateNumber ?? '')
-                  ? { certificateNumber: number.trim() }
+                // Sent exactly as typed: certificate numbers are never trimmed or rewritten.
+                ...(number !== (document.certificateNumber ?? '')
+                  ? { certificateNumber: number }
                   : {}),
               },
               file,

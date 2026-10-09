@@ -34,6 +34,7 @@ export const ERROR_CODES = {
   notFound: 'NOT_FOUND',
   conflict: 'CONFLICT',
   documentNotEditable: 'DOCUMENT_NOT_EDITABLE',
+  documentNotReady: 'DOCUMENT_NOT_READY',
   curriculumNotEditable: 'CURRICULUM_NOT_EDITABLE',
   curriculumOverlap: 'CURRICULUM_OVERLAP',
   profileRequestPending: 'PROFILE_REQUEST_PENDING',

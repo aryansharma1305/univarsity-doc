@@ -148,7 +148,7 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261011090000_course_curriculum_management`, `20261011093000_curriculum_history_guards`,
   `20261011094000_preserve_assignment_delete_restrict`,
   `20261011100000_curriculum_activation_period_bounds` (Phase 7B),
-  `20261012090000_historical_documents` (Phase 8).
+  `20261012090000_historical_documents`, `20261013090000_historical_document_hardening` (Phase 8).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -211,7 +211,12 @@ Staff upload historic certificates/marksheets (PDF/JPEG/PNG, content-checked, or
 SHA-256) for one registration at `/admin/historical-documents`; students see only their own PUBLISHED
 documents at `/student/documents` and can never upload or change them. Lifecycle DRAFT → PUBLISHED →
 WITHDRAWN/SUPERSEDED, never deleted; corrections are replacements. Authenticity review is separate and
-never by the uploader. Details: [docs/api/historical-documents.md](docs/api/historical-documents.md), ADR-0013.
+never by the uploader. Image scans keep their original bytes as staff-only evidence; students only ever
+receive a separate copy re-encoded without embedded metadata (EXIF/GPS/XMP/IPTC/text), checked on every
+read — never the original. Older image rows get their copy with `pnpm documents:backfill-student-copies`
+(idempotent; `--dry-run`) and cannot be published until then. Certificate numbers are stored exactly as
+given, with a normalised form (NFKC, upper-case, letters/digits) for search and duplicate warnings.
+Details: [docs/api/historical-documents.md](docs/api/historical-documents.md), ADR-0013.
 
 ## 11. Student import workflow (Phase 5)
 

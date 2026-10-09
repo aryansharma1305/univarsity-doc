@@ -1,4 +1,10 @@
-import { DownloadIcon, ExternalLinkIcon, FileTextIcon, ShieldCheckIcon } from 'lucide-react';
+import {
+  ClockIcon,
+  DownloadIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
+  ShieldCheckIcon,
+} from 'lucide-react';
 import {
   AUTHENTICITY_LABELS,
   HISTORICAL_DOCUMENT_TYPE_LABELS,
@@ -37,7 +43,10 @@ function DocumentCard({ document }: { document: StudentDocument }) {
         </span>
         <div className="min-w-0">
           <h2 className="text-base font-semibold break-words text-navy-950">{document.title}</h2>
-          <p className="text-meta">{HISTORICAL_DOCUMENT_TYPE_LABELS[document.documentType]}</p>
+          <p className="text-meta">
+            {HISTORICAL_DOCUMENT_TYPE_LABELS[document.documentType]} ·{' '}
+            <span className="tabular">Ref {document.reference}</span>
+          </p>
         </div>
       </div>
       <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
@@ -75,29 +84,36 @@ function DocumentCard({ document }: { document: StudentDocument }) {
             : 'This is a copy of a previously issued document held by the university. It has not been separately checked against records.'}
         </p>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-        <span className="text-meta">{fileLabel(document)}</span>
-        <div className="flex flex-wrap gap-2">
-          <a
-            href={fileUrl(document.id, 'inline')}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`Preview ${document.title} (opens in a new tab)`}
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-navy-950 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            <ExternalLinkIcon aria-hidden="true" className="size-4" />
-            Preview
-          </a>
-          <a
-            href={fileUrl(document.id, 'attachment')}
-            aria-label={`Download ${document.title}`}
-            className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            <DownloadIcon aria-hidden="true" className="size-4" />
-            Download
-          </a>
+      {document.available ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <span className="text-meta">{fileLabel(document)}</span>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={fileUrl(document.id, 'inline')}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Preview ${document.title} (opens in a new tab)`}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-navy-950 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <ExternalLinkIcon aria-hidden="true" className="size-4" />
+              Preview
+            </a>
+            <a
+              href={fileUrl(document.id, 'attachment')}
+              aria-label={`Download ${document.title}`}
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <DownloadIcon aria-hidden="true" className="size-4" />
+              Download
+            </a>
+          </div>
         </div>
-      </div>
+      ) : (
+        <p className="flex gap-2 border-t border-border pt-4 text-sm text-navy-950">
+          <ClockIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          This document is being prepared for viewing. Please check again later.
+        </p>
+      )}
     </article>
   );
 }
