@@ -197,3 +197,14 @@ describe('historical documents (Phase 8)', () => {
     }
   });
 });
+
+describe('examinations (Phase 9A)', () => {
+  it('lets every staff role read examination records but only EXAM_ADMIN (and SUPER_ADMIN) manage them', () => {
+    for (const [role, permissions] of Object.entries(ROLE_PERMISSIONS)) {
+      expect(permissions.includes(PERMISSIONS.examinationsRead), role).toBe(true);
+      expect(permissions.includes(PERMISSIONS.examinationsManage), role).toBe(
+        role === ROLE_NAMES.superAdmin || role === ROLE_NAMES.examAdmin,
+      );
+    }
+  });
+});

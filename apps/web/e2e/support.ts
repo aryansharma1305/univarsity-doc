@@ -22,6 +22,10 @@ export interface E2EFixtures {
   };
   /** Students with active portal accounts (random passwords) for profile request tests. */
   profileStudents: StudentAccount[];
+  /** Phase 9: EXAM_ADMIN, a year-wise course and two students of it with portal accounts. */
+  examAdmin: Account;
+  examStudents: (StudentAccount & { registrationId: string })[];
+  examProgram: { id: string; code: string; sessionId: string };
 }
 
 export interface StudentAccount {

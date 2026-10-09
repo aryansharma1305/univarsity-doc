@@ -2,6 +2,7 @@ import type { Permission } from '@docversity/types';
 import { PERMISSIONS } from '@docversity/types';
 import {
   BuildingIcon,
+  ClipboardCheckIcon,
   CalendarRangeIcon,
   FileSpreadsheetIcon,
   GraduationCapIcon,
@@ -22,6 +23,7 @@ export interface AdminNavItem {
     | '/admin/student-accounts'
     | '/admin/profile-requests'
     | '/admin/historical-documents'
+    | '/admin/examinations'
     | '/admin/programs'
     | '/admin/subjects'
     | '/admin/departments'
@@ -69,6 +71,12 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     permission: PERMISSIONS.historicalDocumentsRead,
   },
   {
+    href: '/admin/examinations',
+    label: 'Examinations',
+    icon: ClipboardCheckIcon,
+    permission: PERMISSIONS.examinationsRead,
+  },
+  {
     href: '/admin/programs',
     label: 'Course Management',
     icon: GraduationCapIcon,
@@ -107,6 +115,8 @@ export const SEGMENT_LABELS: Record<string, string> = {
   'profile-requests': 'Profile Requests',
   'historical-documents': 'Historical Certificates',
   'historical-documents/new': 'Upload',
+  examinations: 'Examinations',
+  'examinations/application': 'Examination application',
   // Context-specific labels: "<parent>/<segment>"; "<parent>/*" labels an id segment in the trail.
   'programs/*': 'Course',
   'students/new': 'New student',

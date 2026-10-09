@@ -87,7 +87,8 @@ test('a student activates with a university code, sees only their own record, si
   for (const [label, route, heading] of [
     ['My Profile', '/student/profile', 'My Profile'],
     ['Course Details', '/student/course', 'Course Details'],
-    ['Examinations & Results', '/student/results', 'Examinations & Results'],
+    ['Examinations', '/student/examinations', 'Examinations'],
+    ['Results', '/student/results', 'Results'],
     ['My Documents', '/student/documents', 'My Documents'],
     ['Notifications', '/student/notifications', 'Notifications'],
     ['Account Settings', '/student/settings', 'Account Settings'],
@@ -132,6 +133,7 @@ test('a student activates with a university code, sees only their own record, si
   for (const route of [
     '/student/profile',
     '/student/course',
+    '/student/examinations',
     '/student/results',
     '/student/documents',
     '/student/notifications',

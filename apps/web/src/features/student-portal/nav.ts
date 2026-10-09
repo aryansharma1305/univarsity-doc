@@ -1,6 +1,7 @@
 import {
   BellIcon,
   BookOpenIcon,
+  ClipboardCheckIcon,
   ClipboardListIcon,
   FileTextIcon,
   LayoutDashboardIcon,
@@ -13,6 +14,7 @@ export type StudentNavHref =
   | '/student'
   | '/student/profile'
   | '/student/course'
+  | '/student/examinations'
   | '/student/results'
   | '/student/documents'
   | '/student/notifications'
@@ -34,11 +36,12 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/student/profile', label: 'My Profile', icon: UserRoundIcon, available: true },
   { href: '/student/course', label: 'Course Details', icon: BookOpenIcon, available: true },
   {
-    href: '/student/results',
-    label: 'Examinations & Results',
-    icon: ClipboardListIcon,
-    available: false,
+    href: '/student/examinations',
+    label: 'Examinations',
+    icon: ClipboardCheckIcon,
+    available: true,
   },
+  { href: '/student/results', label: 'Results', icon: ClipboardListIcon, available: false },
   { href: '/student/documents', label: 'My Documents', icon: FileTextIcon, available: true },
   { href: '/student/notifications', label: 'Notifications', icon: BellIcon, available: false },
   { href: '/student/settings', label: 'Account Settings', icon: SettingsIcon, available: true },

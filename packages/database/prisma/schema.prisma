@@ -68,6 +68,12 @@ enum ExaminationStatus {
   ARCHIVED
 }
 
+/// Ordinary examination or re-examination (Phase 9). Free-text `exam_type` stays as the label.
+enum ExaminationKind {
+  REGULAR
+  RE_EXAMINATION
+}
+
 enum ResultPublicationStatus {
   DRAFT
   UNDER_REVIEW
@@ -432,6 +438,7 @@ model ProgramCurriculum {
   archivedBy    User?                 @relation("CurriculumArchivedBy", fields: [archivedByUserId], references: [id], onDelete: Restrict)
   subjects      ProgramSubject[]
   registrations StudentRegistration[]
+  examinations  Examination[]
 
   @@unique([programId, versionCode])
   /// Target of the program_subjects (curriculum, program) composite FK.
@@ -531,27 +538,37 @@ model GradingScheme {
 // ============================================================================================
 
 model Examination {
-  id                String            @id @default(uuid(7)) @db.Uuid
-  code              String            @unique @db.VarChar(64)
-  name              String            @db.VarChar(200)
-  programId         String            @map("program_id") @db.Uuid
-  academicSessionId String            @map("academic_session_id") @db.Uuid
-  semesterNumber    Int               @map("semester_number") @db.SmallInt
+  id                     String            @id @default(uuid(7)) @db.Uuid
+  code                   String            @unique @db.VarChar(64)
+  name                   String            @db.VarChar(200)
+  programId              String            @map("program_id") @db.Uuid
+  academicSessionId      String            @map("academic_session_id") @db.Uuid
+  semesterNumber         Int               @map("semester_number") @db.SmallInt
   /// Free text until confirmed (e.g. "REGULAR", "SUPPLEMENTARY").
-  examType          String?           @map("exam_type") @db.VarChar(32)
+  examType               String?           @map("exam_type") @db.VarChar(32)
   /// When the examination was held, as the university labels it (e.g. "May–June 2026").
-  examSession       String            @map("exam_session") @db.VarChar(64)
-  gradingSchemeId   String?           @map("grading_scheme_id") @db.Uuid
-  status            ExaminationStatus @default(DRAFT)
-  publishedAt       DateTime?         @map("published_at") @db.Timestamptz(3)
-  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  examSession            String            @map("exam_session") @db.VarChar(64)
+  gradingSchemeId        String?           @map("grading_scheme_id") @db.Uuid
+  status                 ExaminationStatus @default(DRAFT)
+  publishedAt            DateTime?         @map("published_at") @db.Timestamptz(3)
+  /// Curriculum version this examination belongs to (Phase 9). `semester_number` is then a period of
+  /// that curriculum (a semester or a year). Required by the API for new records; null only for
+  /// rows created before Phase 9.
+  curriculumId           String?           @map("curriculum_id") @db.Uuid
+  kind                   ExaminationKind   @default(REGULAR)
+  /// Re-examinations only: students may apply while this is true (and the examination is OPEN).
+  reExamApplicationsOpen Boolean           @default(false) @map("re_exam_applications_open")
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  program         Program         @relation(fields: [programId], references: [id], onDelete: Restrict)
-  academicSession AcademicSession @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
-  gradingScheme   GradingScheme?  @relation(fields: [gradingSchemeId], references: [id], onDelete: Restrict)
+  program         Program            @relation(fields: [programId], references: [id], onDelete: Restrict)
+  /// Composite FK: the curriculum always belongs to the examination's program.
+  curriculum      ProgramCurriculum? @relation(fields: [curriculumId, programId], references: [id, programId], onDelete: Restrict)
+  academicSession AcademicSession    @relation(fields: [academicSessionId], references: [id], onDelete: Restrict)
+  gradingScheme   GradingScheme?     @relation(fields: [gradingSchemeId], references: [id], onDelete: Restrict)
   results         Result[]
 
+  @@index([curriculumId, status])
   @@index([programId, academicSessionId, semesterNumber])
   @@index([academicSessionId])
   @@index([gradingSchemeId])
@@ -1044,6 +1061,28 @@ model HistoricalDocument {
   @@map("historical_documents")
 }
 
+/// The university's separate examination application (Phase 9). Docversity only links to it: the
+/// examination itself happens outside Docversity. URLs are https only (CHECK).
+model ExternalExamApplication {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  name            String   @db.VarChar(120)
+  websiteUrl      String   @map("website_url") @db.VarChar(512)
+  androidUrl      String?  @map("android_url") @db.VarChar(512)
+  iosUrl          String?  @map("ios_url") @db.VarChar(512)
+  instructions    String?  @db.VarChar(4000)
+  isActive        Boolean  @default(false) @map("is_active")
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  updatedByUserId String   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  createdBy User @relation("ExternalExamAppCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedBy User @relation("ExternalExamAppUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([isActive])
+  @@map("external_exam_applications")
+}
+
 model User {
   id           String     @id @default(uuid(7)) @db.Uuid
   /// Stored lower-case (CHECK) so uniqueness is case-insensitive.
@@ -1066,6 +1105,8 @@ model User {
   historicalDocumentsReviewed  HistoricalDocument[]          @relation("HistoricalDocumentReviewedBy")
   curriculaActivated           ProgramCurriculum[]           @relation("CurriculumActivatedBy")
   curriculaArchived            ProgramCurriculum[]           @relation("CurriculumArchivedBy")
+  examAppsCreated              ExternalExamApplication[]     @relation("ExternalExamAppCreatedBy")
+  examAppsUpdated              ExternalExamApplication[]     @relation("ExternalExamAppUpdatedBy")
   auditLogs                    AuditLog[]
   certificatesGenerated        Certificate[]                 @relation("CertificateGeneratedBy")
   certificatesApproved         Certificate[]                 @relation("CertificateApprovedBy")

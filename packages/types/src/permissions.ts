@@ -51,6 +51,10 @@ export const PERMISSIONS = {
   historicalDocumentsPublish: 'historicalDocuments.publish',
   /** Record the official authenticity review (never by the uploader). */
   historicalDocumentsVerify: 'historicalDocuments.verify',
+  /** Examination records and the external examination application links (Phase 9A). */
+  examinationsRead: 'examinations.read',
+  /** Configure external examination application links; create/open/archive examination records. */
+  examinationsManage: 'examinations.manage',
   templatesRead: 'templates.read',
   templatesWrite: 'templates.write',
   /** Import history, rows and error reports. */
@@ -101,6 +105,7 @@ const READ_ONLY: readonly Permission[] = [
   P.resultsRead,
   P.certificatesRead,
   P.templatesRead,
+  P.examinationsRead,
 ];
 
 /** Maintaining the academic masters and student records (Phase 4). */
@@ -141,7 +146,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
    * Prepares results and will run result imports (Phase 8); cannot publish (maker–checker).
    * Student imports are deliberately NOT granted.
    */
-  EXAM_ADMIN: [...READ_ONLY, P.resultsWrite, P.importsResultsRun],
+  EXAM_ADMIN: [...READ_ONLY, P.resultsWrite, P.importsResultsRun, P.examinationsManage],
   /** Prepares certificates and maintains templates; cannot approve/issue (maker–checker). */
   CERTIFICATE_ADMIN: [
     ...READ_ONLY,
@@ -168,7 +173,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
 export const ROLE_DESCRIPTIONS: Readonly<Record<RoleName, string>> = Object.freeze({
   SUPER_ADMIN: 'Full access, including user and settings management.',
   REGISTRAR: 'Manages student records and imports; prepares certificates.',
-  EXAM_ADMIN: 'Prepares examination results and runs result imports.',
+  EXAM_ADMIN:
+    'Maintains examination records and the examination application links; prepares results.',
   CERTIFICATE_ADMIN: 'Prepares certificates and maintains document templates.',
   APPROVER: 'Publishes results and approves, issues or revokes certificates.',
   VIEWER: 'Read-only access.',

@@ -44,6 +44,8 @@ test fixtures) ensure all six code-defined roles exist as records.
 | studentAccounts.read   |      ✓      |     ✓     |            |                   |          |        |
 | studentAccounts.manage |      ✓      |     ✓     |            |                   |          |        |
 | audit.read             |      ✓      |     ✓     |            |                   |          |        |
+| examinations.read      |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| examinations.manage    |      ✓      |           |     ✓      |                   |          |        |
 | users.manage           |      ✓      |           |            |                   |          |        |
 | settings.manage        |      ✓      |           |            |                   |          |        |
 
@@ -63,6 +65,9 @@ Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
 - **Student accounts (Phase 6):** only SUPER_ADMIN and REGISTRAR see portal states and issue/revoke
   activation codes. Students themselves have **no** permissions at all — they are a separate principal
   (see authentication.md).
+- **Examinations (Phase 9A):** every role reads examination records and the external examination
+  application links (no personal data); only SUPER_ADMIN and EXAM_ADMIN configure links and create, open
+  or archive records.
 - A user's permissions are the union of their roles' permissions. There is no role hierarchy.
 
 ## Guards

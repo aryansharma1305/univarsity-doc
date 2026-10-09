@@ -7,6 +7,8 @@ import {
   studentCurriculumSchema,
   type StudentDocument,
   studentDocumentListSchema,
+  type StudentExaminations,
+  studentExaminationsSchema,
   type StudentProfileRequest,
   studentProfileRequestListSchema,
 } from '@docversity/validation';
@@ -115,6 +117,25 @@ export const getStudentCurriculum = cache(async (): Promise<StudentCurriculum | 
     });
     if (!response.ok) return null;
     const parsed = studentCurriculumSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+});
+
+/** The signed-in student's examination page data (Phase 9A), or `null` when unavailable. */
+export const getStudentExaminations = cache(async (): Promise<StudentExaminations | null> => {
+  const jar = await cookies();
+  if (!STUDENT_COOKIES.some((name) => jar.has(name))) return null;
+  const { API_INTERNAL_URL } = loadWebEnv();
+  try {
+    const response = await fetch(new URL('/api/v1/student/examinations', API_INTERNAL_URL), {
+      headers: { cookie: jar.toString(), accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!response.ok) return null;
+    const parsed = studentExaminationsSchema.safeParse(await response.json());
     return parsed.success ? parsed.data : null;
   } catch {
     return null;

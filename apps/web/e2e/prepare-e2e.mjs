@@ -30,8 +30,16 @@ const registrar = {
   password: randomBytes(24).toString('base64url'),
   displayName: 'E2E Test Registrar',
 };
+const examAdmin = {
+  email: `e2e.examadmin.${randomUUID().slice(0, 8)}@example.test`,
+  password: randomBytes(24).toString('base64url'),
+  displayName: 'E2E Exam Admin',
+};
 let fixture;
 const profileStudents = [];
+const examStudents = [];
+let examProgram;
+let examSessionId;
 const db = createPrismaClient({ connectionString: databaseUrl });
 try {
   await createAdmin(db, credentials);
@@ -56,6 +64,17 @@ try {
       displayName: registrar.displayName,
       passwordHash: await new PasswordService().hashPassword(registrar.password),
       roles: { create: { roleId: registrarRole.id } },
+    },
+  });
+
+  // An EXAM_ADMIN (examination records and the external examination application links, Phase 9).
+  const examAdminRole = await db.role.findUniqueOrThrow({ where: { name: 'EXAM_ADMIN' } });
+  await db.user.create({
+    data: {
+      email: examAdmin.email,
+      displayName: examAdmin.displayName,
+      passwordHash: await new PasswordService().hashPassword(examAdmin.password),
+      roles: { create: { roleId: examAdminRole.id } },
     },
   });
 
@@ -118,6 +137,50 @@ try {
       password,
     });
   }
+  // Phase 9: a year-wise course and two students with portal accounts. The curriculum is built and
+  // assigned by the test through the real API, so every curriculum rule applies.
+  examProgram = await db.program.create({
+    data: {
+      code: 'E2E-EXAM-PROG',
+      name: 'E2E Synthetic Diploma',
+      level: 'DIPLOMA',
+      academicStructure: 'YEAR_WISE',
+      periodCount: 2,
+      durationValue: 2,
+      durationUnit: 'YEARS',
+      departmentId: department.id,
+    },
+  });
+  examSessionId = session.id;
+  for (const [index, name] of ['E2E Examinee Alpha', 'E2E Examinee Beta'].entries()) {
+    const registrationNumber = `E2E-REG-020${index + 1}`;
+    const password = randomBytes(18).toString('base64url');
+    const created = await db.student.create({
+      data: {
+        fullName: name,
+        registrations: {
+          create: {
+            registrationNumber,
+            registrationNumberNormalized: registrationNumber,
+            programId: examProgram.id,
+            departmentId: department.id,
+            academicSessionId: session.id,
+          },
+        },
+        account: {
+          create: { passwordHash: await new PasswordService().hashPassword(password) },
+        },
+      },
+      include: { registrations: true },
+    });
+    examStudents.push({
+      studentId: created.id,
+      studentName: name,
+      registrationNumber,
+      registrationId: created.registrations[0].id,
+      password,
+    });
+  }
   fixture = {
     studentId: student.id,
     studentName: student.fullName,
@@ -140,6 +203,9 @@ writeFileSync(
     registrar,
     fixture,
     profileStudents,
+    examAdmin,
+    examStudents,
+    examProgram: { id: examProgram.id, code: examProgram.code, sessionId: examSessionId },
   }),
   { mode: 0o600 },
 );
