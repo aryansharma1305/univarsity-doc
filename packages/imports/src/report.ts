@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { type ImportIssue, studentImportField } from '@docversity/validation';
+import { type ImportIssue, studentImportField, type StudentImportField } from '@docversity/validation';
 import { escapeSpreadsheetText } from './safety.js';
 
 export interface ReportRow {
@@ -68,7 +68,9 @@ export async function buildErrorReport(
       messages: text(
         all
           .map((issue) => {
-            const label = issue.field ? `${studentImportField(issue.field).label}: ` : '';
+            const def = issue.field ? studentImportField(issue.field as StudentImportField) : null;
+            const labelStr = def ? def.label : issue.field;
+            const label = labelStr ? `${labelStr}: ` : '';
             const message = issue.message.startsWith(label)
               ? issue.message
               : `${label}${issue.message}`;

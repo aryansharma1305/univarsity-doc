@@ -184,4 +184,37 @@ describe('validateResultRows', () => {
       expect.objectContaining({ field: 'subjectCode', code: 'DUPLICATE_ROW' })
     );
   });
+
+  it('should throw ERROR for missing or empty academic period', () => {
+    const invalidContext = { ...mockContext, academicPeriod: '' };
+    expect(() => validateResultRows([], mapping, invalidContext)).toThrow('Academic period context is missing, empty, or invalid.');
+  });
+
+  it('should throw ERROR for academic period inconsistent with curriculum structure', () => {
+    const invalidContext = { ...mockContext, academicPeriod: 'INVALID-SEM' };
+    expect(() => validateResultRows([], mapping, invalidContext)).toThrow('does not exist in the loaded curriculum structure.');
+  });
+
+  it('should throw ERROR for invalid examination context identity', () => {
+    const invalidContext = { 
+      ...mockContext, 
+      examinationContext: { examinationId: '', attemptNumber: undefined as any } 
+    };
+    expect(() => validateResultRows([], mapping, invalidContext)).toThrow('Examination context is invalid.');
+  });
+
+  it('should properly differentiate blank (missing) from zero marks', () => {
+    // Blank marks should trigger 'REQUIRED_COMPONENT_MISSING' on required components, but NOT 'INVALID_NUMBER'
+    const rows = [createRow(2, { A: 'REG1', B: 'SUB1', C: ' ', D: '0', F: 'A' })]; 
+    const outcomes = validateResultRows(rows, mapping, mockContext);
+    expect(outcomes[0].status).toBe('ERROR');
+    const errors = outcomes[0].errors;
+    
+    // Internal should be missing
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'internalMarks', code: 'REQUIRED_COMPONENT_MISSING' }));
+    
+    // External should NOT have any error, because '0' is valid
+    const externalErrors = errors.filter(e => e.field === 'externalMarks');
+    expect(externalErrors).toHaveLength(0);
+  });
 });
