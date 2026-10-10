@@ -109,3 +109,11 @@ authoritative.
 
 The guard is tested through test-only routes (`apps/api/test/support/test-routes.ts`) and, since
 Phase 4, through the real academic endpoints (`apps/api/test/academic`).
+
+## Phase 10D result review policy
+
+`results.review` and `results.approve` are separate from `results.publish`. No existing publishing
+permission implies these new powers. Until explicitly authorized reviewer roles are established,
+review/approval decisions are disabled server-side, including for SUPER_ADMIN (whose existing
+ALL_PERMISSIONS grant is not a policy bypass). Submission reuses results.write and queue/version
+reads reuse results.read. See [result review](../api/result-review.md) for the complete boundary.

@@ -191,7 +191,7 @@ export class DraftResultsService {
     return issues;
   }
 
-  private present(item: Item): SavedDraft {
+  present(item: Item): SavedDraft {
     const context = {
       programId: item.result.examination.programId,
       curriculumId: item.programSubject.curriculumId,
@@ -226,7 +226,14 @@ export class DraftResultsService {
       marks: marksOf(item),
       status: 'DRAFT',
       updatedAt: item.updatedAt.toISOString(),
-      issues: this.assess(subject, item.result.studentRegistration, context, marksOf(item)),
+      issues: [
+        ...this.assess(subject, item.result.studentRegistration, context, marksOf(item)),
+        ...config.unrecognized.map((name) => ({
+          field: null,
+          code: 'UNCONFIGURED_COMPONENT',
+          message: `Assessment component ${name} requires configuration.`,
+        })),
+      ],
     };
   }
 

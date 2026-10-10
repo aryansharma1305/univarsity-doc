@@ -149,13 +149,18 @@ function DraftEditor({ initial, canWrite }: { initial?: SavedDraft; canWrite: bo
     <>
       <PageHeader
         title={initial ? 'Saved draft' : 'Enter marks'}
-        description="Save internal DRAFT records without grades, approval or publication."
+        description="Save internal DRAFT marks, then submit the complete examination attempt for staff review."
         actions={
           <Button asChild variant="outline">
             <Link href="/admin/results">Draft results</Link>
           </Button>
         }
       />
+      {saved && (
+        <Button asChild variant="outline" className="mb-4">
+          <Link href={`/admin/results/review/${saved.resultId}`}>Review examination result</Link>
+        </Button>
+      )}
       {initial ? (
         <p className="mb-6 text-sm">
           {initial.examinationName} · {initial.registrationNumber} · {initial.subjectCode} · Attempt{' '}

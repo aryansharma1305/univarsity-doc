@@ -11,21 +11,21 @@ records, a student portal, and (planned) public verification of results, registr
 One PostgreSQL database serves admin, student and public features — never duplicate student or
 certificate data.
 
-| Phase | Scope                                                                                       | Status (git tag)                |
-| ----- | ------------------------------------------------------------------------------------------- | ------------------------------- |
-| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`         |
-| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`      |
-| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`          |
-| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters`   |
-| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`    |
-| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts`   |
-| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)               |
-| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | ✅ merged (PR #2)               |
-| 7B    | Course management, curriculum versions, subject catalogue and explicit student assignment   | ✅ merged (PR #3)               |
-| 8     | Staff-managed historical certificates and the student document library                      | ✅ merged (PR #4)               |
-| 9     | External examination links/records, re-exam applications, regional QR payments (9A/9B/9C)   | 9A/9B merged (PR #5, #7); 9C PR |
+| Phase | Scope                                                                                       | Status (git tag)              |
+| ----- | ------------------------------------------------------------------------------------------- | ----------------------------- |
+| 1     | Monorepo, Docker infrastructure, health checks, CI                                          | ✅ `phase-1-foundation`       |
+| 2     | Core academic schema (23 tables, CHECKs, integrity triggers)                                | ✅ `phase-2-domain-schema`    |
+| 3     | Staff authentication (sessions, CSRF, rate limits), RBAC, audit                             | ✅ `phase-3-auth-rbac`        |
+| 4     | Design system, public/admin shells, departments/programs/sessions/students/registrations    | ✅ `phase-4-academic-masters` |
+| 5     | Student/registration Excel import (worker-based, incl. the "Registration 2025" layout)      | ✅ `phase-5-student-imports`  |
+| 6     | Student accounts: activation codes, separate student sign-in, `/student` overview           | ✅ `phase-6-student-accounts` |
+| 6.5   | Responsive student portal, read-only profile/course/account views, public access navigation | ✅ merged (PR #1)             |
+| 7     | Student profile change requests (DOB, photo, corrections) with staff approval               | ✅ merged (PR #2)             |
+| 7B    | Course management, curriculum versions, subject catalogue and explicit student assignment   | ✅ merged (PR #3)             |
+| 8     | Staff-managed historical certificates and the student document library                      | ✅ merged (PR #4)             |
+| 9     | External examination links/records, re-exam applications, regional QR payments (9A/9B/9C)   | merged (PR #5, #7, #8)        |
 
-**Not built yet** (do not describe as working): examination-taking (done in the university's separate app), grading, result approval/publication, certificate generation
+**Not built yet** (do not describe as working): examination-taking (done in the university's separate app), grading, policy-enabled result approval/publication, certificate generation
 (PDF/QR), legacy QR mapping and bulk migration of historic documents, public verification (the `/verify/*` and `/results` pages are honest
 "not available yet" placeholders), legacy WordPress migration, retention cleanup jobs, email delivery
 (password reset refuses with 503 when no notifier is configured). Plan: [docs/roadmap.md](docs/roadmap.md).
@@ -254,7 +254,16 @@ Excel previews have a separate confirmed draft-save action (`imports.results.run
 Before changing these workflows, read [draft results](docs/api/draft-results.md) and
 [ADR-0015](docs/decisions/ADR-0015-ungraded-draft-results.md): preserve approved re-exam application
 attempt numbers exactly, null outcomes while DRAFT, version conflicts, atomic audits and durable
-batch replay protection. No approval/publication, student result visibility, grading or GPA exists.
+batch replay protection. Result review/version infrastructure follows Phase 10D; production review/approval remains policy-gated. Student result visibility, publication, grading and GPA remain unavailable.
+
+## 10f. Internal result review (Phase 10D)
+
+Before changing result transitions or permissions, read [review contracts](docs/api/result-review.md)
+and [ADR-0016](docs/decisions/ADR-0016-internal-review-before-grading.md). Submission locks a complete
+marks version; correction preserves the submitted snapshot. Review/approval permissions are separate
+from publication. Their role policy is pending; the server blocks these decisions until authorized.
+Publication is disabled in the API/database independently. Preserve receipt replay, atomic audit and
+exact re-exam attempts when extending this workflow.
 
 ## 11. Student import workflow (Phase 5)
 

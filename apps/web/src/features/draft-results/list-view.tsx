@@ -21,9 +21,12 @@ export function DraftResultsListView() {
     <>
       <PageHeader
         title="Draft results"
-        description="Internal marks drafts. Nothing here is approved, published or visible to students."
+        description="Internal marks drafts. Review complete marks through the review queue. Draft marks are not visible to students."
         actions={
           <>
+            <Button asChild variant="outline">
+              <Link href="/admin/results/review">Review queue</Link>
+            </Button>
             {canWrite && (
               <Button asChild>
                 <Link href="/admin/results/new">Enter marks</Link>

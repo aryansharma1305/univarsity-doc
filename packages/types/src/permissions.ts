@@ -37,6 +37,8 @@ export const PERMISSIONS = {
   studentCurriculaAssign: 'studentCurricula.assign',
   resultsRead: 'results.read',
   resultsWrite: 'results.write',
+  resultsReview: 'results.review',
+  resultsApprove: 'results.approve',
   resultsPublish: 'results.publish',
   certificatesRead: 'certificates.read',
   certificatesGenerate: 'certificates.generate',
