@@ -4,6 +4,11 @@ import {
   type ImportMapping,
   type ImportSheet,
   normalizeImportHeader,
+  RESULT_IMPORT_FIELDS,
+  type ResultColumnMapping,
+  type ResultImportField,
+  type ResultImportSheet,
+  type ResultPreviewMapping,
   STUDENT_IMPORT_FIELDS,
 } from '@docversity/validation';
 
@@ -96,6 +101,104 @@ export function validateStudentMapping(
       continue;
     }
     columnsInUse.set(column, field.label);
+  }
+  return problems;
+}
+
+/** Deterministic header suggestions for a results workbook (same rules as `suggestStudentMapping`). */
+export function suggestResultMapping(columns: readonly ImportColumn[]): ResultColumnMapping {
+  const byHeader = new Map<string, number>();
+  for (const column of columns) {
+    if (column.sensitive) continue;
+    const normalized = normalizeImportHeader(column.header);
+    if (normalized && !byHeader.has(normalized)) byHeader.set(normalized, column.index);
+  }
+  const used = new Set<number>();
+  const mapping: ResultColumnMapping = {};
+  for (const field of RESULT_IMPORT_FIELDS) {
+    let match: number | null = null;
+    for (const candidate of [normalizeImportHeader(field.label), ...field.aliases]) {
+      const index = byHeader.get(normalizeImportHeader(candidate));
+      if (index !== undefined && !used.has(index)) {
+        match = index;
+        break;
+      }
+    }
+    if (match !== null) used.add(match);
+    mapping[field.key] = match;
+  }
+  return mapping;
+}
+
+const MARK_FIELDS = [
+  'internalMarks',
+  'externalMarks',
+  'practicalMarks',
+  'otherMarks',
+  'totalMarks',
+] as const satisfies readonly ResultImportField[];
+
+/**
+ * Checks a results mapping against the discovered worksheets: registration number and subject code
+ * are always required, at least one marks column must be mapped, components the curriculum
+ * requires must be mapped, and a column may feed one field only.
+ */
+export function validateResultMapping(
+  mapping: ResultPreviewMapping,
+  sheets: readonly ResultImportSheet[],
+  requiredFields: readonly ResultImportField[] = [],
+): MappingProblem[] {
+  const sheet = sheets.find((candidate) => candidate.name === mapping.worksheet);
+  if (!sheet) return [{ path: 'worksheet', message: 'Choose one of the worksheets in this file.' }];
+  if (sheet.problem) return [{ path: 'worksheet', message: sheet.problem }];
+
+  const problems: MappingProblem[] = [];
+  const columnsInUse = new Map<number, string>();
+  for (const field of RESULT_IMPORT_FIELDS) {
+    const column = mapping.columns[field.key] ?? null;
+    if (column === null) {
+      if (field.required) {
+        problems.push({
+          path: `columns.${field.key}`,
+          message: `Choose the column for ${field.label}.`,
+        });
+      } else if (requiredFields.includes(field.key)) {
+        problems.push({
+          path: `columns.${field.key}`,
+          message: `The curriculum requires ${field.label} for this semester/year. Choose its column.`,
+        });
+      }
+      continue;
+    }
+    if (column > sheet.columnCount) {
+      problems.push({
+        path: `columns.${field.key}`,
+        message: 'This column does not exist in the worksheet.',
+      });
+      continue;
+    }
+    if (sheet.columns.find((candidate) => candidate.index === column)?.sensitive) {
+      problems.push({
+        path: `columns.${field.key}`,
+        message: 'This column holds identity numbers and is never read.',
+      });
+      continue;
+    }
+    const other = columnsInUse.get(column);
+    if (other) {
+      problems.push({
+        path: `columns.${field.key}`,
+        message: `This column is already mapped to ${other}. Each column can be mapped to one field only.`,
+      });
+      continue;
+    }
+    columnsInUse.set(column, field.label);
+  }
+  if (!MARK_FIELDS.some((field) => (mapping.columns[field] ?? null) !== null)) {
+    problems.push({
+      path: 'columns.totalMarks',
+      message: 'Map at least one marks column (internal, external, practical, other or total).',
+    });
   }
   return problems;
 }

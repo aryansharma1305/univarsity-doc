@@ -76,7 +76,7 @@ export const PERMISSIONS = {
   importsRead: 'imports.read',
   /** Run student / registration imports (Phase 5). */
   importsStudentsRun: 'imports.students.run',
-  /** Run result imports — reserved for Phase 8 (no endpoint uses it yet). */
+  /** Run result imports. Phase 10B: results import PREVIEW only (nothing is saved). */
   importsResultsRun: 'imports.results.run',
   /** Student portal accounts: list registrations with their portal state (Phase 6). */
   studentAccountsRead: 'studentAccounts.read',

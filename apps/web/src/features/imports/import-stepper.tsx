@@ -41,14 +41,18 @@ export function stepForStatus(status: ImportStatus): number {
 export function ImportStepper({
   current,
   complete = false,
+  steps = IMPORT_STEPS,
+  shortLabels = SHORT_LABELS,
 }: {
   current: number;
   complete?: boolean;
+  steps?: readonly string[];
+  shortLabels?: readonly string[];
 }) {
   return (
     <nav aria-label="Import steps" className="mb-6">
       <ol className="flex items-center gap-1 sm:gap-2">
-        {IMPORT_STEPS.map((label, index) => {
+        {steps.map((label, index) => {
           const done = index < current || (complete && index === current);
           const active = index === current && !complete;
           return (
@@ -67,7 +71,7 @@ export function ImportStepper({
               >
                 {done ? <CheckIcon aria-hidden="true" className="size-4" /> : index + 1}
                 <span className="sr-only">
-                  {`, step ${index + 1} of ${IMPORT_STEPS.length}, ${label}${done ? ', done' : active ? ', current step' : ''}`}
+                  {`, step ${index + 1} of ${steps.length}, ${label}${done ? ', done' : active ? ', current step' : ''}`}
                 </span>
               </span>
               <span
@@ -77,9 +81,9 @@ export function ImportStepper({
                   active ? 'font-semibold text-navy-950' : 'text-muted-foreground',
                 )}
               >
-                {SHORT_LABELS[index]}
+                {shortLabels[index]}
               </span>
-              {index < IMPORT_STEPS.length - 1 && (
+              {index < steps.length - 1 && (
                 <span
                   aria-hidden="true"
                   className="hidden h-px min-w-3 flex-1 bg-border-strong sm:block"
@@ -89,9 +93,9 @@ export function ImportStepper({
           );
         })}
       </ol>
-      {current >= 0 && current < IMPORT_STEPS.length && (
+      {current >= 0 && current < steps.length && (
         <p aria-hidden="true" className="mt-2 text-sm font-semibold text-navy-950 lg:hidden">
-          Step {current + 1} of {IMPORT_STEPS.length} · {IMPORT_STEPS[current]}
+          Step {current + 1} of {steps.length} · {steps[current]}
           {complete ? ' · done' : ''}
         </p>
       )}

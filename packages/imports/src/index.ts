@@ -26,8 +26,20 @@ export {
   type ImportStepResult,
 } from './engine.js';
 export { ImportFileError, ImportStateError, StaleImportRunError } from './errors.js';
-export { suggestStudentMapping, validateStudentMapping, type MappingProblem } from './mapping.js';
-export { buildErrorReport, type ReportRow } from './report.js';
+export {
+  suggestResultMapping,
+  suggestStudentMapping,
+  validateResultMapping,
+  validateStudentMapping,
+  type MappingProblem,
+} from './mapping.js';
+export {
+  buildErrorReport,
+  buildResultErrorReport,
+  type ReportRow,
+  type ResultReportRow,
+  type ResultReportSummary,
+} from './report.js';
 export { escapeSpreadsheetText, sanitizeFilename } from './safety.js';
 export {
   IMPORT_TRANSITIONS,
@@ -52,12 +64,13 @@ export {
   type StudentRowOutcome,
   type StudentValidationContext,
 } from './student-rows.js';
-export { buildStudentTemplate } from './template.js';
+export { buildResultTemplate, buildStudentTemplate } from './template.js';
 export { uuidv7 } from './uuid.js';
 export {
   MAX_WORKSHEETS,
   columnLetter,
   defaultWorksheet,
+  describeResultWorksheets,
   describeWorksheets,
   loadWorkbook,
   readWorksheetRows,

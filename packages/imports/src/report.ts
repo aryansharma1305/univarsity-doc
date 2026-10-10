@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import {
   type ImportIssue,
+  resultImportField,
   studentImportField,
   type StudentImportField,
 } from '@docversity/validation';
@@ -100,6 +101,102 @@ export async function buildErrorReport(
   info.getRow(1).font = { bold: true };
   info.addRow({ item: 'File', value: text(summary.filename) });
   info.addRow({ item: 'Worksheet', value: text(summary.worksheet) });
+  info.addRow({
+    item: 'Generated (UTC)',
+    value: summary.generatedAt.toISOString().replace('T', ' ').slice(0, 19),
+  });
+  for (const [item, value] of Object.entries(summary.counts)) info.addRow({ item, value });
+
+  return new Uint8Array(await workbook.xlsx.writeBuffer());
+}
+
+export interface ResultReportRow {
+  rowNumber: number;
+  registrationNumber: string | null;
+  subjectCode: string | null;
+  errors: readonly ImportIssue[];
+  warnings: readonly ImportIssue[];
+}
+
+export interface ResultReportSummary {
+  filename: string;
+  worksheet: string;
+  generatedAt: Date;
+  /** Label → value lines describing the academic context (course, curriculum, examination…). */
+  context: readonly (readonly [string, string])[];
+  counts: Record<string, number>;
+}
+
+/**
+ * The results preview error report (Phase 10B): one row per spreadsheet row with errors or warnings
+ * — original row number, registration number and subject code as typed in the file, codes,
+ * messages and the action required. It contains no data looked up from Docversity (no names), and
+ * every text value is formula-escaped.
+ */
+export async function buildResultErrorReport(
+  rows: readonly ResultReportRow[],
+  summary: ResultReportSummary,
+): Promise<Uint8Array> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Docversity';
+  workbook.created = summary.generatedAt;
+
+  const issues = workbook.addWorksheet('Issues', { views: [{ state: 'frozen', ySplit: 1 }] });
+  issues.columns = [
+    { header: 'Row', key: 'row', width: 8 },
+    { header: 'Registration Number', key: 'registrationNumber', width: 24 },
+    { header: 'Subject Code', key: 'subjectCode', width: 16 },
+    { header: 'Status', key: 'status', width: 11 },
+    { header: 'Error Codes', key: 'codes', width: 34 },
+    { header: 'Messages', key: 'messages', width: 90 },
+    { header: 'Action Required', key: 'actionRequired', width: 50 },
+  ];
+  issues.getRow(1).font = { bold: true };
+  for (const row of rows) {
+    const all = [...row.errors, ...row.warnings];
+    const added = issues.addRow({
+      row: row.rowNumber,
+      registrationNumber: text(row.registrationNumber),
+      subjectCode: text(row.subjectCode),
+      status: row.errors.length > 0 ? 'ERROR' : 'WARNING',
+      codes: all.map((issue) => issue.code).join(', '),
+      messages: text(
+        all
+          .map((issue) => {
+            const label = issue.field
+              ? (resultImportField(issue.field)?.label ?? issue.field)
+              : null;
+            const prefix = label ? `${label}: ` : '';
+            return `${issue.severity === 'error' ? 'Error' : 'Warning'} — ${prefix}${issue.message}`;
+          })
+          .join('\n'),
+      ),
+      actionRequired:
+        row.errors.length > 0
+          ? 'Correct this row in the spreadsheet (or the curriculum/registration data) and preview again.'
+          : 'Review the warning before results are recorded.',
+    });
+    added.alignment = { wrapText: true, vertical: 'top' };
+    added.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: row.errors.length > 0 ? RED : AMBER },
+    };
+  }
+
+  const info = workbook.addWorksheet('Summary');
+  info.columns = [
+    { header: 'Item', key: 'item', width: 28 },
+    { header: 'Value', key: 'value', width: 60 },
+  ];
+  info.getRow(1).font = { bold: true };
+  info.addRow({
+    item: 'Status',
+    value: 'Preview only — no marks have been saved to official records.',
+  });
+  info.addRow({ item: 'File', value: text(summary.filename) });
+  info.addRow({ item: 'Worksheet', value: text(summary.worksheet) });
+  for (const [item, value] of summary.context) info.addRow({ item, value: text(value) });
   info.addRow({
     item: 'Generated (UTC)',
     value: summary.generatedAt.toISOString().replace('T', ' ').slice(0, 19),
