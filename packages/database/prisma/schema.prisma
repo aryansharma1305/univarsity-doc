@@ -684,7 +684,7 @@ model Result {
   maxMarks              Decimal?                @map("max_marks") @db.Decimal(7, 2)
   sgpa                  Decimal?                @db.Decimal(5, 3)
   cgpa                  Decimal?                @db.Decimal(5, 3)
-  /// Required once APPROVED/PUBLISHED (CHECK); may be null while a draft is being prepared.
+  /// Required for publication; internal ungraded approval needs an immutable review receipt.
   outcome               ResultOutcome?
   publicationStatus     ResultPublicationStatus @default(DRAFT) @map("publication_status")
   /// The exact grading scheme version used. With calculation_snapshot this makes the published
@@ -703,6 +703,7 @@ model Result {
   supersededBy        Result?             @relation("ResultRevision")
   items               ResultItem[]
   verificationLogs    VerificationLog[]
+  reviewEvents        ResultReviewEvent[]
 
   @@unique([studentRegistrationId, examinationId, attemptNumber, revisionNumber])
   // Partial-index predicates are written exactly as PostgreSQL normalises them (pg_get_expr), so
@@ -714,8 +715,8 @@ model Result {
   @@map("results")
 }
 
-/// One subject line of a result. Editable only while the parent result is a working draft
-/// (DRAFT/UNDER_REVIEW); frozen afterwards (trigger).
+/// One subject line of a result. Review receipts lock items until return to DRAFT;
+/// legacy working drafts retain their original guards. Approved/published items are frozen.
 model ResultItem {
   id                  String             @id @default(uuid(7)) @db.Uuid
   resultId            String             @map("result_id") @db.Uuid
@@ -1405,16 +1406,17 @@ model ExternalExamApplication {
 }
 
 model User {
-  draftBatches ResultDraftBatch[]
-  id           String             @id @default(uuid(7)) @db.Uuid
+  resultReviewEvents ResultReviewEvent[]
+  draftBatches       ResultDraftBatch[]
+  id                 String              @id @default(uuid(7)) @db.Uuid
   /// Stored lower-case (CHECK) so uniqueness is case-insensitive.
-  email        String             @unique @db.VarChar(254)
-  displayName  String             @map("display_name") @db.VarChar(120)
+  email              String              @unique @db.VarChar(254)
+  displayName        String              @map("display_name") @db.VarChar(120)
   /// Argon2id hash (Phase 3). Null = cannot sign in with a password.
-  passwordHash String?            @map("password_hash")
-  status       UserStatus         @default(ACTIVE)
-  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  passwordHash       String?             @map("password_hash")
+  status             UserStatus          @default(ACTIVE)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   roles                        UserRole[]
   importJobs                   ImportJob[]                   @relation("ImportJobCreatedBy")
@@ -1561,4 +1563,25 @@ model ResultDraftBatch {
 
   @@index([previewId])
   @@map("result_draft_batches")
+}
+
+/// Append-only state transition receipt and immutable marks version; contains no student names.
+model ResultReviewEvent {
+  id            String                  @id @db.Uuid
+  resultId      String                  @map("result_id") @db.Uuid
+  actorUserId   String                  @map("actor_user_id") @db.Uuid
+  action        String                  @db.VarChar(16)
+  fromStatus    ResultPublicationStatus @map("from_status")
+  toStatus      ResultPublicationStatus @map("to_status")
+  resultVersion Int                     @map("result_version")
+  requestDigest String                  @map("request_digest") @db.Char(64)
+  snapshot      Json
+  reason        String?                 @db.VarChar(1000)
+  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  result        Result                  @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  actor         User                    @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([resultId, resultVersion])
+  @@index([actorUserId])
+  @@map("result_review_events")
 }

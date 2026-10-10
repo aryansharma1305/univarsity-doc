@@ -1,9 +1,13 @@
+> Phase 10D extends the internal lifecycle through a separate [review workflow](result-review.md).
+> These draft endpoints still edit only DRAFT records; approved/public marks remain protected.
+
 # Internal draft results (Phase 10C)
 
 Staff can enter marks at `/admin/results/new`, open saved subject drafts at `/admin/results/:id`, and
 browse the latest 200 subjects at `/admin/results`. Excel upload remains `/admin/results/import`;
 its preview offers a separate, deliberate draft-save plan and confirmation. Student/public results
-pages remain unavailable. No approval, publication, GPA, certificates or grading-scheme writes exist.
+pages remain unavailable. These draft endpoints perform no approval, publication, GPA, certificate
+or grading-scheme writes; internal review is handled separately.
 
 All endpoints are under `/api/v1/draft-results`. Staff authentication applies everywhere, unsafe
 methods require CSRF, and responses use `Cache-Control: no-store`.
@@ -76,6 +80,6 @@ Migration `20261017090000_draft_result_persistence` adds `results.version`, null
 `result_items.status`, unique/FK `re_exam_application_id`, and an append-only `result_draft_batches`
 receipt table with actor/examination FKs. Existing values remain intact. Database triggers require
 valid enrollment/examination/subject/application identity for ungraded lines, enforce regular attempt
-1 and preserve approved application attempts. Ungraded lines cannot leave DRAFT, and the existing
+1 and preserve approved application attempts. Ungraded lines require a matching immutable review receipt to enter internal review/approval; publication still requires official outcomes. The existing
 published result/item guards remain authoritative. No real seed/reset or destructive migration is
 required. See [design](../plans/phase-10c-draft-results.md) and [ADR-0015](../decisions/ADR-0015-ungraded-draft-results.md).

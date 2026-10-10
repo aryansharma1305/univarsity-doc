@@ -243,3 +243,12 @@ describe('re-exam payments (Phase 9C)', () => {
     expect(can(ROLE_NAMES.approver, PERMISSIONS.reExamApplicationsDecide)).toBe(false);
   });
 });
+
+// Review powers remain separate from preparing marks and publishing them.
+it('does not give makers or viewers result review and approval powers', () => {
+  for (const role of ['EXAM_ADMIN', 'REGISTRAR', 'VIEWER', 'CERTIFICATE_ADMIN']) {
+    const permissions = permissionsForRoles([role]);
+    expect(permissions.has(PERMISSIONS.resultsReview)).toBe(false);
+    expect(permissions.has(PERMISSIONS.resultsApprove)).toBe(false);
+  }
+});

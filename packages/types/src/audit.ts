@@ -33,6 +33,10 @@ export const AUDIT_ACTIONS = {
   studentImportFailed: 'STUDENT_IMPORT_FAILED',
   studentImportRetried: 'STUDENT_IMPORT_RETRIED',
   /** Results import preview (Phase 10B): temporary, nothing is written to results. */
+  resultReviewSubmitted: 'RESULT_REVIEW_SUBMITTED',
+  resultReviewReturned: 'RESULT_REVIEW_RETURNED',
+  resultReviewRejected: 'RESULT_REVIEW_REJECTED',
+  resultReviewApproved: 'RESULT_REVIEW_APPROVED',
   resultDraftCreated: 'RESULT_DRAFT_CREATED',
   resultDraftUpdated: 'RESULT_DRAFT_UPDATED',
   resultDraftBatchSaved: 'RESULT_DRAFT_BATCH_SAVED',

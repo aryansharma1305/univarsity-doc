@@ -265,14 +265,14 @@ describe('published results are never silently mutated', () => {
     expect(released.totalMarks?.toString()).toBe('80');
   });
 
-  it('requires an outcome before approval and a publication time when published', async () => {
+  it('requires a reviewed ungraded version or outcome before approval and a publication time when published', async () => {
     const { registration, examination } = await f.examContext();
     const result = await db.result.create({
       data: { studentRegistrationId: registration.id, examinationId: examination.id },
     });
     await expectDbError(
       db.result.update({ where: { id: result.id }, data: { publicationStatus: 'APPROVED' } }),
-      /results_publication_check/,
+      /ungraded_result_guard/,
     );
     await expectDbError(
       db.result.update({
