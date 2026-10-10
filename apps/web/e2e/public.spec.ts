@@ -20,7 +20,10 @@ test('homepage renders the portal and its services (desktop)', async ({ page }) 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Academic Verification & Records Portal' }),
+    page.getByRole('heading', {
+      level: 1,
+      name: 'Everything academic. One intelligent workspace.',
+    }),
   ).toBeVisible();
   const main = page.getByRole('main');
   for (const service of SERVICES)
@@ -32,10 +35,16 @@ test('homepage renders the portal and its services (desktop)', async ({ page }) 
   await expect(
     page.getByRole('link', { name: 'Activate Student Account', exact: true }).first(),
   ).toHaveAttribute('href', '/student/register');
-  await expect(page.getByRole('link', { name: 'Staff Login', exact: true })).toHaveAttribute(
-    'href',
-    '/admin/login',
+  await expect(
+    page.getByRole('link', { name: 'Staff Login', exact: true }).first(),
+  ).toHaveAttribute('href', '/admin/login');
+  // Planned services are labelled as such, never presented as live.
+  await expect(page.locator('#services li').getByText('Coming soon', { exact: true })).toHaveCount(
+    4,
   );
+  // Section anchors used by the navigation exist.
+  for (const id of ['features', 'get-started', 'faq'])
+    await expect(page.locator(`#${id}`)).toHaveCount(1);
   await expectNoHorizontalOverflow(page);
   await capture(page, 'public-home-desktop');
 });

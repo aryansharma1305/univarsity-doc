@@ -24,9 +24,12 @@ export function DocversityMark({ className }: { className?: string }) {
 
 export function Wordmark({
   inverted = false,
+  adaptive = false,
   subtitle = true,
 }: {
   inverted?: boolean;
+  /** Follow the landing page's light/dark tokens instead of a fixed colour (public header). */
+  adaptive?: boolean;
   subtitle?: boolean;
 }) {
   return (
@@ -36,7 +39,7 @@ export function Wordmark({
         <span
           className={cn(
             'font-heading text-base font-bold tracking-tight',
-            inverted ? 'text-white' : 'text-navy-950',
+            inverted ? 'text-white' : adaptive ? 'text-lp-ink' : 'text-navy-950',
           )}
         >
           Docversity
@@ -45,7 +48,7 @@ export function Wordmark({
           <span
             className={cn(
               'text-[0.6875rem] font-medium tracking-wide uppercase',
-              inverted ? 'text-white/70' : 'text-muted-foreground',
+              inverted ? 'text-white/70' : adaptive ? 'text-lp-ink-soft' : 'text-muted-foreground',
             )}
           >
             Academic Records
