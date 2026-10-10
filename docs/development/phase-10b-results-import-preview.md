@@ -73,3 +73,25 @@ they do not replace existing objects. Snapshot files remain private in `/tmp`, o
 - [Semester preview, 390px](phase-10b/results-preview-semester_wise-mobile.png)
 - [Year preview, desktop](phase-10b/results-preview-year_wise-desktop.png)
 - [Year preview, 390px](phase-10b/results-preview-year_wise-mobile.png)
+
+## Implemented routes
+
+The UI uses `/admin/results/import` and `/admin/results/import/:id`; `/admin/results` redirects to
+upload. Under `/api/v1/result-imports`, the API exposes GET `/context` and `/template`, POST
+`/previews`, GET `/previews/:id`, POST `/previews/:id/validate`, GET `/previews/:id/rows`, GET
+`/previews/:id/error-report` and DELETE `/previews/:id`. There is no commit route. Request/response
+contracts, context blockers and file controls are detailed in the [API reference](../api/result-import-previews.md).
+
+## Acceptance and Phase 10C dependencies
+
+The real browser acceptance scenarios completed for both course structures: authorized staff select
+an examination, upload a synthetic workbook, recover from an incomplete mapping, review valid/error
+rows, filter issues, download the report, reload and discard. Desktop and 390px screenshots were
+manually reviewed; the final corrections eliminate cramped marks and stretched badges. API tests
+confirm that the workflow never writes official marks or changes its registrations or payments.
+
+Before Phase 10C, agree the examination attempt/revision identity and re-exam application linkage,
+resolve how existing draft/published results must be handled, review any persistent RESULTS staging
+migration, and define the explicit permission, idempotency and transaction rules for saving drafts.
+University grading, pass/fail, GPA/CGPA and publication policy require approval before implementation.
+Phase 10C has not started; the PR remains a preview-only draft for review.
