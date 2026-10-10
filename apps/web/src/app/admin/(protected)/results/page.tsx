@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { DraftResultsListView } from '@/features/draft-results/list-view';
 export default function ResultsPage() {
-  redirect('/admin/results/import');
+  return <DraftResultsListView />;
 }

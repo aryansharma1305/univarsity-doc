@@ -6,3 +6,6 @@
 - **Subject:** A reusable academic subject in the university catalogue.
 - **Subject Assignment:** A subject's placement, credits, classification and assessment configuration within a curriculum version.
 - **Registration:** A student's enrolment in a program and academic session; it may follow a curriculum version.
+- **Draft Result:** An internal, editable examination result whose marks have not been reviewed, approved or published. Missing marks have no implied academic outcome.
+- **Result Attempt:** One registration's attempt at an identified examination. A regular examination and a re-examination remain separate examinations.
+- **Re-exam Application Attempt:** The recorded attempt number on a student's subject-specific re-exam application. An approved application's result preserves this number exactly.

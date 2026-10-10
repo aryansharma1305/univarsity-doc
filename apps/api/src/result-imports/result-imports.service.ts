@@ -36,6 +36,7 @@ import {
   type ResultPreviewRowList,
   type ResultPreviewRowQuery,
 } from '@docversity/validation';
+import type { Prisma } from '@docversity/database';
 import { AuditService } from '../audit/audit.service.js';
 import { AppError, Errors } from '../common/app-error.js';
 import { paginationMeta } from '../common/pagination.js';
@@ -85,6 +86,36 @@ const BLOCKER_MESSAGES: Record<ResultContextBlocker, string> = {
   PERIOD_HAS_NO_SUBJECTS:
     'The curriculum has no subjects in this semester/year. Add them in Course Management first.',
 };
+
+export interface ResolvedResultContext {
+  exam: {
+    id: string;
+    code: string;
+    name: string;
+    kind: 'REGULAR' | 'RE_EXAMINATION';
+    status: 'DRAFT' | 'OPEN' | 'UNDER_REVIEW' | 'PUBLISHED' | 'ARCHIVED';
+    examSession: string;
+    semesterNumber: number;
+    programId: string;
+    academicSessionId: string;
+    curriculumId: string | null;
+    program: { id: string; code: string; name: string };
+    academicSession: { id: string; code: string; name: string };
+    curriculum: {
+      id: string;
+      versionCode: string;
+      name: string;
+      status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+      structureType: 'SEMESTER_WISE' | 'YEAR_WISE';
+    } | null;
+  };
+  curriculum: NonNullable<ResolvedResultContext['exam']['curriculum']>;
+  programSubjects: ResultProgramSubject[];
+  periodSubjectCount: number;
+  components: ResultComponent[];
+  unrecognizedComponents: string[];
+  requiredFields: ResultImportField[];
+}
 
 export interface DownloadFile {
   filename: string;
@@ -227,8 +258,12 @@ export class ResultImportsService {
    * Re-reads the examination and proves that the submitted course, curriculum, session and
    * semester/year are exactly its own. Client-provided identifiers are never trusted on their own.
    */
-  private async resolveContext(context: ResultPreviewContext, enforceBlockers = true) {
-    const exam = await this.prisma.client.examination.findUnique({
+  async resolveContext(
+    context: ResultPreviewContext,
+    enforceBlockers = true,
+    client: Prisma.TransactionClient = this.prisma.client,
+  ): Promise<ResolvedResultContext> {
+    const exam = await client.examination.findUnique({
       where: { id: context.examinationId },
       select: {
         id: true,
@@ -284,7 +319,7 @@ export class ResultImportsService {
     if (mismatches.length > 0) throw Errors.validation(mismatches);
 
     const curriculum = exam.curriculum;
-    const subjects = await this.prisma.client.programSubject.findMany({
+    const subjects = await client.programSubject.findMany({
       where: { curriculumId: curriculum.id },
       orderBy: [{ semesterNumber: 'asc' }, { displayOrder: 'asc' }],
       select: {
@@ -343,7 +378,7 @@ export class ResultImportsService {
       unrecognizedComponents: [...unrecognized].sort(),
       requiredFields: components
         .filter((component) => component.required)
-        .map((component) => component.field) as ResultImportField[],
+        .map((component) => component.field),
     };
   }
 
@@ -678,10 +713,10 @@ export class ResultImportsService {
     });
   }
 
-  private present(
+  private async present(
     meta: PreviewMeta,
     resolved: Awaited<ReturnType<ResultImportsService['resolveContext']>>,
-  ): ResultPreview {
+  ): Promise<ResultPreview> {
     const { exam, curriculum } = resolved;
     return {
       id: meta.id,
@@ -718,6 +753,10 @@ export class ResultImportsService {
       sheets: meta.sheets,
       mapping: meta.mapping,
       counts: meta.counts,
+      hasSavedDrafts:
+        (await this.prisma.client.resultDraftBatch.count({
+          where: { previewId: meta.id, actorUserId: meta.ownerUserId },
+        })) > 0,
       hasErrorReport: meta.counts !== null && meta.counts.warnings + meta.counts.errors > 0,
     };
   }
