@@ -7,6 +7,7 @@ import { ResultPreviewStore } from './result-preview.store.js';
 /** Phase 10B: results import preview (temporary, owner-scoped; never writes results). */
 @Module({
   controllers: [ResultImportsController],
+  exports: [ResultImportsService, ResultPreviewStore],
   providers: [ResultImportsService, ResultPreviewStore, WorkbookUploadInterceptor],
 })
 export class ResultImportsModule {}

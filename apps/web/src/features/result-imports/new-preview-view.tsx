@@ -21,7 +21,7 @@ import { errorMessage } from '@/lib/api';
 import { resultImportsApi } from './api';
 import { PreviewNotice, PreviewSteps } from './shared';
 
-function ContextSelect({
+export function ContextSelect({
   label,
   value,
   options,

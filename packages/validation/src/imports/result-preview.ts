@@ -179,6 +179,7 @@ export const resultPreviewSchema = z
     mapping: resultPreviewMappingSchema.nullable(),
     counts: resultPreviewCountsSchema.nullable(),
     hasErrorReport: z.boolean(),
+    hasSavedDrafts: z.boolean().optional(),
   })
   .meta({ id: 'ResultPreview' });
 

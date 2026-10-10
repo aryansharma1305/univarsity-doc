@@ -23,6 +23,7 @@ export interface AdminNavItem {
     | '/admin'
     | '/admin/students'
     | '/admin/imports'
+    | '/admin/results'
     | '/admin/results/import'
     | '/admin/student-accounts'
     | '/admin/profile-requests'
@@ -57,6 +58,12 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     label: 'Imports',
     icon: FileSpreadsheetIcon,
     permission: PERMISSIONS.importsRead,
+  },
+  {
+    href: '/admin/results',
+    label: 'Draft Results',
+    icon: ClipboardPenLineIcon,
+    permission: PERMISSIONS.resultsRead,
   },
   {
     href: '/admin/results/import',
@@ -142,6 +149,8 @@ export const SEGMENT_LABELS: Record<string, string> = {
   'academic-sessions': 'Academic Sessions',
   imports: 'Imports',
   results: 'Results',
+  'results/new': 'Enter marks',
+  'results/*': 'Draft',
   'results/import': 'Results Import',
   'import/*': 'Preview',
   'student-accounts': 'Student Accounts',

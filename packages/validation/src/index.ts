@@ -13,3 +13,4 @@ export * from './examinations/schemas.js';
 export * from './examinations/re-exams.js';
 export * from './examinations/payment-common.js';
 export * from './examinations/re-exam-payments.js';
+export * from './results/drafts.js';

@@ -74,3 +74,12 @@ import jobs. See [API and lifecycle](../api/result-import-previews.md). It retai
 classified rows privately in Redis for two hours and exposes no commit operation. Persistent
 RESULTS staging, manual marks entry, result conflict resolution, attempt/revision policy and
 approval/publication remain later phases. No new database migration is required.
+
+## 11. Phase 10C draft persistence
+
+Manual drafts and confirmed Excel-to-draft saving reuse the existing Result/ResultItem identity.
+See [Phase 10C design](phase-10c-draft-results.md), [API](../api/draft-results.md) and
+[ADR-0015](../decisions/ADR-0015-ungraded-draft-results.md). Re-exam result attempts preserve the
+approved application's number exactly, as confirmed; no automatic increment, replacement or
+carry-forward is inferred. Excel rejects different existing draft marks for manual resolution.
+Nullable draft outcomes remove the need to invent pass/fail; approval/publication remains deferred.

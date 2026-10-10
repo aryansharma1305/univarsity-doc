@@ -1,7 +1,9 @@
 # Manual marks entry — design foundation (Phase 9, Part F)
 
-Status: **design only.** Implementation is Phase 10, after the university approves its grading and
-attempt rules. Examinations are conducted in the university's separate application; marks are typed in
+Status: **Phase 10C implements internal DRAFT marks only.** See the
+[current draft contract](../api/draft-results.md) and [ADR-0015](../decisions/ADR-0015-ungraded-draft-results.md).
+The proposed verification/publication contract below remains future design; its blockers are historical.
+Grading, carry-forward, replacement and publication rules remain unapproved. Examinations are conducted in the university's separate application; marks are typed in
 by staff afterwards. Docversity never connects to, imports from or scrapes that application.
 
 ## What already exists (Phase 2 schema, unchanged)

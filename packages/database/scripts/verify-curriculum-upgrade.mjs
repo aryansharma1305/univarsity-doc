@@ -115,14 +115,14 @@ try {
   assert.equal(c.version_code, 'LEGACY-2025');
   assert.equal(c.number_of_periods, 4);
   assert.equal(c.status, 'DRAFT');
-  assert.deepEqual(
-    (await db.query('SELECT * FROM results WHERE id=$1', [result])).rows[0],
-    oldResult,
-  );
-  assert.deepEqual(
-    (await db.query('SELECT * FROM result_items WHERE id=$1', [item])).rows[0],
-    oldItem,
-  );
+  assert.deepEqual((await db.query('SELECT * FROM results WHERE id=$1', [result])).rows[0], {
+    ...oldResult,
+    version: 1,
+  });
+  assert.deepEqual((await db.query('SELECT * FROM result_items WHERE id=$1', [item])).rows[0], {
+    ...oldItem,
+    re_exam_application_id: null,
+  });
   const largeCourse = (
     await db.query(
       'SELECT duration_semesters, academic_structure, period_count FROM programs WHERE id=$1',

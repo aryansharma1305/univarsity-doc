@@ -11,7 +11,7 @@ it is never written or maintained by hand.
 Swagger is served only when `SWAGGER_ENABLED=true` (default `false`; `.env.example` enables it for local
 development). Keep it disabled in production unless access is restricted.
 
-Feature references: [academic masters](./academic-masters.md) · [course curricula](./curricula.md) · [imports](./imports.md) · [student portal & accounts](./student-accounts.md) · [profile change requests](./profile-requests.md) · [historical documents](./historical-documents.md).
+Feature references: [academic masters](./academic-masters.md) · [course curricula](./curricula.md) · [imports](./imports.md) · [student portal & accounts](./student-accounts.md) · [profile change requests](./profile-requests.md) · [historical documents](./historical-documents.md) · [examinations](./examinations.md) · [result previews](./result-import-previews.md) · [internal draft results](./draft-results.md).
 
 ## How the OpenAPI schema is produced (single source of truth)
 

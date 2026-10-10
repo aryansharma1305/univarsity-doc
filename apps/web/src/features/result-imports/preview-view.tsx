@@ -1,4 +1,5 @@
 'use client';
+import { DraftImportAction } from '@/features/draft-results/import-action';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -324,6 +325,7 @@ function Mapping({ preview }: { preview: ResultPreview }) {
   );
 }
 export function ResultPreviewView({ id }: { id: string }) {
+  const [draftSaved, setDraftSaved] = useState(false);
   const canRun = useCan(PERMISSIONS.importsResultsRun);
   const router = useRouter();
   const query = useQuery({
@@ -351,7 +353,13 @@ export function ResultPreviewView({ id }: { id: string }) {
         title="Results preview"
         description="Check normalized marks and validation messages for this workbook."
       />
-      <PreviewNotice />
+      {draftSaved || preview?.hasSavedDrafts ? (
+        <p role="note" className="mb-6 text-sm">
+          Internal drafts have been saved. No results have been approved or published.
+        </p>
+      ) : (
+        <PreviewNotice />
+      )}
       {query.isPending ? (
         <TableSkeleton />
       ) : query.isError ? (
@@ -399,6 +407,12 @@ export function ResultPreviewView({ id }: { id: string }) {
                 with warnings, {preview.counts.errors} with errors.
               </p>
               <PreviewRows preview={preview} />
+              <DraftImportAction
+                previewId={id}
+                onSaved={() => {
+                  setDraftSaved(true);
+                }}
+              />
               <section className="flex flex-col gap-3">
                 <h2 className="text-section-title">6. Download error report</h2>
                 <p className="text-sm text-muted-foreground">

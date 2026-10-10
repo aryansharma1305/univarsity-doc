@@ -1,8 +1,10 @@
 # Results import previews (Phase 10B)
 
-Staff with `imports.results.run` can use `/admin/results/import`. This workflow is preview-only:
-there is no commit endpoint and it never creates or changes official results, result items,
-registrations, grading schemes, certificates or payments.
+Staff with `imports.results.run` can use `/admin/results/import`. Upload, mapping, validation and
+preview endpoints remain read-only for marks. Phase 10C adds a separate, confirmed
+[draft persistence workflow](draft-results.md) requiring `results.write` as well; it saves internal
+DRAFT records only. There is no approval/publication or registration, grading-scheme, certificate or
+payment modification.
 
 ```text
 Existing examination context → XLSX upload → worksheet/column mapping → validation
