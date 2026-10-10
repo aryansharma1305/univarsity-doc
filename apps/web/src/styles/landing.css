@@ -1,0 +1,132 @@
+/*
+ * Public landing page tokens (UI-01).
+ *
+ * Builds on the shared palette in @docversity/ui/styles/theme.css — no new brand colours. These tokens
+ * only add the marketing-scale typography, hairline surfaces and motion timings the landing page needs.
+ * Admin and student screens do not use them.
+ */
+
+:root {
+  --lp-ink: var(--dv-navy-950);
+  --lp-ink-soft: #334158; /* 10.6:1 on white — supporting copy */
+  --lp-paper: #fbfcfe;
+  --lp-hairline: rgb(3 20 47 / 0.08);
+  --lp-hairline-strong: rgb(3 20 47 / 0.14);
+  --lp-accent: var(--dv-blue-600);
+  --lp-accent-tint: #e9f0fd;
+  --lp-surface: #ffffff; /* cards and banded sections */
+  --lp-cta: var(--dv-navy-950); /* primary button */
+  --lp-cta-hover: var(--dv-navy-900);
+  --lp-cta-fg: #ffffff;
+  --lp-live: var(--dv-success-text); /* "available now" text */
+  --lp-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * Dark mode follows the device setting, on the landing page only (the admin and student apps are
+ * light-only). Scoped with :has() on <body> so the shared public header follows the page. Product
+ * mockups keep their light palette on purpose — they show the real, light-themed portal.
+ */
+@media (prefers-color-scheme: dark) {
+  body:has([data-lp-root]) {
+    --lp-ink: #e8eefb;
+    --lp-ink-soft: #bcc7da; /* 10.4:1 on --lp-surface */
+    --lp-paper: #050d1d;
+    --lp-surface: #0b1930; /* lifted band: separates sections from --lp-paper */
+    --lp-hairline: rgb(255 255 255 / 0.1);
+    --lp-hairline-strong: rgb(255 255 255 / 0.18);
+    --lp-accent: #6aa6ff; /* 7.4:1 on --lp-paper */
+    --lp-accent-tint: rgb(106 166 255 / 0.12);
+    --lp-cta: #ffffff;
+    --lp-cta-hover: #dbe5f5;
+    --lp-cta-fg: var(--dv-navy-950);
+    --lp-live: #4ade80;
+    color-scheme: dark;
+    background: var(--lp-paper);
+  }
+}
+
+@theme inline {
+  --color-lp-ink: var(--lp-ink);
+  --color-lp-ink-soft: var(--lp-ink-soft);
+  --color-lp-paper: var(--lp-paper);
+  --color-lp-hairline: var(--lp-hairline);
+  --color-lp-hairline-strong: var(--lp-hairline-strong);
+  --color-lp-accent: var(--lp-accent);
+  --color-lp-accent-tint: var(--lp-accent-tint);
+  --color-lp-surface: var(--lp-surface);
+  --color-lp-cta: var(--lp-cta);
+  --color-lp-cta-hover: var(--lp-cta-hover);
+  --color-lp-cta-fg: var(--lp-cta-fg);
+  --color-lp-live: var(--lp-live);
+
+  --shadow-lp-window:
+    0 0 0 1px rgb(3 20 47 / 0.06), 0 2px 4px rgb(3 20 47 / 0.04),
+    0 24px 48px -12px rgb(3 20 47 / 0.18), 0 64px 96px -32px rgb(7 89 215 / 0.18);
+  --shadow-lp-float: 0 0 0 1px rgb(3 20 47 / 0.06), 0 12px 32px -8px rgb(3 20 47 / 0.2);
+  --ease-lp-out: var(--lp-ease-out);
+}
+
+/* Marketing type scale. Sizes clamp between the 390px and 1440px layouts. */
+@utility lp-type-hero {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(2.5rem, 1.7rem + 3.6vw, 4.75rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+@utility lp-type-section {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(2rem, 1.5rem + 2.1vw, 3.25rem);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+@utility lp-type-lead {
+  font-size: clamp(1.0625rem, 1rem + 0.35vw, 1.25rem);
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+}
+@utility lp-type-eyebrow {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+/* The one editorial accent per heading: serif italic, slightly larger optical size. */
+@utility lp-serif {
+  /* --font-lp-serif is set by next/font on the landing page wrapper, so resolve it here, not on :root. */
+  font-family: var(--font-lp-serif), Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -0.02em;
+}
+
+/* Hairline blueprint grid used behind the hero and final CTA. */
+@utility lp-grid {
+  background-image:
+    linear-gradient(to right, var(--lp-hairline) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--lp-hairline) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+@utility lp-grid-fade {
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 30%, transparent 75%);
+}
+
+/* Cursor spotlight: cards set --lp-x / --lp-y from pointer position (see Spotlight). */
+@utility lp-spotlight {
+  background-image: radial-gradient(
+    320px circle at var(--lp-x, -999px) var(--lp-y, -999px),
+    var(--lp-accent-tint),
+    transparent 70%
+  );
+}
+
+/* Elements GSAP animates start hidden only once the pre-paint guard has confirmed motion is allowed.
+   The flag lives on <body>, whose attributes the root layout exempts from hydration checks. */
+@layer base {
+  body[data-lp-motion] [data-lp-reveal] {
+    visibility: hidden;
+  }
+}

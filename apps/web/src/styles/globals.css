@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import '@docversity/ui/styles/theme.css';
+@import './landing.css';
 
 /* Tailwind must also scan the design-system package for class names. */
 @source '../../../../packages/ui/src';
