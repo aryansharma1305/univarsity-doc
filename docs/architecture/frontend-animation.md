@@ -1,7 +1,8 @@
 # Frontend animation rules
 
 Framer Motion and GSAP are both part of the agreed stack. To keep motion purposeful and the bundle small,
-each has a defined job. **Neither is installed in Phase 1** — they are added when the first screen needs them.
+each has a defined job. The installed packages are `motion` (Framer Motion) and `gsap`, reused by UI-01
+and UI-02 rather than introducing another animation stack.
 
 ## Framer Motion — default for UI motion
 
@@ -21,6 +22,8 @@ Use **only** for:
 - complex hero sequences on the public landing page
 - QR scanning visual effects
 - special timeline-based interactions that Framer Motion cannot express cleanly
+- the explicitly requested UI-02 dashboard workspace switcher: a bounded rule/mask timeline,
+  dynamically loaded in that feature only, with static content as the fallback
 
 **Do not use GSAP for ordinary UI transitions.**
 
