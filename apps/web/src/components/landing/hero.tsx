@@ -231,7 +231,11 @@ export function Hero() {
           </div>
         </div>
 
-        <div data-lp-window data-lp-reveal className="relative mx-auto max-w-[1040px]">
+        <div
+          data-lp-window
+          data-lp-reveal
+          className="relative mx-auto max-w-[22rem] md:max-w-[1040px]"
+        >
           <div
             data-lp-tilt
             role="tabpanel"

@@ -60,7 +60,7 @@ export function HowItWorks() {
       ref={scope}
       id="get-started"
       aria-labelledby="how-heading"
-      className="scroll-mt-20 bg-lp-paper py-24 sm:py-32"
+      className="scroll-mt-20 border-t border-lp-hairline bg-lp-surface py-24 sm:py-32"
     >
       <div className="mx-auto grid max-w-7xl gap-14 px-4 lg:grid-cols-[1fr_1.15fr] lg:gap-20 lg:px-8">
         <div className="lg:sticky lg:top-32 lg:self-start">
@@ -75,7 +75,7 @@ export function HowItWorks() {
             lead="Your university has already registered you. Activate your account once, then sign in with your registration number and password."
           />
           <Reveal delay={0.1} className="mt-8">
-            <div className="rounded-2xl border border-lp-hairline bg-lp-surface p-5">
+            <div className="rounded-2xl border border-lp-hairline-strong bg-lp-paper p-5">
               <p className="font-heading text-sm font-semibold text-lp-ink">
                 Have these ready before you activate
               </p>
@@ -120,7 +120,7 @@ export function HowItWorks() {
               <span className="relative z-10 flex size-10 shrink-0 items-center justify-center rounded-full border border-lp-hairline-strong bg-lp-surface font-heading text-sm font-bold text-lp-ink-soft transition-[background-color,border-color,color,box-shadow] duration-500 group-data-[state=active]:border-lp-accent group-data-[state=active]:bg-lp-accent group-data-[state=active]:text-lp-cta-fg group-data-[state=active]:shadow-[0_0_0_6px_var(--lp-accent-tint)]">
                 {String(index + 1).padStart(2, '0')}
               </span>
-              <div className="flex flex-col gap-2 pt-1.5 transition-opacity duration-500 group-data-[state=idle]:opacity-45">
+              <div className="flex flex-col gap-2 pt-1.5 transition-opacity duration-500 group-data-[state=idle]:opacity-75">
                 <h3 className="font-heading text-xl font-semibold tracking-tight text-lp-ink">
                   {step.title}
                 </h3>

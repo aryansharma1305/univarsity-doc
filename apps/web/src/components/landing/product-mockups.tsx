@@ -65,7 +65,7 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
       data-lp-part="panel"
       className="rounded-lg border border-border bg-white p-3.5 shadow-card"
     >
-      <p className="text-[0.6875rem] font-semibold text-navy-950">{title}</p>
+      <p className="text-[0.8125rem] md:text-[0.6875rem] font-semibold text-navy-950">{title}</p>
       <div className="mt-2.5">{children}</div>
     </div>
   );
@@ -75,7 +75,7 @@ function Pill({ tone, children }: { tone: 'success' | 'info' | 'muted'; children
   return (
     <span
       className={cn(
-        'shrink-0 rounded-full px-1.5 py-0.5 text-[0.5625rem] font-semibold',
+        'shrink-0 rounded-full px-1.5 py-0.5 text-[0.6875rem] md:text-[0.5625rem] font-semibold',
         tone === 'success' && 'bg-success-soft text-success-text',
         tone === 'info' && 'bg-info-soft text-brand',
         tone === 'muted' && 'bg-slate-100 text-slate-600',
@@ -93,17 +93,17 @@ function DashboardView() {
         data-lp-part="panel"
         className="flex items-center gap-4 rounded-xl bg-navy-950 p-4 text-white"
       >
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-[0.75rem] font-bold">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-[0.875rem] md:text-[0.75rem] font-bold">
           ST
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[0.5625rem] font-semibold tracking-wider text-white/65 uppercase">
+          <p className="text-[0.6875rem] md:text-[0.5625rem] font-semibold tracking-wider text-white/65 uppercase">
             Student overview
           </p>
           <Bar className="mt-1.5 h-2.5 w-36 bg-white/80" />
           <Bar className="mt-1.5 h-1.5 w-24 bg-white/30" />
         </div>
-        <span className="hidden items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[0.625rem] font-semibold sm:flex">
+        <span className="hidden items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[0.75rem] md:text-[0.625rem] font-semibold sm:flex">
           <span className="size-1.5 rounded-full bg-emerald-400" />
           Active
         </span>
@@ -125,7 +125,7 @@ function DashboardView() {
         </Panel>
         <div className="hidden lg:block">
           <Panel title="Documents">
-            <span className="flex items-center gap-2 text-[0.625rem] text-muted-foreground">
+            <span className="flex items-center gap-2 text-[0.75rem] md:text-[0.625rem] text-muted-foreground">
               <FileBadgeIcon className="size-3.5 text-brand" />
               Published documents
             </span>
@@ -135,11 +135,11 @@ function DashboardView() {
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Panel title="Examinations">
-          <span className="flex items-center justify-between gap-2 text-[0.625rem]">
+          <span className="flex items-center justify-between gap-2 text-[0.75rem] md:text-[0.625rem]">
             <span className="text-muted-foreground">Re-exam applications</span>
             <Pill tone="info">Open</Pill>
           </span>
-          <p className="mt-2 text-[0.625rem] text-muted-foreground">
+          <p className="mt-2 text-[0.75rem] md:text-[0.625rem] text-muted-foreground">
             Results are not available yet
           </p>
         </Panel>
@@ -148,7 +148,7 @@ function DashboardView() {
             {['View profile', 'Course details', 'My documents'].map((action) => (
               <span
                 key={action}
-                className="rounded-md border border-border px-2 py-1 text-[0.625rem] font-medium text-navy-950"
+                className="rounded-md border border-border px-2 py-1 text-[0.75rem] md:text-[0.625rem] font-medium text-navy-950"
               >
                 {action}
               </span>
@@ -176,7 +176,9 @@ function ProfileView() {
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
           {PROFILE_FIELDS.map((field, index) => (
             <div key={field}>
-              <dt className="text-[0.5625rem] font-medium text-muted-foreground">{field}</dt>
+              <dt className="text-[0.6875rem] md:text-[0.5625rem] font-medium text-muted-foreground">
+                {field}
+              </dt>
               <dd>
                 <Bar className={cn('mt-1.5 h-1.5', index % 2 ? 'w-16' : 'w-24')} />
               </dd>
@@ -186,15 +188,15 @@ function ProfileView() {
       </Panel>
       <div className="flex flex-col gap-3">
         <Panel title="Photo">
-          <span className="flex size-14 items-center justify-center rounded-lg bg-secondary text-[0.75rem] font-bold text-navy-900">
+          <span className="flex size-14 items-center justify-center rounded-lg bg-secondary text-[0.875rem] md:text-[0.75rem] font-bold text-navy-900">
             ST
           </span>
         </Panel>
         <Panel title="Something wrong?">
-          <p className="text-[0.625rem] leading-relaxed text-muted-foreground">
+          <p className="text-[0.75rem] md:text-[0.625rem] leading-relaxed text-muted-foreground">
             Request a correction. University staff review it before your record changes.
           </p>
-          <span className="mt-2.5 inline-flex rounded-md bg-navy-950 px-2.5 py-1 text-[0.625rem] font-semibold text-white">
+          <span className="mt-2.5 inline-flex rounded-md bg-navy-950 px-2.5 py-1 text-[0.75rem] md:text-[0.625rem] font-semibold text-white">
             Request a correction
           </span>
         </Panel>
@@ -241,7 +243,7 @@ function ExaminationsView() {
           {['w-32', 'w-24'].map((width) => (
             <li key={width} className="flex items-center justify-between gap-2 py-2 first:pt-0">
               <Bar className={cn('h-1.5', width)} />
-              <span className="rounded-md border border-border px-2 py-0.5 text-[0.5625rem] font-semibold text-navy-950">
+              <span className="rounded-md border border-border px-2 py-0.5 text-[0.6875rem] md:text-[0.5625rem] font-semibold text-navy-950">
                 Open exam app ↗
               </span>
             </li>
@@ -250,16 +252,18 @@ function ExaminationsView() {
       </Panel>
       <div className="grid gap-3 sm:grid-cols-2">
         <Panel title="Re-examination">
-          <span className="flex items-center justify-between gap-2 text-[0.625rem]">
+          <span className="flex items-center justify-between gap-2 text-[0.75rem] md:text-[0.625rem]">
             <span className="text-muted-foreground">Applications</span>
             <Pill tone="info">Open</Pill>
           </span>
-          <span className="mt-2.5 inline-flex rounded-md bg-navy-950 px-2.5 py-1 text-[0.625rem] font-semibold text-white">
+          <span className="mt-2.5 inline-flex rounded-md bg-navy-950 px-2.5 py-1 text-[0.75rem] md:text-[0.625rem] font-semibold text-white">
             Apply for a re-exam
           </span>
         </Panel>
         <Panel title="Results">
-          <p className="text-[0.625rem] text-muted-foreground">Results are not available yet</p>
+          <p className="text-[0.75rem] md:text-[0.625rem] text-muted-foreground">
+            Results are not available yet
+          </p>
           <Pill tone="muted">Coming soon</Pill>
         </Panel>
       </div>
@@ -280,11 +284,13 @@ function DocumentsView() {
               <FileBadgeIcon className="size-3.5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[0.6875rem] font-medium text-navy-950">{kind}</span>
+              <span className="block text-[0.8125rem] md:text-[0.6875rem] font-medium text-navy-950">
+                {kind}
+              </span>
               <Bar className="mt-1 h-1.5 w-20" />
             </span>
             <Pill tone="success">Published</Pill>
-            <span className="rounded-md border border-border px-2 py-0.5 text-[0.5625rem] font-semibold text-navy-950">
+            <span className="rounded-md border border-border px-2 py-0.5 text-[0.6875rem] md:text-[0.5625rem] font-semibold text-navy-950">
               Download
             </span>
           </li>
@@ -321,18 +327,18 @@ export function StudentWindow({
     <div
       aria-hidden="true"
       className={cn(
-        'overflow-hidden rounded-xl bg-white shadow-lp-window ring-1 ring-lp-hairline select-none',
+        'overflow-hidden rounded-[1.75rem] border-[6px] border-navy-950 bg-white shadow-lp-window select-none md:rounded-xl md:border-0 md:ring-1 md:ring-lp-hairline',
         className,
       )}
     >
       {/* Window chrome */}
-      <div className="flex h-9 items-center gap-3 border-b border-slate-200 bg-slate-50 px-3.5">
+      <div className="hidden h-9 items-center gap-3 border-b border-slate-200 bg-slate-50 px-3.5 md:flex">
         <span className="flex gap-1.5">
           <span className="size-2.5 rounded-full bg-slate-300" />
           <span className="size-2.5 rounded-full bg-slate-300" />
           <span className="size-2.5 rounded-full bg-slate-300" />
         </span>
-        <span className="mx-auto flex h-5 w-56 items-center justify-center rounded-md bg-white text-[0.625rem] text-slate-500 ring-1 ring-slate-200">
+        <span className="mx-auto flex h-5 w-56 items-center justify-center rounded-md bg-white text-[0.75rem] md:text-[0.625rem] text-slate-500 ring-1 ring-slate-200">
           /student{view === 'dashboard' ? '' : `/${view}`}
         </span>
         <span className="w-10" />
@@ -358,7 +364,7 @@ export function StudentWindow({
                       if (target) onSelect?.(target);
                     }}
                     className={cn(
-                      'relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.6875rem] font-medium transition-colors',
+                      'relative flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[0.8125rem] md:text-[0.6875rem] font-medium transition-colors',
                       active ? 'text-white' : 'text-white/65',
                       target && onSelect && 'cursor-pointer hover:text-white',
                     )}
@@ -377,7 +383,7 @@ export function StudentWindow({
                     <item.icon className="relative size-3.5 shrink-0" />
                     <span className="relative truncate">{item.label}</span>
                     {item.soon && (
-                      <span className="relative ml-auto rounded bg-white/10 px-1 text-[0.5rem] text-white/70">
+                      <span className="relative ml-auto rounded bg-white/10 px-1 text-[0.5625rem] md:text-[0.5rem] text-white/70">
                         Soon
                       </span>
                     )}
@@ -390,12 +396,15 @@ export function StudentWindow({
         {/* Main */}
         <div className="min-w-0 flex-1 bg-background">
           <div className="flex h-11 items-center justify-between gap-3 border-b border-border bg-white px-4">
-            <span className="text-[0.6875rem] font-semibold text-navy-950">
-              {VIEW_TITLES[view]}
+            <span className="flex items-center gap-2">
+              <DocversityMark className="size-5 md:hidden" />
+              <span className="text-[0.8125rem] md:text-[0.6875rem] font-semibold text-navy-950">
+                {VIEW_TITLES[view]}
+              </span>
             </span>
             <span className="flex items-center gap-3">
               <BellIcon className="size-3.5 text-slate-500" />
-              <span className="flex size-6 items-center justify-center rounded-full bg-secondary text-[0.5625rem] font-bold text-navy-900">
+              <span className="flex size-6 items-center justify-center rounded-full bg-secondary text-[0.6875rem] md:text-[0.5625rem] font-bold text-navy-900">
                 ST
               </span>
             </span>

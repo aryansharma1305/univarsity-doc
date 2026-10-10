@@ -32,7 +32,10 @@ const CHOICES: readonly {
 /** Sends students to the right door: first-timers often press "Login" by mistake. */
 export function FinalCta() {
   return (
-    <section aria-labelledby="cta-heading" className="relative isolate overflow-hidden bg-lp-paper">
+    <section
+      aria-labelledby="cta-heading"
+      className="relative isolate overflow-hidden border-t border-lp-hairline bg-lp-paper"
+    >
       <div aria-hidden="true" className="lp-grid lp-grid-fade absolute inset-0 -z-10" />
       <div className="mx-auto flex max-w-4xl flex-col items-center px-4 py-24 text-center sm:py-32 lg:px-8">
         <Reveal className="flex flex-col items-center gap-5">

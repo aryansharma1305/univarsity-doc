@@ -54,7 +54,7 @@ export function PublicHeader() {
             <Wordmark adaptive subtitle={false} />
           </span>
           <span className="hidden sm:block">
-            <Wordmark adaptive />
+            <Wordmark adaptive large />
           </span>
         </Link>
 

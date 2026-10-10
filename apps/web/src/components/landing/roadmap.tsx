@@ -14,7 +14,7 @@ export function Roadmap() {
     <section
       id="roadmap"
       aria-labelledby="roadmap-heading"
-      className="scroll-mt-20 border-t border-lp-hairline bg-lp-surface py-24 sm:py-32"
+      className="scroll-mt-20 border-t border-lp-hairline bg-lp-paper py-24 sm:py-32"
     >
       <div className="mx-auto max-w-7xl px-4 lg:px-8">
         <SectionHeading

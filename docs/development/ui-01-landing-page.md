@@ -100,10 +100,30 @@ light on purpose (they depict the light-themed portal).
 `app/(public)/opengraph-image.tsx` generates a 1200×630 PNG at build time. `metadataBase` uses
 `WEB_URL`. The site stays `noindex` until launch (root layout, unchanged).
 
+## Final polish pass
+
+After visual review, without new features:
+
+- **Contrast:** `--lp-ink-soft` darkened in light mode (`#334158`, 10.6:1 on white) and brightened in
+  dark mode (`#bcc7da`, 10.4:1 on the dark surface). Idle get-started steps dim to 75% instead of 45%
+  (still ≥ 5:1 in both themes).
+- **Mobile preview:** below `md` the hero preview is framed as a phone (navy bezel, no desktop address
+  bar) at up to 22 rem wide, with its type stepped up one size (e.g. 10 → 12 px). Desktop is unchanged.
+- **Header branding:** the wordmark has an opt-in `large` size (bigger shield and name, tracked
+  subtitle), used in the public header from `sm` up. Phones keep the standard size so the header fits
+  at 390 px.
+- **Dark-mode separation:** sections alternate `--lp-paper` and a lifted `--lp-surface`
+  (`#0b1930`) with hairline dividers; hairlines are slightly stronger in dark mode.
+- **Mobile feature cards:** icon beside the text, tighter padding and gaps on phones; the 390 px page is
+  526 px shorter (9,924 → 9,398 px).
+
+Overflow at 390 px is checked with a full-height viewport and an element scan: with mobile emulation,
+wide content widens the layout viewport instead of scrolling, which `scrollWidth − innerWidth` misses.
+
 ## Accessibility
 
 - axe (serious/critical) passes on `/` in light mode (`accessibility.spec.ts`) and was run locally in
-  dark mode as well. Three contrast issues found during the work were fixed.
+  dark mode at 1440 px and 390 px as well. Three contrast issues found during the work were fixed.
 - Real headings per section; preview tabs, FAQ accordion and palette follow WAI-ARIA patterns;
   decorative mockups are `aria-hidden` with a screen-reader description of the selected screen.
 - No page-level horizontal scroll at 390 px.
@@ -126,5 +146,5 @@ Production build, full page:
 | 390   | [light](ui-01/landing-390-light.png)  | [dark](ui-01/landing-390-dark.png)  |
 
 Details: [hero](ui-01/hero-1440-light.png), [portal preview — Profile](ui-01/preview-profile.png),
-[command palette](ui-01/command-palette.png). Before (dev build): [1440](ui-01/before-1440.png),
+[command palette](ui-01/command-palette.png), [mobile preview](ui-01/preview-mobile.png). Before (dev build): [1440](ui-01/before-1440.png),
 [390](ui-01/before-390.png). Screenshots are manual evidence, not golden assertions.

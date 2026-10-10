@@ -8,7 +8,7 @@
 
 :root {
   --lp-ink: var(--dv-navy-950);
-  --lp-ink-soft: #3b4a63; /* 9.1:1 on white — long-form body copy */
+  --lp-ink-soft: #334158; /* 10.6:1 on white — supporting copy */
   --lp-paper: #fbfcfe;
   --lp-hairline: rgb(3 20 47 / 0.08);
   --lp-hairline-strong: rgb(3 20 47 / 0.14);
@@ -30,11 +30,11 @@
 @media (prefers-color-scheme: dark) {
   body:has([data-lp-root]) {
     --lp-ink: #e8eefb;
-    --lp-ink-soft: #a9b6cc; /* 8.9:1 on --lp-surface */
+    --lp-ink-soft: #bcc7da; /* 10.4:1 on --lp-surface */
     --lp-paper: #050d1d;
-    --lp-surface: #0a1628;
-    --lp-hairline: rgb(255 255 255 / 0.08);
-    --lp-hairline-strong: rgb(255 255 255 / 0.16);
+    --lp-surface: #0b1930; /* lifted band: separates sections from --lp-paper */
+    --lp-hairline: rgb(255 255 255 / 0.1);
+    --lp-hairline-strong: rgb(255 255 255 / 0.18);
     --lp-accent: #6aa6ff; /* 7.4:1 on --lp-paper */
     --lp-accent-tint: rgb(106 166 255 / 0.12);
     --lp-cta: #ffffff;
