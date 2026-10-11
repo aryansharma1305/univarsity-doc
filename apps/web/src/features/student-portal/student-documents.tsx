@@ -35,7 +35,7 @@ function DocumentCard({ document }: { document: StudentDocument }) {
   return (
     <article
       aria-label={document.title}
-      className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-card"
+      className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6"
     >
       <div className="flex items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-brand">
@@ -93,7 +93,7 @@ function DocumentCard({ document }: { document: StudentDocument }) {
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`Preview ${document.title} (opens in a new tab)`}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-navy-950 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-navy-950 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <ExternalLinkIcon aria-hidden="true" className="size-4" />
               Preview
@@ -101,7 +101,7 @@ function DocumentCard({ document }: { document: StudentDocument }) {
             <a
               href={fileUrl(document.id, 'attachment')}
               aria-label={`Download ${document.title}`}
-              className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               <DownloadIcon aria-hidden="true" className="size-4" />
               Download

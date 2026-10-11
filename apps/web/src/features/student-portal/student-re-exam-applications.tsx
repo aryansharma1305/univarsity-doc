@@ -27,7 +27,7 @@ const TONE = {
 } as const;
 
 const outlineButton =
-  'inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-navy-950 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50';
+  'inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-navy-950 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50';
 
 function feeDescription(app: StudentReExamApplication): string {
   const fee = app.fee;
@@ -61,7 +61,7 @@ function ApplicationCard({ app }: { app: StudentReExamApplication }) {
   return (
     <article
       aria-label={`Application ${app.reference}`}
-      className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-card"
+      className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -133,7 +133,7 @@ function ApplicationCard({ app }: { app: StudentReExamApplication }) {
           <div className="border-t border-border pt-4">
             <Link
               href={`/student/examinations/re-exam/${app.id}/payment`}
-              className="inline-flex h-9 items-center rounded-md bg-brand px-3 text-sm font-medium text-white hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="inline-flex min-h-11 items-center rounded-md bg-brand px-3 text-sm font-medium text-white hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               {app.payment && app.payment.status !== 'REJECTED' ? 'View payment' : 'Pay now'}
             </Link>

@@ -22,11 +22,11 @@ export function PortalCard({
 }) {
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   return (
-    <section className={cn('flex flex-col rounded-xl border border-border bg-card', className)}>
-      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
+    <section className={cn('flex flex-col rounded-2xl border border-border bg-card', className)}>
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-5 sm:px-6">
         <div className="flex min-w-0 items-center gap-2.5">
           {Icon && (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-brand">
+            <span className="flex size-5 shrink-0 items-center justify-center text-brand">
               <Icon aria-hidden="true" className="size-4" />
             </span>
           )}
@@ -35,13 +35,13 @@ export function PortalCard({
         {action && (
           <Link
             href={action.href}
-            className="shrink-0 rounded text-sm font-medium text-brand hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="inline-flex min-h-11 shrink-0 items-center rounded text-sm font-medium text-brand hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             {action.label}
           </Link>
         )}
       </div>
-      <div className="flex flex-1 flex-col px-5 py-4">{children}</div>
+      <div className="flex flex-1 flex-col px-5 py-5 sm:px-6">{children}</div>
     </section>
   );
 }
@@ -86,7 +86,7 @@ export function PortalEmptyState({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-4 text-center">
       <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Icon aria-hidden="true" className="size-5" />
       </span>
@@ -115,9 +115,9 @@ export function SoonBadge({ onDark = false }: { onDark?: boolean }) {
 
 export function PageIntro({ title, description }: { title: string; description: string }) {
   return (
-    <div className="mb-6">
+    <div className="mb-6 max-w-3xl">
       <h1 className="text-page-title text-navy-950">{title}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
     </div>
   );
 }

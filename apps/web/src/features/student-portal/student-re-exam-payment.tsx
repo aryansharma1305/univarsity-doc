@@ -33,7 +33,7 @@ const TONE = {
 } as const;
 
 const primaryButton =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50';
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-brand px-4 text-sm font-medium text-white hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50';
 
 const ORDINAL = ['first', 'second', 'third', 'fourth', 'fifth'];
 function attemptLabel(n: number): string {
