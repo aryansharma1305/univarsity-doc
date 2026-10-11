@@ -118,7 +118,7 @@ All local repository gates passed:
 | Unit/integration       | `pnpm turbo run test --force --concurrency=1 -- --maxWorkers=1`        | **688 passed**, 14 tasks uncached            |
 | Production build       | `pnpm turbo run build --force --concurrency=2`                         | Passed, 10 tasks uncached                    |
 | Database drift         | `pnpm db:check`                                                        | **No difference detected**                   |
-| Complete browser suite | `pnpm --filter @docversity/web test:e2e` against that production build | **52 passed**, no retries/skips, 6.2 minutes |
+| Complete browser suite | `pnpm --filter @docversity/web test:e2e` against that production build | **52 passed**, no retries/skips, 6.3 minutes |
 
 Unit/integration totals: API 330, web 98, database 98, imports 94, validation 37, types 20,
 worker 7 and storage 4. New coverage adds five API, two web, two validation and two browser tests.
@@ -130,6 +130,26 @@ authentication source, assertions nor timeouts were changed. This is recorded as
 incident, without claiming a proven root cause. The first browser run found an over-broad alert
 selector matching Next.js's route announcer as well as the correct rendered error. Scoping it to
 `main` retained the complete error/retry assertions; all 52 tests then passed.
+
+### PR CI shared-database investigation
+
+The initial push CI passed, but PR CI failed in existing Excel-batch rollback (expected 500,
+received 409) and review retry (expected 200, received 500) assertions. The preview-expiry rollback
+regressions and all five new student-results API tests passed. Each failing test passed five focused
+runs; both full result test files passed five runs (41 tests each). Parallel full-suite stress runs
+reproduced other existing draft/review failures and a dashboard count race. PostgreSQL CI logs also
+recorded serialization aborts. The exact transaction sequence behind the two original CI failures
+could not be reconstructed from those logs; no transaction-integrity breach is claimed or dismissed.
+
+The API global setup supplies one disposable database to all files. The smallest harness correction
+sets `fileParallelism: false`, preventing unrelated fixture writes/count changes across files while
+retaining every explicit `Promise.all` concurrency test, rollback safety assertion and timeout.
+No production draft/review, grading, approval or publication implementation changed.
+With isolation configured, the 330-test API suite passed with a 12-worker CLI limit (files still
+execute sequentially), and all repository gates passed again: 688 unit/integration tests, 52 browser
+tests without retries/skips, format, lint, typecheck, production build and database drift. A 12-worker
+stress attempt also exhausted database connections; that distinct overload is not presented as the
+cause of the original CI failures. Temporary diagnostic probes were removed before delivery.
 
 The preservation comparison matched **all 38 tables** in the original development database by
 row counts and content hashes, and **all 2,224 pre-existing MinIO objects** by key, size and ETag.
@@ -170,13 +190,14 @@ and both GitHub CI links are recorded in the draft PR and delivery response afte
 
 ## Changed files
 
-22 source/test/documentation files and 11 synthetic screenshots:
+23 source/test/documentation files and 11 synthetic screenshots:
 
 ```text
 apps/api/src/app.module.ts
 apps/api/src/student-results/student-results.controller.ts
 apps/api/src/student-results/student-results.module.ts
 apps/api/test/results/student-results.test.ts
+apps/api/vitest.config.ts
 apps/web/PRODUCT.md
 apps/web/e2e/student-portal.spec.ts
 apps/web/e2e/student-results.spec.ts
