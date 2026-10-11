@@ -445,22 +445,44 @@ describe('safe internal draft persistence', () => {
     const reviewed = await plan(p.id);
     expect(reviewed.counts).toEqual({ created: 0, updated: 0, skipped: 0, rejected: 2 });
   });
-  it('rolls back if the preview expires during a commit', async () => {
-    const f = await fixture();
-    const p = await preview(f, [[f.student.registrationNumber, f.subjectCode, '15', '50']]);
-    const reviewed = await plan(p.id);
-    const store = app.get(ResultPreviewStore),
-      original = store.meta.bind(store);
-    let reads = 0;
-    vi.spyOn(store, 'meta').mockImplementation(async (...args) => {
-      reads++;
-      return reads >= 3 ? null : original(...args);
-    });
-    await examAdmin
-      .post(`draft-results/imports/${p.id}/commit`, confirmed(reviewed.digest))
-      .expect(409);
-    expect(await testDb().result.count({ where: { examinationId: f.exam.id } })).toBe(0);
-  });
+  it.each([false, true])(
+    'rolls back if the preview expires during a commit (serialization retry: %s)',
+    async (retry) => {
+      const f = await fixture();
+      const p = await preview(f, [[f.student.registrationNumber, f.subjectCode, '15', '50']]);
+      const reviewed = await plan(p.id);
+      const audit = app.get(AuditService),
+        originalAudit = audit.writeAuditEvent.bind(audit);
+      let retried = false;
+      let expired = false;
+      vi.spyOn(audit, 'writeAuditEvent').mockImplementation(async (...args) => {
+        await originalAudit(...args);
+        if (retry && !retried) {
+          retried = true;
+          throw Object.assign(new Error('synthetic serialization retry'), { code: 'P2034' });
+        }
+        expired = true;
+      });
+      const store = app.get(ResultPreviewStore),
+        original = store.meta.bind(store);
+      // Expire after a successful write, not after reads consumed by serialization retries.
+      vi.spyOn(store, 'meta').mockImplementation(async (...args) =>
+        expired ? null : original(...args),
+      );
+      const request = confirmed(reviewed.digest);
+      await examAdmin.post(`draft-results/imports/${p.id}/commit`, request).expect(409);
+      expect(expired).toBe(true);
+      expect(retried).toBe(retry);
+      expect(await testDb().result.count({ where: { examinationId: f.exam.id } })).toBe(0);
+      expect(await testDb().resultItem.count({ where: { programSubjectId: f.line.id } })).toBe(0);
+      expect(await testDb().resultDraftBatch.count({ where: { id: request.batchId } })).toBe(0);
+      expect(
+        await testDb().auditLog.count({
+          where: { metadata: { path: ['batchId'], equals: request.batchId } },
+        }),
+      ).toBe(0);
+    },
+  );
   it('durable import receipts cannot be modified or deleted and expired previews cannot replay them', async () => {
     const f = await fixture();
     const p = await preview(f, [[f.student.registrationNumber, f.subjectCode, '15', '50']]);
