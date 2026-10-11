@@ -16,3 +16,5 @@ export * from './examinations/re-exam-payments.js';
 export * from './results/drafts.js';
 
 export * from './results/review.js';
+
+export * from './results/student-results.js';

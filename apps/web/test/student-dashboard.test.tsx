@@ -55,7 +55,7 @@ describe('student dashboard and read-only pages', () => {
     expect(screen.getByRole('heading', { name: 'Welcome, Test Student One' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'TEST-REG-1' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Quick actions' })).toBeInTheDocument();
-    expect(screen.getByText('Results are not available yet')).toBeInTheDocument();
+    expect(screen.getByText('Only published results appear in My Results')).toBeInTheDocument();
     // Phase 8: documents are real; with none published the card says so honestly.
     expect(screen.getByText('No documents published yet')).toBeInTheDocument();
     // Recent activity lists exactly one real event: the stored activation timestamp.
@@ -65,7 +65,7 @@ describe('student dashboard and read-only pages', () => {
     expect(activity.querySelector('time')).toHaveAttribute('datetime', me.account.activatedAt);
     expect(screen.queryByText('No activity available')).not.toBeInTheDocument();
     // Planned quick actions carry a "Soon" label; working ones do not.
-    expect(screen.getByRole('link', { name: /My Results.*Soon/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^My Results$/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /My Documents/ })).not.toHaveTextContent('Soon');
     expect(screen.getByRole('link', { name: /My Profile/ })).not.toHaveTextContent('Soon');
     expect(screen.queryByText(/65%|Rahul|WhatsApp|SGPA|CGPA/)).not.toBeInTheDocument();

@@ -8,6 +8,9 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     globalSetup: ['test/support/global-setup.ts'],
+    // Files share one disposable database; unrelated fixtures must not overlap.
+    // Explicit concurrency within each test still exercises transaction races.
+    fileParallelism: false,
     testTimeout: 20_000,
     hookTimeout: 30_000,
   },

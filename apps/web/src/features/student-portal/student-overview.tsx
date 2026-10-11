@@ -24,7 +24,7 @@ import { RecordStatus } from '@/components/data/status';
 import { cn } from '@docversity/ui';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { primaryRegistration, type StudentNavHref } from './nav';
-import { PortalCard, PortalEmptyState, SoonBadge } from './portal-ui';
+import { PortalCard, PortalEmptyState } from './portal-ui';
 import { StudentAvatar } from './student-avatar';
 import { StudentActionMotion, StudentDashboardMotion } from './student-motion';
 
@@ -247,7 +247,7 @@ export function StudentOverview({
             href="/student/results"
             className="inline-flex min-h-11 items-center gap-2 rounded text-xs text-muted-foreground hover:text-navy-950"
           >
-            My Results <SoonBadge />
+            My Results
           </Link>
         </div>
       </nav>
@@ -398,7 +398,7 @@ export function StudentOverview({
         )}
       </section>
       <footer className="flex flex-wrap justify-between gap-3 border-t border-border pt-4 text-xs text-muted-foreground">
-        <p>Results are not available yet</p>
+        <p>Only published results appear in My Results</p>
         <Link
           href="/help"
           className="inline-flex min-h-11 items-center rounded font-medium text-brand hover:underline"

@@ -22,7 +22,8 @@ Existing student routes provide profile/correction requests, assigned curricula,
 links, re-exam applications and regional payment instructions, published documents and account
 information. APIs enforce student ownership. UI-03 changes presentation only; authentication,
 permissions, fees, attempts, academic rules, migrations and stored records remain unchanged.
-Results and notifications remain honest unavailable pages. No unpublished marks, fabricated
+The Results page provides authenticated empty/error states while publication remains unavailable;
+the notifications page remains honestly unavailable. No unpublished marks, fabricated
 progress, notifications or university branding. Payment verification and application decisions
 remain separate.
 

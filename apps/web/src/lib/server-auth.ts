@@ -1,6 +1,7 @@
 import {
   type AuthUser,
   authUserSchema,
+  studentResultsPageSchema,
   type StudentMe,
   studentMeSchema,
   type StudentCurriculum,
@@ -210,6 +211,24 @@ export const getStudentDocuments = cache(async (): Promise<StudentDocument[] | n
     if (!response.ok) return null;
     const parsed = studentDocumentListSchema.safeParse(await response.json());
     return parsed.success ? parsed.data.data : null;
+  } catch {
+    return null;
+  }
+});
+
+/** Student-only release boundary. Failed reads remain distinct from an empty result page. */
+export const getStudentResults = cache(async () => {
+  const jar = await cookies();
+  if (!STUDENT_COOKIES.some((name) => jar.has(name))) return null;
+  const { API_INTERNAL_URL } = loadWebEnv();
+  try {
+    const response = await fetch(new URL('/api/v1/student/results', API_INTERNAL_URL), {
+      headers: { Cookie: jar.toString() },
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    const parsed = studentResultsPageSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }

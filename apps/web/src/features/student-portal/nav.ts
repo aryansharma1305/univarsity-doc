@@ -44,7 +44,7 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
     icon: ClipboardCheckIcon,
     available: true,
   },
-  { href: '/student/results', label: 'Results', icon: ClipboardListIcon, available: false },
+  { href: '/student/results', label: 'Results', icon: ClipboardListIcon, available: true },
   { href: '/student/documents', label: 'My Documents', icon: FileTextIcon, available: true },
   { href: '/student/notifications', label: 'Notifications', icon: BellIcon, available: false },
   { href: '/student/settings', label: 'Account Settings', icon: SettingsIcon, available: true },
