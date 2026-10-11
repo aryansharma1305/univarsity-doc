@@ -12,7 +12,7 @@ import { EXAMINATION_KIND_LABELS, type StudentExaminations } from '@docversity/v
 import { PageIntro, PortalCard, PortalEmptyState } from './portal-ui';
 
 const linkButton =
-  'inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
+  'inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
 
 function ExamApplications({ apps }: { apps: StudentExaminations['applications'] }) {
   return (
@@ -118,7 +118,7 @@ export function StudentExaminationsPage({ data }: { data: StudentExaminations | 
             </p>
             <Link
               href="/student/examinations/re-exam"
-              className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
               Apply for a re-examination
             </Link>

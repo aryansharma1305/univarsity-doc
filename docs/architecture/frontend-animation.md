@@ -25,7 +25,10 @@ Use **only** for:
 - the explicitly requested UI-02 dashboard workspace switcher: a bounded rule/mask timeline,
   dynamically loaded in that feature only, with static content as the fallback
 
-**Do not use GSAP for ordinary UI transitions.**
+- the explicitly requested UI-03 student dashboard entrance: one scoped, dynamically loaded
+  welcome/identity/academic/actions timeline following UI-01/UI-02 timing and lifecycle patterns
+
+**Do not use GSAP for ordinary UI transitions beyond these explicitly approved dashboard sequences.**
 
 ## General rules
 

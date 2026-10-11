@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
@@ -16,6 +17,8 @@ const WEB_PORT = 3100;
 const API_PORT = 4100;
 /** BullMQ prefix shared by the e2e API (producer) and e2e worker (consumer) — never the dev one. */
 const QUEUE_PREFIX = 'dve2eq';
+// Session and rate-limit keys belong to this test run, including repeated local runs.
+const REDIS_KEY_PREFIX = `dve2e:${randomUUID()}:`;
 const isCI = Boolean(process.env.CI);
 
 const baseDatabaseUrl = process.env.DATABASE_URL ?? '';
@@ -50,7 +53,7 @@ export default defineConfig({
         WEB_URL: `http://127.0.0.1:${WEB_PORT}`,
         CORS_ORIGINS: `http://127.0.0.1:${WEB_PORT}`,
         SWAGGER_ENABLED: 'false',
-        REDIS_KEY_PREFIX: 'dve2e:',
+        REDIS_KEY_PREFIX,
         QUEUE_PREFIX,
         LOG_LEVEL: 'warn',
       },

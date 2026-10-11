@@ -42,18 +42,18 @@ export function StudentProfile({
       <div className="grid items-start gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
         <section
           aria-label="Student identity"
-          className="flex flex-col items-center rounded-xl border border-border bg-card p-6 text-center"
+          className="flex flex-col items-center rounded-2xl bg-secondary p-6 text-center"
         >
           <StudentAvatar name={student.fullName} hasPhoto={student.hasPhoto} size="lg" />
           <h2 className="mt-5 text-card-title break-words text-navy-950">{student.fullName}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-navy-900/80">
             {student.hasPhoto
               ? 'Official photo on record.'
               : 'Photo: Not on record. Initials shown instead.'}
           </p>
           <Link
             href="/student/profile/requests"
-            className="mt-4 rounded text-sm font-medium text-brand hover:underline"
+            className="mt-4 inline-flex min-h-11 items-center rounded text-sm font-medium text-brand hover:underline"
           >
             My update requests
             {requests && requests.length > 0 ? ` (${String(requests.length)})` : ''}

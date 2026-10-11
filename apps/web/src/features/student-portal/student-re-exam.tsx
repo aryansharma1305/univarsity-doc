@@ -28,7 +28,7 @@ function feeLine(fee: SubjectOption['fee']): string {
 }
 
 const primaryButton =
-  'inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50';
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50';
 
 /**
  * The re-exam application form. Name, registration number, course, session and semester/year come
@@ -253,7 +253,7 @@ export function StudentReExamApply({ options }: { options: StudentReExamOptions 
                 </button>
                 <Link
                   href="/student/examinations/re-exam/applications"
-                  className="inline-flex h-10 items-center text-sm font-medium text-brand underline underline-offset-2"
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-brand underline underline-offset-2"
                 >
                   My re-exam applications
                 </Link>

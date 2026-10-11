@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { StudentMe } from '@docversity/validation';
+import type { StudentMe, StudentReExamApplication } from '@docversity/validation';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), replace: vi.fn(), push: vi.fn() }),
@@ -69,6 +69,77 @@ describe('student dashboard and read-only pages', () => {
     expect(screen.getByRole('link', { name: /My Documents/ })).not.toHaveTextContent('Soon');
     expect(screen.getByRole('link', { name: /My Profile/ })).not.toHaveTextContent('Soon');
     expect(screen.queryByText(/65%|Rahul|WhatsApp|SGPA|CGPA/)).not.toBeInTheDocument();
+  });
+
+  it('keeps an approved application separate from its unverified payment', () => {
+    const application: StudentReExamApplication = {
+      id: '01900000-0000-7000-8000-000000000010',
+      reference: 'TEST-APP-1',
+      status: 'APPROVED',
+      submittedAt: '2026-10-09T10:00:00.000Z',
+      registrationNumber: 'TEST-REG-1',
+      programName: 'Test Program',
+      academicSessionName: 'Test Session',
+      periodLabel: 'Year 1',
+      examinationName: 'Test Re-exam',
+      examSession: 'Test exam session',
+      subject: { code: 'TEST-SUB', name: 'Test subject' },
+      attemptNumber: 2,
+      decidedAt: null,
+      decisionReason: null,
+      cancelledAt: null,
+      history: [],
+      fee: {
+        status: 'NOT_CONFIGURED',
+        blockedReason: null,
+        amountMinor: null,
+        currency: null,
+        scope: null,
+        ruleVersion: null,
+        assessedAt: null,
+      },
+      payment: {
+        id: '01900000-0000-7000-8000-000000000011',
+        status: 'SUBMITTED',
+        region: 'INDIA',
+        amountMinor: 100,
+        currency: 'INR',
+        submittedAt: '2026-10-09T10:00:00.000Z',
+        reviewedAt: null,
+      },
+    };
+    render(<StudentOverview me={me} applications={[application]} />);
+    const status = screen.getByRole('list', { name: 'Re-exam application status' });
+    expect(status).toHaveTextContent('Application:Approved');
+    expect(status).toHaveTextContent('Payment:');
+    expect(status).toHaveTextContent('Submitted');
+    expect(status).not.toHaveTextContent('Verified');
+    expect(status).not.toHaveTextContent('Result');
+  });
+
+  it('keeps unavailable dashboard sources distinct from empty records', () => {
+    render(<StudentOverview me={me} requests={null} documents={null} applications={null} />);
+    expect(screen.getByText(/Profile requests could not be loaded/)).toBeInTheDocument();
+    expect(screen.getByText(/Documents could not be loaded/)).toBeInTheDocument();
+    expect(screen.getByText(/Re-exam applications could not be loaded/)).toBeInTheDocument();
+    expect(screen.queryByText('No documents published yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('No re-exam applications yet.')).not.toBeInTheDocument();
+    expect(screen.queryByText('No profile update is waiting for review.')).not.toBeInTheDocument();
+  });
+
+  it('offers only existing student destinations and never infers a current period', () => {
+    render(<StudentOverview me={me} />);
+    expect(screen.getByRole('link', { name: /Re-exam applications/ })).toHaveAttribute(
+      'href',
+      '/student/examinations/re-exam/applications',
+    );
+    expect(screen.getByRole('link', { name: /My Course/ })).toHaveAttribute(
+      'href',
+      '/student/course',
+    );
+    expect(
+      screen.queryByText(/Current semester|Current year|Attendance|CGPA/),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps the honest empty state when no activation timestamp is stored', () => {
