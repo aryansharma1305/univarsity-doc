@@ -282,3 +282,18 @@ packages/validation/src/documents/marksheet-preview.ts
 packages/validation/src/index.ts
 pnpm-lock.yaml
 ```
+
+## Approved PDF security follow-up
+
+The preview controller explicitly sets `Cache-Control: no-store` on PDF responses.
+The existing middleware remains in place to protect authorization and error responses.
+The API integration test checks the exact header for both inline and attachment responses
+across semester, year and stress fixtures, with an audit event for each successful preview.
+Authorization, auditing, SAMPLE watermarking, synthetic-only restrictions and the approved
+PDF layouts are unchanged.
+
+Follow-up verification: format, forced lint/typecheck, 723 uncached unit/integration
+tests, forced production build, database drift (no difference) and all 54 browser
+tests passed. The focused preview API suite passed all six tests. Preservation
+checks confirmed all 38 original tables and 2,629 original MinIO objects remain
+unchanged, and the existing localhost application responds with HTTP 200.

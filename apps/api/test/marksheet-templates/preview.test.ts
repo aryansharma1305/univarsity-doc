@@ -48,19 +48,21 @@ it('returns synthetic PDFs with safe headers and audits, without academic querie
   const storage = app.get<ObjectStorage>(OBJECT_STORAGE);
   const put = vi.spyOn(storage, 'putObject');
   const before = await testDb().result.count();
-  for (const fixture of ['semester', 'year', 'stress']) {
-    const response = await certificate
-      .get(
-        `marksheet-templates/preview?templateId=sample-academic&version=1&fixture=${fixture}&disposition=attachment`,
-      )
-      .expect(200);
-    expect(response.headers['content-type']).toContain('application/pdf');
-    expect(response.headers['content-disposition']).toBe(
-      `attachment; filename="sample-marksheet-${fixture}-v1.pdf"`,
-    );
-    expect(response.headers['cache-control']).toBe('no-store');
-    expect(response.headers['x-content-type-options']).toBe('nosniff');
-    expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+  for (const disposition of ['inline', 'attachment']) {
+    for (const fixture of ['semester', 'year', 'stress']) {
+      const response = await certificate
+        .get(
+          `marksheet-templates/preview?templateId=sample-academic&version=1&fixture=${fixture}&disposition=${disposition}`,
+        )
+        .expect(200);
+      expect(response.headers['content-type']).toContain('application/pdf');
+      expect(response.headers['content-disposition']).toBe(
+        `${disposition}; filename="sample-marksheet-${fixture}-v1.pdf"`,
+      );
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['content-security-policy']).toContain("default-src 'none'");
+    }
   }
   expect(results).not.toHaveBeenCalled();
   expect(items).not.toHaveBeenCalled();
@@ -70,7 +72,7 @@ it('returns synthetic PDFs with safe headers and audits, without academic querie
   const audits = await testDb().auditLog.findMany({
     where: { actorUserId: certificate.user.id, action: 'MARKSHEET_PREVIEW_GENERATED' },
   });
-  expect(audits).toHaveLength(3);
+  expect(audits).toHaveLength(6);
   expect(JSON.stringify(audits.map((a) => a.metadata))).not.toMatch(
     /Alex|SAMPLE\/2026|studentId|resultId/,
   );

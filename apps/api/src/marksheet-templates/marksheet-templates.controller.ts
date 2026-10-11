@@ -33,6 +33,7 @@ export class MarksheetTemplatesController {
     const bytes = await this.service.preview(query, auth.user.id);
     res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'self'");
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-store');
     return new StreamableFile(bytes, {
       type: 'application/pdf',
       disposition: `${query.disposition}; filename="sample-marksheet-${query.fixture}-v1.pdf"`,
