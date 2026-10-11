@@ -197,7 +197,7 @@ export async function apiUpload<TSchema extends z.ZodType>(
  * Downloads a private file (template, error report) through the authenticated API and hands it to
  * the browser as a file. Nothing is cached; the object URL is revoked right away.
  */
-export async function apiDownload(path: string, fallbackName: string): Promise<void> {
+export async function apiFile(path: string): Promise<{ blob: Blob; filename: string | null }> {
   let response: Response;
   try {
     response = await fetch(buildUrl(path), { credentials: 'same-origin', cache: 'no-store' });
@@ -210,8 +210,14 @@ export async function apiDownload(path: string, fallbackName: string): Promise<v
   }
   if (!response.ok) throw await toApiError(response);
   const disposition = response.headers.get('content-disposition') ?? '';
-  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallbackName;
-  const url = URL.createObjectURL(await response.blob());
+  const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? null;
+  return { blob: await response.blob(), filename: name };
+}
+
+export async function apiDownload(path: string, fallbackName: string): Promise<void> {
+  const file = await apiFile(path);
+  const name = file.filename ?? fallbackName;
+  const url = URL.createObjectURL(file.blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = name;

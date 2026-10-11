@@ -4,6 +4,7 @@ export const NAV_GROUPS = ['Workspace', 'Records', 'Academic', 'Examinations', '
 
 /** Presentation only: permissions and destinations remain owned by ADMIN_NAV. */
 export function navGroup(href: string): (typeof NAV_GROUPS)[number] {
+  if (href === '/admin/marksheet-templates') return 'Examinations';
   if (href.startsWith('/admin/settings')) return 'Settings';
   if (/^\/admin\/(results|examinations|re-exam)/.test(href)) return 'Examinations';
   if (/^\/admin\/(programs|subjects|departments|academic-sessions)/.test(href)) return 'Academic';

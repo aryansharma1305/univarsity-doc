@@ -18,3 +18,5 @@ export * from './results/drafts.js';
 export * from './results/review.js';
 
 export * from './results/student-results.js';
+
+export * from './documents/marksheet-preview.js';

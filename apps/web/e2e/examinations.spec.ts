@@ -237,6 +237,10 @@ test('re-exam application: confirmed fee schedule, verified identity, attempt an
   await staff
     .getByLabel('Search by student name or registration number')
     .fill(alpha.registrationNumber);
+  // The debounced filter must finish replacing the URL before navigating to a detail page.
+  await expect
+    .poll(() => new URL(staff.url()).searchParams.get('search'))
+    .toBe(alpha.registrationNumber);
   await staff.getByRole('link', { name: reference }).first().click();
   await expect(staff.getByRole('heading', { level: 1, name: 'E2E Examinee Alpha' })).toBeVisible();
   await expect(staff.getByText('₹1,000.00 · Per subject (paper)')).toBeVisible();
