@@ -23,6 +23,7 @@ import { StorageModule } from './storage/storage.module.js';
 import { StudentAccountsModule } from './student-accounts/student-accounts.module.js';
 import { StudentProfileModule } from './student-profile/student-profile.module.js';
 import { StudentAuthGuard } from './student-auth/student-auth.guard.js';
+import { StudentResultsModule } from './student-results/student-results.module.js';
 import { StudentAuthModule } from './student-auth/student-auth.module.js';
 
 @Module({})
@@ -46,6 +47,7 @@ export class AppModule {
         StudentAuthModule,
         StudentAccountsModule,
         StudentProfileModule,
+        StudentResultsModule,
         HistoricalDocumentsModule,
         ExaminationsModule,
         ReExamsModule,

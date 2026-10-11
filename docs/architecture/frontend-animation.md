@@ -28,7 +28,10 @@ Use **only** for:
 - the explicitly requested UI-03 student dashboard entrance: one scoped, dynamically loaded
   welcome/identity/academic/actions timeline following UI-01/UI-02 timing and lifecycle patterns
 
-**Do not use GSAP for ordinary UI transitions beyond these explicitly approved dashboard sequences.**
+- the explicitly requested Phase 11A student Results entrance: a scoped, dynamically loaded
+  4px translation over 280ms, without hiding content or delaying result/error visibility
+
+**Do not use GSAP for ordinary UI transitions beyond these explicitly approved sequences.**
 
 ## General rules
 

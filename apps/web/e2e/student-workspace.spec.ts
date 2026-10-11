@@ -89,7 +89,7 @@ test('mobile student tasks remain accessible with motion disabled and show only 
   } else {
     await expect(page.getByText('No documents published yet')).toBeVisible();
   }
-  await expect(page.getByText('Results are not available yet')).toBeVisible();
+  await expect(page.getByText('Only published results appear in My Results')).toBeVisible();
   await expect(page.locator('main')).not.toContainText(/CGPA|SGPA|Attendance/);
   const navigation = page.getByRole('navigation', { name: 'Student quick navigation' });
   await navigation.getByRole('link', { name: 'Home', exact: true }).focus();

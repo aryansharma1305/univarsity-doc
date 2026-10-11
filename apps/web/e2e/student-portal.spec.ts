@@ -72,14 +72,14 @@ test('a student activates with a university code, sees only their own record, si
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: fixture.registrationNumber })).toBeVisible();
   await expect(page.getByText('Not on record').first()).toBeVisible();
-  // Recent activity shows only the real activation event; planned modules are marked "Soon".
+  // Recent activity shows only the real activation event; Results opens the release boundary.
   await expect(
     page.getByRole('list', { name: 'Recent activity' }).getByText('Student account activated'),
   ).toBeVisible();
   await expect(
     page
       .getByRole('navigation', { name: 'Quick actions' })
-      .getByRole('link', { name: /My Results.*Soon/ }),
+      .getByRole('link', { name: /^My Results$/ }),
   ).toBeVisible();
   await expectNoSeriousA11yViolations(page);
   await capture(page, 'student-home-desktop');
@@ -88,7 +88,7 @@ test('a student activates with a university code, sees only their own record, si
     ['My Profile', '/student/profile', 'My Profile'],
     ['Course Details', '/student/course', 'Course Details'],
     ['Examinations', '/student/examinations', 'Examinations'],
-    ['Results', '/student/results', 'Results'],
+    ['Results', '/student/results', 'My Results'],
     ['My Documents', '/student/documents', 'My Documents'],
     ['Notifications', '/student/notifications', 'Notifications'],
     ['Account Settings', '/student/settings', 'Account Settings'],
@@ -110,7 +110,13 @@ test('a student activates with a university code, sees only their own record, si
       await expect(page.getByText('Official records are read-only')).toBeVisible();
       await expect(page.getByRole('button', { name: /Edit/ })).toHaveCount(0);
     }
-    if (['/student/results', '/student/notifications'].includes(route ?? '')) {
+    if (route === '/student/results') {
+      await expect(page.getByRole('status')).toContainText(
+        "Your results haven't been published yet. They'll appear here when your university releases them.",
+      );
+      await expect(page.locator('main input, main form')).toHaveCount(0);
+    }
+    if (route === '/student/notifications') {
       await expect(page.getByText(/are not available yet/)).toBeVisible();
       await expect(page.locator('main input, main form')).toHaveCount(0);
     }
