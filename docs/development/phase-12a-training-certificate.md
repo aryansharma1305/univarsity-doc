@@ -119,3 +119,21 @@ Pre-existing design-context metadata drift and missing DESIGN.md were preserved,
 of this phase. The existing marksheet route remains intact despite a context-loader orphan warning.
 Final PR/SHA and CI run links are maintained in the draft PR body to avoid self-referential commits.
 The phase stops here: no Phase 12B, official issuance, signing, activation or public verification.
+
+## Final visual approval and scope audit
+
+The user approved the standard and long-text PDFs, including branding, typography, wrapping,
+SAMPLE watermark, QR placement and unsigned signature lines. The approved design is unchanged.
+The user-supplied reference and this approval authorize the isolated branding and decorative seal
+assets for synthetic development previews; the scope is recorded in the asset README.
+
+The PR retains exactly three generated knowledge-graph files: `graphify-out/graph.json`,
+`graphify-out/graph.html` and `graphify-out/GRAPH_REPORT.md`. These are documented repository
+requirements in [knowledge-graph instructions](knowledge-graph.md) and CLAUDE.md. No generated
+caches or unrelated graph outputs are included. The instructions permit the graph to lag behind
+small subsequent documentation edits, so this scope clarification does not regenerate it.
+
+This follow-up changes documentation only. Synthetic input restrictions, staff permissions,
+audit-before-delivery behavior, PDF security headers (including `Cache-Control: no-store`),
+watermarking and unsigned signatures remain unchanged. Final verification and both CI run links
+for the follow-up commit are recorded in the draft PR body.

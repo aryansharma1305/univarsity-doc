@@ -5,6 +5,11 @@ for Phase 12A. The complete source certificate, recipient, original QR and handw
 are not committed or reproduced. Crops are static branding, not evidence of issuance; every
 rendered page displays SAMPLE and blank unsigned signature lines.
 
+Development-preview authorization comes from the user's instruction to use the supplied reference
+for Phase 12A and their final visual approval of both synthetic PDFs. That authorization covers these
+branding and decorative seal crops in synthetic development previews. It does not activate official
+issuance, real signatures or public verification.
+
 UnifrakturMaguntia Book and Crimson Pro are self-hosted print fonts from Google Fonts,
 licensed under the included SIL Open Font License files. Source:
 https://github.com/google/fonts/tree/main/ofl/unifrakturmaguntia and
