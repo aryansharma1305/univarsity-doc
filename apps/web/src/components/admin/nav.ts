@@ -20,6 +20,7 @@ import {
 
 export interface AdminNavItem {
   href:
+    | '/admin/marksheet-templates'
     | '/admin'
     | '/admin/students'
     | '/admin/imports'
@@ -47,6 +48,12 @@ export interface AdminNavItem {
  */
 export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboardIcon },
+  {
+    href: '/admin/marksheet-templates',
+    label: 'Marksheet Templates',
+    icon: FileBadgeIcon,
+    permission: PERMISSIONS.templatesWrite,
+  },
   {
     href: '/admin/students',
     label: 'Students',
@@ -141,6 +148,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
 
 export const SEGMENT_LABELS: Record<string, string> = {
   admin: 'Dashboard',
+  'marksheet-templates': 'Marksheet Templates',
   students: 'Students',
   programs: 'Course Management',
   subjects: 'Subject Catalogue',

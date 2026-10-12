@@ -2,7 +2,7 @@
   "name": "@docversity/documents",
   "version": "0.0.0",
   "private": true,
-  "description": "Official document layouts rendered for both preview and PDF. Intentionally empty in Phase 1.",
+  "description": "Validated, synthetic-only marksheet templates and PDF renderer.",
   "type": "module",
   "exports": {
     ".": {
@@ -11,19 +11,28 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "assets"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@docversity/config": "workspace:*",
     "@types/node": "22.20.5",
+    "@types/pdfkit": "0.17.6",
     "eslint": "9.39.5",
-    "typescript": "6.0.3"
+    "pdf2json": "4.1.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  },
+  "dependencies": {
+    "@docversity/validation": "workspace:*",
+    "pdfkit": "0.20.2"
   }
 }

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@docversity/database": "workspace:*",
+    "@docversity/documents": "workspace:*",
     "@docversity/imports": "workspace:*",
     "@docversity/storage": "workspace:*",
     "@docversity/types": "workspace:*",

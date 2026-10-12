@@ -1,27 +1,22 @@
 # @docversity/documents
 
-Official document layouts. **Empty in Phase 1 by design** — no layouts are implemented until the
-client supplies approved samples, wording, fonts, seals and signatory details.
+Phase 11B implements **synthetic preview only**: code-versioned A4 templates, fixed invented
+fixtures and a validated PDFKit renderer returning PDF bytes. Official issuance is unavailable.
 
-## Planned structure
+- `renderMarksheetPreview(input, template)` validates both boundaries; it never queries a database,
+  fetches assets, writes storage, signs, publishes or calculates academic values.
+- `marksheetTemplate('sample-academic', 1)` selects the internal PREVIEW_ONLY registry entry.
+- `syntheticMarksheet('semester' | 'year' | 'stress')` returns fresh fictitious examples.
+- Input and template schemas live in `@docversity/validation`; unknown fields, URLs, paths,
+  excessive rows/text and watermark-suppression options are rejected.
+- Noto Sans regular/bold are embedded from bundled, fixed font paths. SIL OFL is included.
+- Every page carries `SAMPLE — NOT VALID FOR OFFICIAL USE`, the synthetic footer and page numbers.
+- Staff see **the actual generated PDF**, and download those same bytes. There is no separate HTML
+  facsimile and no production Chromium/native rendering dependency.
+- Only the existing templates.write permission authorizes previews. There is no student download.
 
-```text
-src/
-├── layouts/
-│   ├── result-statement/            public result download / print
-│   ├── registration-verification/   registration verification download / print
-│   ├── provisional-certificate/
-│   ├── transcript/
-│   └── character-certificate/
-├── shared/                          print CSS, QR block, signatory block, page frame
-└── index.ts                         render(layoutKey, data) → HTML string
-```
+The earlier HTML/worker/QR plan was a placeholder, not implemented behavior. The user-authorized
+Phase 11B contract now uses vector PDFs for previews; official templates, policy, provenance,
+signing and private issuance must be implemented and approved separately in Phase 11C.
 
-## Rules (from the migration plan)
-
-- A **template** = a code-defined layout (here) + database configuration (wording, signatories, asset
-  keys, number pattern). Program-specific variants are configuration, not copy-pasted layouts.
-- Admin-authored arbitrary HTML is not supported (injection risk; preview/PDF drift).
-- The same HTML is used for preview and PDF. PDF rendering happens only in `apps/worker`.
-- QR codes encode only an opaque verification URL — never names, numbers or marks.
-- Totals, percentages and GPAs shown on documents are always derived from stored data, never typed.
+See [Phase 11B](../../docs/development/phase-11b-marksheet-infrastructure.md).
