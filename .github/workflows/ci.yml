@@ -61,14 +61,14 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Install Playwright browser
+        run: pnpm --filter @docversity/web exec playwright install --with-deps chromium
+
       - name: Unit and integration tests
         run: pnpm test
 
       - name: Build
         run: pnpm build
-
-      - name: Install Playwright browser
-        run: pnpm --filter @docversity/web exec playwright install --with-deps chromium
 
       - name: Browser smoke test
         run: pnpm test:e2e
