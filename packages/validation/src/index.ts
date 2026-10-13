@@ -20,3 +20,4 @@ export * from './results/review.js';
 export * from './results/student-results.js';
 
 export * from './documents/marksheet-preview.js';
+export * from './documents/training-certificate.js';

@@ -1,5 +1,6 @@
 /** Audit action names written to `audit_logs.action`. Add new actions here, never inline strings. */
 export const AUDIT_ACTIONS = {
+  trainingCertificatePreviewGenerated: 'TRAINING_CERTIFICATE_PREVIEW_GENERATED',
   marksheetPreviewGenerated: 'MARKSHEET_PREVIEW_GENERATED',
   authLoginSuccess: 'AUTH_LOGIN_SUCCESS',
   authLoginFailure: 'AUTH_LOGIN_FAILURE',

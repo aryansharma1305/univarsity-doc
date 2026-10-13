@@ -2,7 +2,7 @@
   "name": "@docversity/documents",
   "version": "0.0.0",
   "private": true,
-  "description": "Validated, synthetic-only marksheet templates and PDF renderer.",
+  "description": "Validated, synthetic-only academic and training certificate templates and PDF renderers.",
   "type": "module",
   "exports": {
     ".": {
@@ -26,13 +26,17 @@
     "@docversity/config": "workspace:*",
     "@types/node": "22.20.5",
     "@types/pdfkit": "0.17.6",
+    "@types/qrcode": "1.5.6",
     "eslint": "9.39.5",
     "pdf2json": "4.1.0",
+    "pdfjs-dist": "6.4.299",
     "typescript": "6.0.3",
     "vitest": "5.0.3"
   },
   "dependencies": {
     "@docversity/validation": "workspace:*",
-    "pdfkit": "0.20.2"
+    "pdfkit": "0.20.2",
+    "playwright": "1.63.0",
+    "qrcode": "1.5.4"
   }
 }
