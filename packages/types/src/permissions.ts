@@ -40,6 +40,8 @@ export const PERMISSIONS = {
   resultsReview: 'results.review',
   resultsApprove: 'results.approve',
   resultsPublish: 'results.publish',
+  certificateRequestsRead: 'certificateRequests.read',
+  certificateRequestsReview: 'certificateRequests.review',
   certificatesRead: 'certificates.read',
   certificatesGenerate: 'certificates.generate',
   certificatesApprove: 'certificates.approve',
@@ -174,6 +176,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
   ],
   /** Prepares certificates and maintains templates; cannot approve/issue (maker–checker). */
   CERTIFICATE_ADMIN: [
+    P.certificateRequestsRead,
+    P.certificateRequestsReview,
     ...READ_ONLY,
     P.certificatesGenerate,
     P.templatesWrite,

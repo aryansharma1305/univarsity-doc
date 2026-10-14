@@ -16,6 +16,7 @@ export type StudentNavHref =
   | '/student/course'
   | '/student/examinations'
   | '/student/results'
+  | '/student/certificate-requests'
   | '/student/documents'
   | '/student/notifications'
   | '/student/settings';
@@ -45,6 +46,12 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
     available: true,
   },
   { href: '/student/results', label: 'Results', icon: ClipboardListIcon, available: true },
+  {
+    href: '/student/certificate-requests',
+    label: 'Certificate Requests',
+    icon: FileTextIcon,
+    available: true,
+  },
   { href: '/student/documents', label: 'My Documents', icon: FileTextIcon, available: true },
   { href: '/student/notifications', label: 'Notifications', icon: BellIcon, available: false },
   { href: '/student/settings', label: 'Account Settings', icon: SettingsIcon, available: true },

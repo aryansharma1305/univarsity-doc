@@ -47,6 +47,7 @@ const approver = {
   password: randomBytes(24).toString('base64url'),
   displayName: 'E2E Payment Verifier',
 };
+let certificateRequestId;
 let fixture;
 const profileStudents = [];
 const examStudents = [];
@@ -215,6 +216,30 @@ try {
     programCode: program.code,
     sessionCode: session.code,
   };
+  // Phase 12B: existing synthetic request only; no active university application policy is seeded.
+  const certificateStudent = profileStudents[0];
+  if (!certificateStudent) throw new Error('Missing synthetic certificate student');
+  const request = await db.certificateRequest.create({
+    data: {
+      reference: 'CR-E2E-SYNTHETIC-APPLICATION',
+      studentId: certificateStudent.studentId,
+      certificateType: 'TRANSCRIPT',
+      policyId: 'SYNTHETIC-ISOLATED-E2E',
+      policyVersion: 1,
+      policySnapshot: { synthetic: true },
+      purpose: 'Synthetic application for further study.',
+      submissionKey: randomUUID(),
+      events: {
+        create: {
+          version: 1,
+          status: 'SUBMITTED',
+          action: 'SUBMIT',
+          actorStudentId: certificateStudent.studentId,
+        },
+      },
+    },
+  });
+  certificateRequestId = request.id;
 } finally {
   await db.$disconnect();
 }
@@ -230,6 +255,7 @@ writeFileSync(
     registrar,
     fixture,
     profileStudents,
+    certificateRequestId,
     examAdmin,
     paymentChecker,
     approver,

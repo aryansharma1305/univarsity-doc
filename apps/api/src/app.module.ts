@@ -10,6 +10,7 @@ import { GlobalExceptionFilter } from './common/http-exception.filter.js';
 import type { ApiConfig } from './config/api-config.js';
 import { ConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
+import { CertificateRequestsModule } from './certificate-requests/certificate-requests.module.js';
 import { CertificateTemplatesModule } from './certificate-templates/certificate-templates.module.js';
 import { MarksheetTemplatesModule } from './marksheet-templates/marksheet-templates.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -52,6 +53,7 @@ export class AppModule {
         StudentResultsModule,
         MarksheetTemplatesModule,
         CertificateTemplatesModule,
+        CertificateRequestsModule,
         HistoricalDocumentsModule,
         ExaminationsModule,
         ReExamsModule,

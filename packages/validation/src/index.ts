@@ -21,3 +21,5 @@ export * from './results/student-results.js';
 
 export * from './documents/marksheet-preview.js';
 export * from './documents/training-certificate.js';
+
+export * from './certificate-requests/schemas.js';

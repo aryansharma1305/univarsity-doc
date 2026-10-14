@@ -430,11 +430,13 @@ model Student {
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  registrations         StudentRegistration[]
-  account               StudentAccount?
-  profileChangeRequests StudentProfileChangeRequest[]
-  reExamApplications    ReExamApplication[]
-  reExamPayments        ReExamPayment[]
+  registrations            StudentRegistration[]
+  account                  StudentAccount?
+  profileChangeRequests    StudentProfileChangeRequest[]
+  reExamApplications       ReExamApplication[]
+  certificateRequests      CertificateRequest[]
+  certificateRequestEvents CertificateRequestEvent[]
+  reExamPayments           ReExamPayment[]
 
   @@map("students")
 }
@@ -1440,6 +1442,7 @@ model User {
   paymentDestinationsApproved  ReExamPaymentDestination[]    @relation("PaymentDestinationApprovedBy")
   paymentDestinationsRetired   ReExamPaymentDestination[]    @relation("PaymentDestinationRetiredBy")
   reExamPaymentsReviewed       ReExamPayment[]               @relation("ReExamPaymentReviewedBy")
+  certificateRequestEvents     CertificateRequestEvent[]
   auditLogs                    AuditLog[]
   certificatesGenerated        Certificate[]                 @relation("CertificateGeneratedBy")
   certificatesApproved         Certificate[]                 @relation("CertificateApprovedBy")
@@ -1584,4 +1587,52 @@ model ResultReviewEvent {
   @@unique([resultId, resultVersion])
   @@index([actorUserId])
   @@map("result_review_events")
+}
+
+/// Application/review infrastructure only: no approval, payment or issuance state.
+model CertificateRequest {
+  id              String                    @id @default(uuid(7)) @db.Uuid
+  reference       String                    @unique @db.VarChar(64)
+  studentId       String                    @map("student_id") @db.Uuid
+  certificateType String                    @map("certificate_type") @db.VarChar(32)
+  policyId        String                    @map("policy_id") @db.VarChar(128)
+  policyVersion   Int                       @map("policy_version")
+  policySnapshot  Json                      @map("policy_snapshot")
+  status          String                    @default("SUBMITTED") @db.VarChar(32)
+  purpose         String                    @db.VarChar(1000)
+  remarks         String?                   @db.VarChar(2000)
+  submissionKey   String                    @map("submission_key") @db.Uuid
+  version         Int                       @default(1)
+  submittedAt     DateTime                  @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  updatedAt       DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  student         Student                   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  events          CertificateRequestEvent[]
+
+  @@unique([studentId, submissionKey])
+  @@unique([studentId, certificateType], map: "certificate_requests_one_open_key", where: raw("((status)::text = ANY (ARRAY[('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('INFORMATION_REQUESTED'::character varying)::text, ('INFORMATION_PROVIDED'::character varying)::text, ('REVIEW_COMPLETED'::character varying)::text]))"))
+  @@index([studentId, submittedAt])
+  @@index([status, certificateType, submittedAt])
+  @@map("certificate_requests")
+}
+
+/// Append-only, student messages and internal review notes are distinct.
+model CertificateRequestEvent {
+  id             String             @id @default(uuid(7)) @db.Uuid
+  requestId      String             @map("request_id") @db.Uuid
+  version        Int
+  status         String             @db.VarChar(32)
+  action         String             @db.VarChar(32)
+  studentMessage String?            @map("student_message") @db.VarChar(2000)
+  privateNote    String?            @map("private_note") @db.VarChar(2000)
+  actorStudentId String?            @map("actor_student_id") @db.Uuid
+  actorUserId    String?            @map("actor_user_id") @db.Uuid
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  request        CertificateRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  actorStudent   Student?           @relation(fields: [actorStudentId], references: [id], onDelete: Restrict)
+  actorUser      User?              @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@unique([requestId, version])
+  @@index([actorUserId])
+  @@index([actorStudentId])
+  @@map("certificate_request_events")
 }
