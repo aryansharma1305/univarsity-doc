@@ -21,6 +21,7 @@ import {
 export interface AdminNavItem {
   href:
     | '/admin/marksheet-templates'
+    | '/admin/certificate-requests'
     | '/admin/certificate-templates'
     | '/admin'
     | '/admin/students'
@@ -48,6 +49,12 @@ export interface AdminNavItem {
  * Admin navigation. Only implemented workflows are listed; results currently expose preview imports.
  */
 export const ADMIN_NAV: readonly AdminNavItem[] = [
+  {
+    href: '/admin/certificate-requests',
+    label: 'Certificate Requests',
+    icon: FileBadgeIcon,
+    permission: PERMISSIONS.certificateRequestsRead,
+  },
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboardIcon },
   {
     href: '/admin/certificate-templates',
@@ -154,6 +161,8 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
 ];
 
 export const SEGMENT_LABELS: Record<string, string> = {
+  'certificate-requests': 'Certificate Requests',
+  'certificate-requests/*': 'Application',
   admin: 'Dashboard',
   'certificate-templates': 'Certificate Templates',
   'marksheet-templates': 'Marksheet Templates',
