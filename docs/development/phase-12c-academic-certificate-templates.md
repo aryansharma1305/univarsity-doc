@@ -214,9 +214,12 @@ objects, coordination with Codex; the key lists are kept locally for that decisi
   bucket and aborts the run if it is unreachable (no fallback to the development bucket).
 - e2e: the Playwright API **and worker** servers use it; a missing bucket fails the API `/health`
   storage probe, so the run cannot start.
-- Provisioning: `docker/minio/init.sh` creates the test bucket (private) and scopes the application
-  user's policy to exactly the two buckets; compose and `.env.example` define `S3_TEST_BUCKET`. CI
-  starts a fresh MinIO from this script.
+- Provisioning: `docker/minio/init.sh` creates the test bucket (private) and adds it to the
+  application user's policy only when `S3_TEST_BUCKET` is set. Local `docker-compose.yml` and
+  `.env.example` set it, and CI uses those. The Phase 14A staging stack (`deploy/compose.yml`) runs
+  the same script without it, so staging and production keep a single bucket and the original
+  single-bucket policy. All three modes (staging, local, and a test bucket equal to the app bucket,
+  which is refused) were checked in throwaway MinIO containers.
 - Local shared MinIO: the updated idempotent `init.sh` was run once in the running container. It
   created the empty bucket `docversity-local-test` and widened the `docversity-app` policy to it. The
   previous policy was captured first; no development object was touched. If the shared container is
