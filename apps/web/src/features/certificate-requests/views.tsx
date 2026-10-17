@@ -229,6 +229,17 @@ function RequestsView({
             : 'Review applications and request information. Staff review does not authorize certificate issuance.'
         }
       />
+      {student && (
+        <p className="text-sm text-muted-foreground">
+          Want to see an example?{' '}
+          <Link
+            href="/student/documents#certificate-samples"
+            className="inline-flex min-h-11 items-center rounded font-medium text-brand underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            View Sample Certificate
+          </Link>
+        </p>
+      )}
       {student &&
         (catalogue.isPending ? (
           <TableSkeleton rows={3} />

@@ -1,8 +1,12 @@
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
+import { StudentCertificateSamplesController } from './student-certificate-samples.controller.js';
 import { CertificateTemplatesController } from './certificate-templates.controller.js';
 import { CertificateTemplatesService } from './certificate-templates.service.js';
-@Module({ controllers: [CertificateTemplatesController], providers: [CertificateTemplatesService] })
+@Module({
+  controllers: [CertificateTemplatesController, StudentCertificateSamplesController],
+  providers: [CertificateTemplatesService],
+})
 export class CertificateTemplatesModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
@@ -10,6 +14,6 @@ export class CertificateTemplatesModule implements NestModule {
         res.setHeader('Cache-Control', 'no-store');
         next();
       })
-      .forRoutes(CertificateTemplatesController);
+      .forRoutes(CertificateTemplatesController, StudentCertificateSamplesController);
   }
 }

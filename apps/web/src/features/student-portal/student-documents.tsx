@@ -10,6 +10,7 @@ import {
   HISTORICAL_DOCUMENT_TYPE_LABELS,
   type StudentDocument,
 } from '@docversity/validation';
+import { StudentCertificateSamples } from './certificate-samples';
 import { formatDate } from '@/lib/format';
 import { PageIntro, PortalCard, PortalEmptyState } from './portal-ui';
 
@@ -125,6 +126,7 @@ export function StudentDocuments({ documents }: { documents: StudentDocument[] |
         title="My Documents"
         description="Certificates and records the university has published to you. You can view and download them; only the university can add or change documents."
       />
+      <StudentCertificateSamples />
       {documents === null ? (
         <PortalCard title="Documents" icon={FileTextIcon}>
           <p role="alert" className="text-sm text-danger-text">
