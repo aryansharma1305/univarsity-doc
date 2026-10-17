@@ -42,6 +42,7 @@ python3 deploy/scripts/staging.py up
 python3 deploy/scripts/staging.py fixture
 # Export only the public local CA certificate for the trusted HTTPS smoke client.
 docker compose -f deploy/compose.yml cp proxy:/data/caddy/pki/authorities/local/root.crt .local/staging/local-ca.crt
+chmod 644 .local/staging/local-ca.crt
 python3 deploy/scripts/staging.py smoke
 python3 deploy/scripts/staging.py status
 python3 deploy/scripts/staging.py backup
@@ -175,7 +176,9 @@ No test assertion was removed: a missing host Playwright browser after local cle
 the smoke script's student endpoint was corrected to the existing `/student/me` contract. MinIO's
 filtered bucket listing was tested against an additional private canary rather than assuming that
 listing accessible buckets must fail. The canary is an empty control fixture, not application data;
-backups cover the application bucket.
+backups cover the application bucket. Linux CI also confirmed that `docker compose cp` preserves
+the CA file’s restrictive source mode; the public certificate is explicitly set to `0644`
+before the non-root smoke client reads it. Private keys and credential permissions are unchanged.
 
 ### Resources observed
 
