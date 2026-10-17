@@ -1,0 +1,18 @@
+{
+  admin off
+  skip_install_trust
+  auto_https disable_redirects
+}
+https://localhost {
+  tls internal
+  encode zstd gzip
+  request_body {
+    max_size 12MB
+  }
+  handle /health {
+    reverse_proxy api:4000
+  }
+  handle {
+    reverse_proxy web:3000
+  }
+}

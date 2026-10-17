@@ -71,3 +71,7 @@ graphify-out/20*/
 
 # Reviewed synthetic sample shipped privately by the document package (never real student PDFs)
 !packages/documents/assets/samples/training-v1.pdf
+
+# Isolated staging credentials, certificates and backup data
+.local/
+deploy/scripts/__pycache__/

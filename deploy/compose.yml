@@ -1,0 +1,237 @@
+name: docversity14a
+x-app: &app
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs: ['/tmp:size=256m,mode=1777']
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  pids_limit: 256
+  mem_limit: 1g
+  cpus: 1.0
+  stop_grace_period: 60s
+  networks: [backend]
+  secrets: [runtime]
+  logging: &logging
+    driver: json-file
+    options: { max-size: 10m, max-file: '3' }
+services:
+  tools:
+    <<: *app
+    image: docversity14a-tools:${IMAGE_TAG:-local}
+    profiles: [operator]
+    restart: 'no'
+    volumes:
+      - ./scripts:/operations:ro
+      - ../.local/staging/fixture.json:/credentials/fixture.json:ro
+      - ../.local/staging/local-ca.crt:/credentials/local-ca.crt:ro
+    command: ['node', '/operations/fixture.mjs']
+  storage-tools:
+    image: cgr.dev/chainguard/minio@sha256:e7ca559d9f7c0b5f24f5f669bb92f40f3ca88d56273b808bf3a7c116c17d2ffa
+    profiles: [operator]
+    entrypoint: ['/bin/sh', '/operations/storage.sh']
+    user: '${LOCAL_UID:-1000}:${LOCAL_GID:-1000}'
+    secrets: [minio]
+    volumes:
+      - ./scripts:/operations:ro
+      - ../.local/backups:/backups
+    networks: [backend]
+    read_only: true
+    tmpfs: ['/tmp:size=16m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 128m
+  postgres:
+    stop_grace_period: 60s
+    image: postgres:17.11-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: docversity_bootstrap
+      POSTGRES_DB: docversity_staging
+      POSTGRES_PASSWORD_FILE: /run/secrets/database_bootstrap_password
+    secrets: [database_bootstrap_password, database_owner_password, database_app_password]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/10-app.sh:ro
+    networks: [backend]
+    mem_limit: 512m
+    cpus: 1.0
+    security_opt: ['no-new-privileges:true']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U docversity_bootstrap -d docversity_staging']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    logging: *logging
+  redis:
+    stop_grace_period: 60s
+    image: redis:7.4-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    restart: unless-stopped
+    user: redis
+    command: ['redis-server', '/run/secrets/redis_config']
+    secrets: [redis_config, redis_password]
+    read_only: true
+    tmpfs: ['/tmp:size=16m']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    volumes: [redis:/data]
+    networks: [backend]
+    mem_limit: 256m
+    cpus: 0.5
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'REDISCLI_AUTH=$$(cat /run/secrets/redis_password) redis-cli --user docversity --no-auth-warning ping | grep -q PONG',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    logging: *logging
+  minio:
+    stop_grace_period: 60s
+    image: cgr.dev/chainguard/minio@sha256:e7ca559d9f7c0b5f24f5f669bb92f40f3ca88d56273b808bf3a7c116c17d2ffa
+    restart: unless-stopped
+    entrypoint: ['/bin/sh', '/deploy/minio.sh']
+    secrets: [minio]
+    volumes:
+      - minio:/data
+      - ../docker/minio:/docker/minio:ro
+      - ./scripts:/deploy:ro
+    networks: [backend]
+    read_only: true
+    tmpfs: ['/tmp:size=64m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 512m
+    cpus: 1.0
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          '. /deploy/read-minio.sh; export MC_CONFIG_DIR=/tmp/.mc; export MC_HOST_local="http://$${MINIO_ROOT_USER}:$${MINIO_ROOT_PASSWORD}@127.0.0.1:9000"; mc ready local >/dev/null 2>&1 && test -f /tmp/.docversity-initialised',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    logging: *logging
+  migrate:
+    <<: *app
+    image: docversity14a-tools:${IMAGE_TAG:-local}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: tools }
+    restart: 'no'
+    secrets:
+      - source: migration_runtime
+        target: runtime
+    depends_on:
+      postgres: { condition: service_healthy }
+    command:
+      [
+        'node',
+        'packages/database/node_modules/prisma/build/index.js',
+        'migrate',
+        'deploy',
+        '--config',
+        'packages/database/prisma.config.ts',
+      ]
+  api:
+    <<: *app
+    image: docversity14a-api:${IMAGE_TAG:-local}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: api }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+  worker:
+    <<: *app
+    stop_grace_period: 5m
+    secrets:
+      - source: worker_runtime
+        target: runtime
+    image: docversity14a-worker:${IMAGE_TAG:-local}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: worker }
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ['CMD', 'node', '/launch.mjs', 'node', 'dist/scripts/enqueue-health-test.js']
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+  web:
+    <<: *app
+    image: docversity14a-web:${IMAGE_TAG:-local}
+    build: { context: .., dockerfile: deploy/Dockerfile, target: web }
+    networks: [backend, edge]
+    tmpfs: ['/tmp:size=64m,mode=1777', '/app/apps/web/.next/cache:size=32m,uid=1000,gid=1000']
+    environment:
+      RUNTIME_ENV_FILE: /run/secrets/web_runtime
+    secrets: [web_runtime]
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+  proxy:
+    image: caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+    restart: unless-stopped
+    ports: ['127.0.0.1:${HTTPS_PORT:-3443}:443']
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+      - caddy_config:/config
+    networks: [edge, backend]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 128m
+    cpus: 0.5
+    depends_on:
+      web: { condition: service_healthy }
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', '--no-check-certificate', 'https://localhost/health']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+networks:
+  backend: { internal: true }
+  edge: {}
+volumes:
+  postgres_data:
+  redis:
+  minio:
+  caddy:
+  caddy_config:
+secrets:
+  runtime: { file: ../.local/staging/runtime }
+  worker_runtime: { file: ../.local/staging/worker_runtime }
+  web_runtime: { file: ../.local/staging/web_runtime }
+  migration_runtime: { file: ../.local/staging/migration_runtime }
+  database_bootstrap_password: { file: ../.local/staging/database_bootstrap_password }
+  database_owner_password: { file: ../.local/staging/database_owner_password }
+  database_app_password: { file: ../.local/staging/database_app_password }
+  redis_config: { file: ../.local/staging/redis_config }
+  redis_password: { file: ../.local/staging/redis_password }
+  minio: { file: ../.local/staging/minio }

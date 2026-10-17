@@ -88,3 +88,41 @@ jobs:
       - name: Stop services
         if: always()
         run: docker compose down -v
+
+  staging:
+    name: Local Docker staging and recovery rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate isolated synthetic staging credentials
+        run: python3 deploy/scripts/init-local.py
+      - name: Assert private configuration
+        run: |
+          python3 deploy/scripts/check-config.py
+          python3 deploy/scripts/test_staging.py
+      - name: Build production containers
+        run: python3 deploy/scripts/staging.py build
+      - name: Start isolated production-mode staging
+        run: python3 deploy/scripts/staging.py up
+      - name: Create synthetic accounts and verify trusted local HTTPS
+        run: |
+          python3 deploy/scripts/staging.py fixture
+          docker compose -f deploy/compose.yml cp proxy:/data/caddy/pki/authorities/local/root.crt .local/staging/local-ca.crt
+          chmod 644 .local/staging/local-ca.crt
+          python3 deploy/scripts/staging.py smoke
+      - name: Back up and restore only fresh synthetic volumes
+        run: |
+          python3 deploy/scripts/staging.py backup
+          backup_name=$(find .local/backups -mindepth 1 -maxdepth 1 -type d -name '20*' -printf '%f\n' | sort | tail -1)
+          python3 deploy/scripts/staging.py restore-test "$backup_name"
+      - name: Local service health and resource consumption
+        if: always()
+        run: |
+          docker compose -f deploy/compose.yml ps
+          docker stats --no-stream
+      - name: Stop synthetic CI services without touching other projects
+        if: always()
+        run: |
+          docker compose -p docversity14a -f deploy/compose.yml stop
+          docker compose -p docversity14a-restore -f deploy/compose.yml stop
