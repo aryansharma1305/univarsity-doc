@@ -68,6 +68,8 @@ services:
       MC_CONFIG_DIR: /tmp/.mc
       # Bootstrap: private application bucket + least-privilege application user.
       S3_BUCKET: ${S3_BUCKET:-docversity-local}
+      # Separate bucket for automated tests (API integration + e2e); never the development bucket.
+      S3_TEST_BUCKET: ${S3_TEST_BUCKET:-docversity-local-test}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-docversity_app}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-docversity_dev_app_secret}
     ports:

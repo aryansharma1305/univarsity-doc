@@ -1,10 +1,17 @@
 import { z } from 'zod';
+/**
+ * Certificate application types. COURSE_COMPLETION (Phase 12C) is a contract value only: no application
+ * policy exists for it, and the `certificate_request_type_check` constraint still rejects it, so it
+ * cannot be submitted until a reviewed policy and migration activate it.
+ */
 export const certificateTypeSchema = z.enum([
   'TRANSCRIPT',
   'PROVISIONAL',
   'CHARACTER',
   'MIGRATION',
+  'COURSE_COMPLETION',
 ]);
+export type CertificateType = z.infer<typeof certificateTypeSchema>;
 export const certificateRequestStatusSchema = z.enum([
   'SUBMITTED',
   'UNDER_REVIEW',

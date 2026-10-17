@@ -48,6 +48,8 @@ const approver = {
   displayName: 'E2E Payment Verifier',
 };
 let certificateRequestId;
+let eligibilityStudent;
+const eligibilityPrograms = {};
 let fixture;
 const profileStudents = [];
 const examStudents = [];
@@ -240,6 +242,79 @@ try {
     },
   });
   certificateRequestId = request.id;
+
+  // Phase 12C: synthetic courses (3/18/36/12 months) and one student registered on all four, so the
+  // registration-specific eligibility labels can be shown. Disposable _e2e database only. The approved
+  // 3-month set is written as PROPOSED by the registrar fixture and decided by the admin fixture (the
+  // database's separation-of-duties checks apply); no approval authority is activated in the API.
+  const proposer = await db.user.findUniqueOrThrow({ where: { email: registrar.email } });
+  const decider = await db.user.findUniqueOrThrow({ where: { email: credentials.email } });
+  for (const [key, months, name] of [
+    ['m3', 3, 'E2E Certificate Course in Clinical Data Handling'],
+    ['m18', 18, 'E2E Postgraduate Diploma in Applied Research'],
+    ['m36', 36, 'E2E Bachelor of Applied Studies'],
+    ['m12', 12, 'E2E One-Year Diploma'],
+  ]) {
+    const created = await db.program.create({
+      data: {
+        code: `E2E-ELIG-${months}M`,
+        name,
+        durationValue: months % 12 === 0 ? months / 12 : months,
+        durationUnit: months % 12 === 0 ? 'YEARS' : 'MONTHS',
+        departmentId: department.id,
+      },
+    });
+    eligibilityPrograms[key] = created.id;
+  }
+  const eligibilityPassword = randomBytes(18).toString('base64url');
+  const eligibilityCreated = await db.student.create({
+    data: {
+      fullName: 'E2E Eligibility Student',
+      registrations: {
+        create: ['m3', 'm18', 'm36', 'm12'].map((key, i) => ({
+          registrationNumber: `E2E-REG-030${i + 1}`,
+          registrationNumberNormalized: `E2E-REG-030${i + 1}`,
+          programId: eligibilityPrograms[key],
+          departmentId: department.id,
+          academicSessionId: session.id,
+        })),
+      },
+      account: {
+        create: { passwordHash: await new PasswordService().hashPassword(eligibilityPassword) },
+      },
+    },
+  });
+  eligibilityStudent = {
+    studentId: eligibilityCreated.id,
+    studentName: 'E2E Eligibility Student',
+    registrationNumber: 'E2E-REG-0301',
+    password: eligibilityPassword,
+  };
+  const proposal = (programId, certificateTypes, durationMonths, tier) =>
+    db.programCertificateEligibility.create({
+      data: {
+        programId,
+        revision: 1,
+        certificateTypes,
+        policyId: 'UNIVERSITY_COURSE_DURATION_CERTIFICATES',
+        policyVersion: 1,
+        durationMonths,
+        tier,
+        authorityReference: 'Synthetic e2e university decision',
+        proposedByUserId: proposer.id,
+      },
+    });
+  const shortSet = await proposal(eligibilityPrograms.m3, ['COURSE_COMPLETION'], 3, 'SHORT_COURSE');
+  await db.programCertificateEligibility.update({
+    where: { id: shortSet.id },
+    data: { status: 'APPROVED', version: 2, decidedByUserId: decider.id, decidedAt: new Date() },
+  });
+  await proposal(
+    eligibilityPrograms.m18,
+    ['TRANSCRIPT', 'PROVISIONAL', 'CHARACTER'],
+    18,
+    'MORE_THAN_ONE_YEAR',
+  );
 } finally {
   await db.$disconnect();
 }
@@ -256,6 +331,8 @@ writeFileSync(
     fixture,
     profileStudents,
     certificateRequestId,
+    eligibilityStudent,
+    eligibilityPrograms,
     examAdmin,
     paymentChecker,
     approver,

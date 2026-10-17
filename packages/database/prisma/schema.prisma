@@ -383,14 +383,15 @@ model Program {
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  department        Department?               @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  registrations     StudentRegistration[]
-  curriculum        ProgramSubject[]
-  curricula         ProgramCurriculum[]
-  gradingSchemes    GradingScheme[]
-  examinations      Examination[]
-  documentTemplates ProgramDocumentTemplate[]
-  certificates      Certificate[]
+  department             Department?                     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  registrations          StudentRegistration[]
+  curriculum             ProgramSubject[]
+  curricula              ProgramCurriculum[]
+  gradingSchemes         GradingScheme[]
+  examinations           Examination[]
+  documentTemplates      ProgramDocumentTemplate[]
+  certificates           Certificate[]
+  certificateEligibility ProgramCertificateEligibility[]
 
   @@index([departmentId])
   @@map("programs")
@@ -1420,34 +1421,36 @@ model User {
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  roles                        UserRole[]
-  importJobs                   ImportJob[]                   @relation("ImportJobCreatedBy")
-  importJobsCommitted          ImportJob[]                   @relation("ImportJobCommittedBy")
-  activationCodesIssued        StudentActivationCode[]
-  profileRequestsReviewed      StudentProfileChangeRequest[]
-  historicalDocumentsUploaded  HistoricalDocument[]          @relation("HistoricalDocumentUploadedBy")
-  historicalDocumentsPublished HistoricalDocument[]          @relation("HistoricalDocumentPublishedBy")
-  historicalDocumentsWithdrawn HistoricalDocument[]          @relation("HistoricalDocumentWithdrawnBy")
-  historicalDocumentsReviewed  HistoricalDocument[]          @relation("HistoricalDocumentReviewedBy")
-  curriculaActivated           ProgramCurriculum[]           @relation("CurriculumActivatedBy")
-  curriculaArchived            ProgramCurriculum[]           @relation("CurriculumArchivedBy")
-  examAppsCreated              ExternalExamApplication[]     @relation("ExternalExamAppCreatedBy")
-  examAppsUpdated              ExternalExamApplication[]     @relation("ExternalExamAppUpdatedBy")
-  reExamFeeRulesCreated        ReExamFeeRule[]               @relation("ReExamFeeRuleCreatedBy")
-  reExamFeeRulesActivated      ReExamFeeRule[]               @relation("ReExamFeeRuleActivatedBy")
-  reExamFeeRulesRetired        ReExamFeeRule[]               @relation("ReExamFeeRuleRetiredBy")
-  reExamApplicationsDecided    ReExamApplication[]           @relation("ReExamApplicationDecidedBy")
-  paymentDestinationsCreated   ReExamPaymentDestination[]    @relation("PaymentDestinationCreatedBy")
-  paymentDestinationsUpdated   ReExamPaymentDestination[]    @relation("PaymentDestinationUpdatedBy")
-  paymentDestinationsApproved  ReExamPaymentDestination[]    @relation("PaymentDestinationApprovedBy")
-  paymentDestinationsRetired   ReExamPaymentDestination[]    @relation("PaymentDestinationRetiredBy")
-  reExamPaymentsReviewed       ReExamPayment[]               @relation("ReExamPaymentReviewedBy")
-  certificateRequestEvents     CertificateRequestEvent[]
-  auditLogs                    AuditLog[]
-  certificatesGenerated        Certificate[]                 @relation("CertificateGeneratedBy")
-  certificatesApproved         Certificate[]                 @relation("CertificateApprovedBy")
-  certificatesIssued           Certificate[]                 @relation("CertificateIssuedBy")
-  certificatesRevoked          Certificate[]                 @relation("CertificateRevokedBy")
+  roles                          UserRole[]
+  importJobs                     ImportJob[]                     @relation("ImportJobCreatedBy")
+  importJobsCommitted            ImportJob[]                     @relation("ImportJobCommittedBy")
+  activationCodesIssued          StudentActivationCode[]
+  profileRequestsReviewed        StudentProfileChangeRequest[]
+  historicalDocumentsUploaded    HistoricalDocument[]            @relation("HistoricalDocumentUploadedBy")
+  historicalDocumentsPublished   HistoricalDocument[]            @relation("HistoricalDocumentPublishedBy")
+  historicalDocumentsWithdrawn   HistoricalDocument[]            @relation("HistoricalDocumentWithdrawnBy")
+  historicalDocumentsReviewed    HistoricalDocument[]            @relation("HistoricalDocumentReviewedBy")
+  curriculaActivated             ProgramCurriculum[]             @relation("CurriculumActivatedBy")
+  curriculaArchived              ProgramCurriculum[]             @relation("CurriculumArchivedBy")
+  examAppsCreated                ExternalExamApplication[]       @relation("ExternalExamAppCreatedBy")
+  examAppsUpdated                ExternalExamApplication[]       @relation("ExternalExamAppUpdatedBy")
+  reExamFeeRulesCreated          ReExamFeeRule[]                 @relation("ReExamFeeRuleCreatedBy")
+  reExamFeeRulesActivated        ReExamFeeRule[]                 @relation("ReExamFeeRuleActivatedBy")
+  reExamFeeRulesRetired          ReExamFeeRule[]                 @relation("ReExamFeeRuleRetiredBy")
+  reExamApplicationsDecided      ReExamApplication[]             @relation("ReExamApplicationDecidedBy")
+  paymentDestinationsCreated     ReExamPaymentDestination[]      @relation("PaymentDestinationCreatedBy")
+  paymentDestinationsUpdated     ReExamPaymentDestination[]      @relation("PaymentDestinationUpdatedBy")
+  paymentDestinationsApproved    ReExamPaymentDestination[]      @relation("PaymentDestinationApprovedBy")
+  paymentDestinationsRetired     ReExamPaymentDestination[]      @relation("PaymentDestinationRetiredBy")
+  reExamPaymentsReviewed         ReExamPayment[]                 @relation("ReExamPaymentReviewedBy")
+  certificateRequestEvents       CertificateRequestEvent[]
+  certificateEligibilityProposed ProgramCertificateEligibility[] @relation("CertificateEligibilityProposedBy")
+  certificateEligibilityDecided  ProgramCertificateEligibility[] @relation("CertificateEligibilityDecidedBy")
+  auditLogs                      AuditLog[]
+  certificatesGenerated          Certificate[]                   @relation("CertificateGeneratedBy")
+  certificatesApproved           Certificate[]                   @relation("CertificateApprovedBy")
+  certificatesIssued             Certificate[]                   @relation("CertificateIssuedBy")
+  certificatesRevoked            Certificate[]                   @relation("CertificateRevokedBy")
 
   @@map("users")
 }
@@ -1635,4 +1638,42 @@ model CertificateRequestEvent {
   @@index([actorUserId])
   @@index([actorStudentId])
   @@map("certificate_request_events")
+}
+
+/// Phase 12C: a course's proposed/approved certificate-type set under the versioned university
+/// course-duration policy. Revisions are never edited or deleted; a new approval supersedes the old one.
+/// Approval is course configuration only — never student qualification, Rector approval, payment
+/// verification or issuance. Approver must differ from proposer (CHECK); the DB re-checks the policy
+/// v1 tier→type mapping and that the course duration still matches the snapshot at approval (trigger).
+model ProgramCertificateEligibility {
+  id                 String    @id @default(uuid(7)) @db.Uuid
+  programId          String    @map("program_id") @db.Uuid
+  revision           Int
+  version            Int       @default(1)
+  status             String    @default("PROPOSED") @db.VarChar(16)
+  certificateTypes   String[]  @map("certificate_types") @db.VarChar(32)
+  policyId           String    @map("policy_id") @db.VarChar(128)
+  policyVersion      Int       @map("policy_version")
+  durationMonths     Int       @map("duration_months") @db.SmallInt
+  tier               String    @db.VarChar(32)
+  authorityReference String    @map("authority_reference") @db.VarChar(200)
+  rationale          String?   @db.VarChar(1000)
+  proposedByUserId   String    @map("proposed_by_user_id") @db.Uuid
+  proposedAt         DateTime  @default(now()) @map("proposed_at") @db.Timestamptz(3)
+  decidedByUserId    String?   @map("decided_by_user_id") @db.Uuid
+  decidedAt          DateTime? @map("decided_at") @db.Timestamptz(3)
+  decisionNote       String?   @map("decision_note") @db.VarChar(1000)
+  supersededAt       DateTime? @map("superseded_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  program    Program @relation(fields: [programId], references: [id], onDelete: Restrict)
+  proposedBy User    @relation("CertificateEligibilityProposedBy", fields: [proposedByUserId], references: [id], onDelete: Restrict)
+  decidedBy  User?   @relation("CertificateEligibilityDecidedBy", fields: [decidedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([programId, revision])
+  @@unique([programId], map: "program_certificate_eligibility_one_proposed_key", where: raw("((status)::text = 'PROPOSED'::text)"))
+  @@unique([programId], map: "program_certificate_eligibility_one_approved_key", where: raw("((status)::text = 'APPROVED'::text)"))
+  @@index([proposedByUserId])
+  @@index([decidedByUserId])
+  @@map("program_certificate_eligibility")
 }

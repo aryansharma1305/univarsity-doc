@@ -11,6 +11,7 @@ import {
   errorResponseSchema,
   healthResponseSchema,
   sessionListResponseSchema,
+  testStorageBucket,
 } from '@docversity/validation';
 import request from 'supertest';
 import { inject } from 'vitest';
@@ -29,7 +30,8 @@ import { OBJECT_STORAGE } from '../src/storage/storage.module.js';
 
 /**
  * Configuration from the environment (root .env locally, workflow env in CI), pointed at the
- * disposable API test database and a Redis key prefix unique to this call (test isolation).
+ * disposable API test database, a Redis key prefix unique to this call and the dedicated test
+ * object-storage bucket (test isolation).
  */
 export function realConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
   loadRootEnv();
@@ -38,6 +40,8 @@ export function realConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
     DATABASE_URL: inject('apiTestDatabaseUrl'),
     REDIS_KEY_PREFIX: `dvtest:${randomUUID().slice(0, 8)}:`,
     QUEUE_PREFIX: `dvtq-${randomUUID().slice(0, 8)}`,
+    // Never the shared development bucket (other worktrees and `pnpm dev` use it).
+    S3_BUCKET: testStorageBucket(process.env),
     SWAGGER_ENABLED: true,
     HEALTH_CHECK_TIMEOUT_MS: 2_000,
     ...overrides,
