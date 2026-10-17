@@ -28,11 +28,14 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
+  outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
   // The design system is consumed as TypeScript source.
   transpilePackages: ['@docversity/ui'],
   poweredByHeader: false,
   typedRoutes: true,
   experimental: {
+    cpus: 2,
     proxyClientMaxBodySize: (IMPORT_MAX_FILE_MB + 1) * 1024 * 1024,
   },
   headers() {
