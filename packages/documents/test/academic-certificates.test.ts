@@ -107,13 +107,19 @@ describe('PDF rendering', () => {
       const text = (await page.getTextContent()).items
         .map((item) => ('str' in item ? item.str : ''))
         .join(' ');
-      expect(text).toContain('SAMPLE');
-      expect(text).toContain('NOT A UNIVERSITY DOCUMENT');
-      expect(text).toContain('Example University of Learning');
-      // Long identifiers may wrap across lines; compare without layout whitespace.
-      expect(text.replace(/\s+/g, '')).toContain(data.registrationNumber);
-      expect(text).toContain('No verification credential');
-      expect(text).not.toMatch(/https?:\/\//);
+      // Text extraction spacing differs by platform (letter-spaced text and wrapped identifiers
+      // are split differently on Linux and macOS), so compare without layout whitespace.
+      const flat = text.replace(/\s+/g, '');
+      const has = (phrase: string) => flat.includes(phrase.replace(/\s+/g, ''));
+      for (const phrase of [
+        'SAMPLE · SYNTHETIC PREVIEW · NOT A UNIVERSITY DOCUMENT · NOT VALID FOR ANY PURPOSE',
+        'SAMPLE — unsigned, unissued and unverifiable',
+        'Example University of Learning',
+        'No verification credential',
+        data.registrationNumber,
+      ])
+        expect(has(phrase), phrase).toBe(true);
+      expect(flat).not.toMatch(/https?:\/\//);
       const viewport = page.getViewport({ scale: 1 });
       expect(viewport.width / viewport.height).toBeCloseTo(210 / 297, 2);
       await task.destroy();
