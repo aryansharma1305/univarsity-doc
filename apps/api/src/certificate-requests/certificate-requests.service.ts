@@ -24,6 +24,11 @@ const types = [
   ['PROVISIONAL', 'Provisional certificate', 'A provisional qualification document.'],
   ['CHARACTER', 'Character certificate', 'A university character certificate.'],
   ['MIGRATION', 'Migration certificate', 'A document for transfer to another institution.'],
+  [
+    'COURSE_COMPLETION',
+    'Course completion certificate',
+    'Confirms completion of a specific short course. It is not a degree certificate.',
+  ],
 ] as const;
 const include = {
   student: { select: { fullName: true, registrations: { select: { registrationNumber: true } } } },

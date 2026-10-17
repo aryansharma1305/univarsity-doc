@@ -13,6 +13,7 @@ import { useSetBreadcrumbLabel } from '@/components/admin/breadcrumb-context';
 import { EmptyState, ErrorState } from '@/components/data/states';
 import { RecordStatus } from '@/components/data/status';
 import { useCan } from '@/components/providers/session-context';
+import { CourseCertificateEligibilityPanel } from '@/features/certificate-eligibility/course-panel';
 import { useCurricula } from '@/features/curricula/api';
 import { CurriculumDialog } from '@/features/curricula/curriculum-dialog';
 import {
@@ -171,6 +172,11 @@ export function ProgramDetailView({ programId }: { programId: string }) {
           </ul>
         )}
       </section>
+
+      <CourseCertificateEligibilityPanel
+        programId={course.id}
+        durationKey={`${course.durationValue ?? ''}${course.durationUnit ?? ''}`}
+      />
 
       <ProgramDialog open={editing} onOpenChange={setEditing} program={course} />
       <CurriculumDialog

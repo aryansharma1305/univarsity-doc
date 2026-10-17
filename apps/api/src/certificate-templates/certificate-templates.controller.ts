@@ -3,6 +3,9 @@ import { ApiCookieAuth, ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swag
 import { PERMISSIONS } from '@docversity/types';
 import { z } from 'zod';
 import {
+  academicCertificatePreviewQuerySchema,
+  academicCertificateTemplatesResponseSchema,
+  type AcademicCertificatePreviewQuery,
   trainingCertificatePreviewQuerySchema,
   trainingCertificateTemplatesResponseSchema,
   type TrainingCertificatePreviewQuery,
@@ -38,6 +41,29 @@ export class CertificateTemplatesController {
     return new StreamableFile(bytes, {
       type: 'application/pdf',
       disposition: `${query.disposition}; filename="sample-training-certificate-${query.fixture}-v1.pdf"`,
+      length: bytes.length,
+    });
+  }
+  @Get('academic')
+  @ApiOkResponse({ standardSchema: academicCertificateTemplatesResponseSchema })
+  listAcademic(@Query(new ZodValidationPipe(z.object({}).strict())) _query: object) {
+    return this.service.listAcademic();
+  }
+  @Get('academic/preview')
+  @ApiProduces('application/pdf')
+  async academicPreview(
+    @Query(new ZodValidationPipe(academicCertificatePreviewQuerySchema))
+    query: AcademicCertificatePreviewQuery,
+    @CurrentAuth() auth: AuthContext,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { bytes, templateId } = await this.service.academicPreview(query, auth.user.id);
+    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'self'");
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-store');
+    return new StreamableFile(bytes, {
+      type: 'application/pdf',
+      disposition: `${query.disposition}; filename="${templateId}-${query.fixture}-v${query.version}.pdf"`,
       length: bytes.length,
     });
   }

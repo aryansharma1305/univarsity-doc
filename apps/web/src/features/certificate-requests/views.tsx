@@ -30,12 +30,14 @@ import { useListParams } from '@/hooks/use-list-params';
 import { formatDateTime } from '@/lib/format';
 import { errorMessage } from '@/lib/api';
 import { StudentActionMotion } from '@/features/student-portal/student-motion';
+import { StudentCertificateEligibility } from '@/features/certificate-eligibility/student-panel';
 import { certificateRequestsApi as api } from './api';
 const titles: Record<string, string> = {
   TRANSCRIPT: 'Transcript',
   PROVISIONAL: 'Provisional certificate',
   CHARACTER: 'Character certificate',
   MIGRATION: 'Migration certificate',
+  COURSE_COMPLETION: 'Course completion certificate',
 };
 const labels: Record<string, string> = {
   SUBMITTED: 'Submitted',
@@ -247,6 +249,7 @@ function RequestsView({
           <ErrorState error={catalogue.error} onRetry={() => void catalogue.refetch()} />
         ) : (
           <>
+            <StudentCertificateEligibility />
             <section aria-labelledby="services-heading">
               <h2 id="services-heading" className="mb-4 text-lg font-semibold">
                 Certificate services

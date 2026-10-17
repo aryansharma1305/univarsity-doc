@@ -29,3 +29,23 @@ export const storageEnvSchema = z.object({
 export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
 export type RedisEnv = z.infer<typeof redisEnvSchema>;
 export type StorageEnv = z.infer<typeof storageEnvSchema>;
+
+/**
+ * Object-storage bucket for automated tests (API integration tests, e2e API and worker). Tests must
+ * never write into the development bucket shared with `pnpm dev` and other worktrees: the bucket is
+ * `S3_TEST_BUCKET`, or `<S3_BUCKET>-test` when unset, and is refused if it equals `S3_BUCKET`.
+ * `docker/minio/init.sh` provisions it locally and in CI with the same bucket-scoped app policy.
+ */
+export function testStorageBucket(env: Readonly<Record<string, string | undefined>>): string {
+  const base = env.S3_BUCKET;
+  // An empty S3_TEST_BUCKET means "not set", so fall back to the derived name.
+  const configured = env.S3_TEST_BUCKET?.trim() ? env.S3_TEST_BUCKET.trim() : undefined;
+  const bucket = configured ?? (base ? `${base}-test` : '');
+  const valid = storageEnvSchema.shape.S3_BUCKET.safeParse(bucket);
+  if (!valid.success) throw new Error('S3_TEST_BUCKET (or S3_BUCKET) is not a valid bucket name.');
+  if (bucket === base)
+    throw new Error(
+      'S3_TEST_BUCKET must differ from S3_BUCKET: tests must not write to the development bucket.',
+    );
+  return bucket;
+}
