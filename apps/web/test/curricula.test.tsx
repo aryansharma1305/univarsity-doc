@@ -120,12 +120,22 @@ function serveCurriculum(detail: CurriculumDetail) {
 describe('course form', () => {
   it('labels the period count by structure and requires complete structure pairs', async () => {
     const fetchMock = mockFetch(() => ({ body: program }));
+    // One user-event instance, and whole values pasted rather than typed key by key: the test
+    // checks form validation, not per-keystroke behaviour.
+    const user = userEvent.setup();
     renderWithProviders(<ProgramDialog open onOpenChange={vi.fn()} />);
     expect(screen.getByLabelText(/Number of semesters/)).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText(/Course name/), 'Synthetic Course');
-    await userEvent.type(screen.getByLabelText(/Course code/), 'SYN-1');
-    await userEvent.type(screen.getByLabelText(/Number of semesters/), '2');
-    await userEvent.click(screen.getByRole('button', { name: 'Create course' }));
+    const fill = async (label: RegExp, value: string) => {
+      await user.click(screen.getByLabelText(label));
+      await user.paste(value);
+      expect(screen.getByLabelText(label)).toHaveValue(
+        screen.getByLabelText(label).getAttribute('type') === 'number' ? Number(value) : value,
+      );
+    };
+    await fill(/Course name/, 'Synthetic Course');
+    await fill(/Course code/, 'SYN-1');
+    await fill(/Number of semesters/, '2');
+    await user.click(screen.getByRole('button', { name: 'Create course' }));
     expect(await screen.findByText('Choose semester-wise or year-wise.')).toBeInTheDocument();
     expect(
       fetchMock.mock.calls.some(([url]) =>
@@ -134,7 +144,10 @@ describe('course form', () => {
         ),
       ),
     ).toBe(false);
-  });
+    // Explicit budget for this test only. Locally it takes ~0.4 s, about half of it the first render
+    // of the course dialog in jsdom. On shared CI runners, running alongside the API and document
+    // suites, it exceeded the 5 s default (three of four runs after #22), which no input change fixes.
+  }, 20_000);
 });
 
 describe('curriculum editor', () => {
