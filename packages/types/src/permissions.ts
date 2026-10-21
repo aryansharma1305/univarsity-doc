@@ -42,6 +42,15 @@ export const PERMISSIONS = {
   resultsPublish: 'results.publish',
   certificateRequestsRead: 'certificateRequests.read',
   certificateRequestsReview: 'certificateRequests.review',
+  /** Course certificate eligibility (Phase 12C): view a course's duration policy and approved set. */
+  certificateEligibilityRead: 'certificateEligibility.read',
+  /** Propose or withdraw a course's certificate set. Never qualification, Rector approval or issuance. */
+  certificateEligibilityPropose: 'certificateEligibility.propose',
+  /**
+   * Approve/reject a course's proposed certificate set (never one's own proposal). Granted to no role
+   * beyond SUPER_ADMIN's catch-all, and blocked by the API until the university authorizes an approver.
+   */
+  certificateEligibilityApprove: 'certificateEligibility.approve',
   certificatesRead: 'certificates.read',
   certificatesGenerate: 'certificates.generate',
   certificatesApprove: 'certificates.approve',
@@ -161,6 +170,8 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.certificatesGenerate,
     P.auditRead,
     P.reExamApplicationsRead,
+    P.certificateEligibilityRead,
+    P.certificateEligibilityPropose,
   ],
   /**
    * Prepares results and will run result imports (Phase 8); cannot publish (maker–checker).
@@ -178,6 +189,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
   CERTIFICATE_ADMIN: [
     P.certificateRequestsRead,
     P.certificateRequestsReview,
+    P.certificateEligibilityRead,
     ...READ_ONLY,
     P.certificatesGenerate,
     P.templatesWrite,
@@ -197,6 +209,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.reExamApplicationsRead,
     P.reExamPaymentsRead,
     P.reExamPaymentsVerify,
+    P.certificateEligibilityRead,
   ],
   /** Read-only. */
   VIEWER: READ_ONLY,

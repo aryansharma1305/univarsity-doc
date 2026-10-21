@@ -79,7 +79,7 @@ First Playwright run on a machine: `pnpm --filter @docversity/web exec playwrigh
 pnpm format:check
 pnpm lint            # web lint runs `next typegen` first (typed routes)
 pnpm typecheck
-pnpm test            # needs `docker compose up -d`; uses disposable <db>_api_test / per-package test DBs
+pnpm test            # needs `docker compose up -d`; disposable <db>_api_test / per-package test DBs and the S3_TEST_BUCKET
 pnpm build
 pnpm db:check        # migrations vs schema.prisma drift check (must print "No difference detected")
 pnpm test:e2e        # builds, prepares <db>_e2e, starts API :4100 + web :3100 + worker, Playwright
@@ -98,7 +98,7 @@ development placeholder) and `COOKIE_SECURE=true`.
 - **API:** `API_HOST`, `API_PORT`, `CORS_ORIGINS`, `SWAGGER_ENABLED`, `HEALTH_CHECK_TIMEOUT_MS`, `TRUST_PROXY`
 - **PostgreSQL:** `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST_PORT`
 - **Redis / queues:** `REDIS_URL`, `REDIS_PASSWORD`, `REDIS_HOST_PORT`, `QUEUE_PREFIX`, `WORKER_CONCURRENCY`, `IMPORT_CONCURRENCY`
-- **Object storage:** `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_API_HOST_PORT`, `MINIO_CONSOLE_HOST_PORT`
+- **Object storage:** `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_TEST_BUCKET` (tests only; never equal to `S3_BUCKET`), `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_API_HOST_PORT`, `MINIO_CONSOLE_HOST_PORT`
 - **Sessions / auth:** `SESSION_SECRET`, `COOKIE_SECURE`, `SESSION_IDLE_TIMEOUT_SECONDS`, `SESSION_ABSOLUTE_TIMEOUT_SECONDS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP`, `LOGIN_MAX_ATTEMPTS_PER_ACCOUNT`, `LOGIN_MAX_ATTEMPTS_PER_IP`, `PASSWORD_RESET_TOKEN_TTL_SECONDS`, `REDIS_KEY_PREFIX` (optional, default `dv:`)
 - **Student accounts:** `STUDENT_ACTIVATION_CODE_TTL_DAYS`, `STUDENT_ACTIVATION_MAX_FAILED_ATTEMPTS`
 - **Imports:** `IMPORT_MAX_FILE_MB`, `IMPORT_MAX_UNCOMPRESSED_MB`, `IMPORT_MAX_ROWS`, `IMPORT_MAX_COLUMNS`, `IMPORT_BATCH_SIZE`
@@ -153,7 +153,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261014090000_examination_portal_foundation` (Phase 9A), `20261015090000_re_exam_applications` (9B),
   `20261015093000_re_exam_fee_snapshot_required_fields` (9B assessed-fee NULL hardening),
   `20261016090000_re_exam_payments` (9C payment destinations and payments),
-  `20261016093000_re_exam_payment_destination_editor_check` (9C: approver ≠ last editor).
+  `20261016093000_re_exam_payment_destination_editor_check` (9C: approver ≠ last editor),
+  `20261020090000_program_certificate_eligibility` (12C: course certificate sets, proposer ≠ decider).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -264,6 +265,18 @@ marks version; correction preserves the submitted snapshot. Review/approval perm
 from publication. Their role policy is pending; the server blocks these decisions until authorized.
 Publication is disabled in the API/database independently. Preserve receipt replay, atomic audit and
 exact re-exam attempts when extending this workflow.
+
+## 10g. Course certificate eligibility (Phase 12C)
+
+Which certificate types a course may offer comes from a versioned, code-defined university
+course-duration policy (`evaluateCourseDuration`, `@docversity/validation`) plus a per-course set that
+REGISTRAR proposes and a **different** person approves (`certificateEligibility.read/.propose/.approve`).
+Approval is disabled until the university authorizes an approver (no runtime toggle). Unspecified
+durations fail closed. Students see per-registration labels at `/student/certificate-requests`
+(contract `docversity.student-certificate-eligibility` v1). Eligibility is never qualification,
+application availability, payment, Rector approval or issuance. Read
+[ADR-0018](docs/decisions/ADR-0018-course-certificate-eligibility.md) and
+[docs/api/certificate-eligibility.md](docs/api/certificate-eligibility.md) before changing it.
 
 ## 11. Student import workflow (Phase 5)
 

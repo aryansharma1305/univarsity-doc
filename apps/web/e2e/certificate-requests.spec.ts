@@ -24,7 +24,7 @@ test('student catalogue and owned history fit all viewports with disabled polici
     await expect(
       page.getByRole('heading', { name: 'Certificate Requests', exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Not available yet' })).toHaveCount(4);
+    await expect(page.getByRole('button', { name: 'Not available yet' })).toHaveCount(5);
     await expect(page.getByRole('button', { name: 'Not available yet' }).first()).toBeDisabled();
     await expect(page.getByText('CR-E2E-SYNTHETIC-APPLICATION')).toBeVisible();
     await expectNoHorizontalOverflow(page);

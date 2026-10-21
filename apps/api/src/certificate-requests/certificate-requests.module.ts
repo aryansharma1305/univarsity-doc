@@ -9,6 +9,7 @@ import { CertificatePoliciesService } from './certificate-policies.service.js';
 @Module({
   controllers: [CertificateRequestsController, StudentCertificateRequestsController],
   providers: [CertificateRequestsService, CertificatePoliciesService],
+  exports: [CertificatePoliciesService],
 })
 export class CertificateRequestsModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

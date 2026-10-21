@@ -24,6 +24,10 @@ vi.mock('@/features/student-portal/student-motion', () => ({
   StudentActionMotion: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('@/features/certificate-requests/api', () => ({ certificateRequestsApi: mocks }));
+// Phase 12C eligibility labels are covered in certificate-eligibility.test.tsx.
+vi.mock('@/features/certificate-eligibility/student-panel', () => ({
+  StudentCertificateEligibility: () => null,
+}));
 import {
   CertificateRequestsView,
   CertificateRequestDetailView,

@@ -1,4 +1,7 @@
 import {
+  academicCertificatePreviewQuerySchema,
+  academicCertificateTemplatesResponseSchema,
+  type AcademicCertificatePreviewQuery,
   trainingCertificateTemplatesResponseSchema,
   trainingCertificatePreviewQuerySchema,
   type TrainingCertificatePreviewQuery,
@@ -11,6 +14,18 @@ export const certificateTemplatesApi = {
     const query = trainingCertificatePreviewQuerySchema.parse(raw);
     return apiFile(
       `/certificate-templates/preview?${new URLSearchParams({ templateId: query.templateId, version: String(query.version), fixture: query.fixture, disposition: query.disposition }).toString()}`,
+    );
+  },
+  academicList: () =>
+    apiRequest(
+      'GET',
+      '/certificate-templates/academic',
+      academicCertificateTemplatesResponseSchema,
+    ),
+  academicPreview: (raw: AcademicCertificatePreviewQuery) => {
+    const query = academicCertificatePreviewQuerySchema.parse(raw);
+    return apiFile(
+      `/certificate-templates/academic/preview?${new URLSearchParams({ type: query.type, version: String(query.version), fixture: query.fixture, disposition: query.disposition }).toString()}`,
     );
   },
 };

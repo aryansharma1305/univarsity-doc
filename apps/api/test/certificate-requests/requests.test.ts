@@ -94,13 +94,24 @@ it('requires authentication and dedicated permissions, with no-store on denial',
     await user.get('certificate-requests').expect(403);
   }
 });
-it('exposes exactly four unavailable services and blocks unconfigured or incomplete policies', async () => {
+it('exposes exactly five unavailable services and blocks unconfigured or incomplete policies', async () => {
   const r = await one.agent.get('/api/v1/student/certificate-services').expect(200);
   const c = certificateServiceListSchema.parse(r.body);
-  expect(c.data).toHaveLength(4);
+  // Phase 12C added COURSE_COMPLETION as a contract value; it is unavailable like the others.
+  expect(c.data.map((s) => s.certificateType)).toEqual([
+    'TRANSCRIPT',
+    'PROVISIONAL',
+    'CHARACTER',
+    'MIGRATION',
+    'COURSE_COMPLETION',
+  ]);
   expect(c.data.every((s) => !s.available)).toBe(true);
   expect(c.corrections.available).toBe(false);
   expect((await post(one, 'certificate-requests', body())).status).toBe(409);
+  expect(
+    (await post(one, 'certificate-requests', { ...body(), certificateType: 'COURSE_COMPLETION' }))
+      .status,
+  ).toBe(409);
   vi.spyOn(app.get(CertificatePoliciesService), 'definitions').mockReturnValue([
     { ...fixture, fee: undefined },
   ]);

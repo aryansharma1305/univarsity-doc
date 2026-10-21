@@ -252,3 +252,20 @@ it('does not give makers or viewers result review and approval powers', () => {
     expect(permissions.has(PERMISSIONS.resultsApprove)).toBe(false);
   }
 });
+
+it('keeps course certificate-eligibility approval separate from proposal and certificate powers (Phase 12C)', () => {
+  const holders = (permission: string) =>
+    Object.entries(ROLE_PERMISSIONS)
+      .filter(([, granted]) => (granted as readonly string[]).includes(permission))
+      .map(([role]) => role)
+      .sort();
+  expect(holders(PERMISSIONS.certificateEligibilityApprove)).toEqual(['SUPER_ADMIN']);
+  expect(holders(PERMISSIONS.certificateEligibilityPropose)).toEqual(['REGISTRAR', 'SUPER_ADMIN']);
+  expect(holders(PERMISSIONS.certificateEligibilityRead)).toEqual([
+    'APPROVER',
+    'CERTIFICATE_ADMIN',
+    'REGISTRAR',
+    'SUPER_ADMIN',
+  ]);
+  expect(holders(PERMISSIONS.certificateEligibilityRead)).not.toContain('VIEWER');
+});

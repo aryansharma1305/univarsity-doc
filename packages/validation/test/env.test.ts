@@ -6,6 +6,7 @@ import {
   parseEnv,
   redisEnvSchema,
   storageEnvSchema,
+  testStorageBucket,
 } from '../src/index.js';
 
 describe('parseEnv', () => {
@@ -42,4 +43,16 @@ describe('envBoolean', () => {
   it('rejects ambiguous values instead of coercing them', () => {
     expect(schema.safeParse({ FLAG: 'yes' }).success).toBe(false);
   });
+});
+
+it('derives an isolated test bucket and refuses the development bucket', () => {
+  expect(testStorageBucket({ S3_BUCKET: 'docversity-local' })).toBe('docversity-local-test');
+  expect(
+    testStorageBucket({ S3_BUCKET: 'docversity-local', S3_TEST_BUCKET: 'docversity-ci-test' }),
+  ).toBe('docversity-ci-test');
+  expect(() =>
+    testStorageBucket({ S3_BUCKET: 'docversity-local', S3_TEST_BUCKET: 'docversity-local' }),
+  ).toThrow('must differ');
+  expect(() => testStorageBucket({ S3_TEST_BUCKET: 'Bad_Bucket' })).toThrow('not a valid');
+  expect(() => testStorageBucket({})).toThrow('not a valid');
 });

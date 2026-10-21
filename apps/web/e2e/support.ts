@@ -23,6 +23,8 @@ export interface E2EFixtures {
   /** Students with active portal accounts (random passwords) for profile request tests. */
   profileStudents: StudentAccount[];
   certificateRequestId: string;
+  eligibilityStudent: StudentAccount;
+  eligibilityPrograms: Record<'m3' | 'm18' | 'm36' | 'm12', string>;
   /** Phase 9: EXAM_ADMIN, a year-wise course and two students of it with portal accounts. */
   examAdmin: Account;
   examStudents: (StudentAccount & { registrationId: string })[];

@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
+import { testStorageBucket } from '@docversity/validation';
 
 /**
  * Browser tests run against PRODUCTION builds of the web app and API on dedicated ports (3100/4100),
  * so they never collide with `pnpm dev` (3000/4000), and against a disposable `<dev db>_e2e`
  * database created before the API starts. PostgreSQL, Redis and MinIO must be running
  * (`docker compose up -d --wait`). The root `pnpm test:e2e` builds everything first. The worker
- * runs too (imports), on its own BullMQ prefix.
+ * runs too (imports), on its own BullMQ prefix. Object storage uses the dedicated test bucket.
  */
 const rootEnv = fileURLToPath(new URL('../../.env', import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
@@ -20,6 +21,12 @@ const QUEUE_PREFIX = 'dve2eq';
 // Session and rate-limit keys belong to this test run, including repeated local runs.
 const REDIS_KEY_PREFIX = `dve2e:${randomUUID()}:`;
 const isCI = Boolean(process.env.CI);
+/**
+ * Uploads (historical documents, imports, payments, photos) go to the dedicated test bucket shared by
+ * the e2e API and worker — never the development bucket. A missing bucket fails the API's /health
+ * storage check, so the run stops instead of writing elsewhere.
+ */
+const S3_BUCKET = testStorageBucket(process.env);
 
 const baseDatabaseUrl = process.env.DATABASE_URL ?? '';
 const e2eDatabaseUrl = (() => {
@@ -55,6 +62,7 @@ export default defineConfig({
         SWAGGER_ENABLED: 'false',
         REDIS_KEY_PREFIX,
         QUEUE_PREFIX,
+        S3_BUCKET,
         LOG_LEVEL: 'warn',
       },
       reuseExistingServer: false,
@@ -64,7 +72,7 @@ export default defineConfig({
       // The background worker (imports). Started after the API, whose command prepares the database.
       command: 'node ../worker/dist/main.js',
       wait: { stdout: /queue "imports" ready/ },
-      env: { DATABASE_URL: e2eDatabaseUrl, QUEUE_PREFIX, LOG_LEVEL: 'warn' },
+      env: { DATABASE_URL: e2eDatabaseUrl, QUEUE_PREFIX, S3_BUCKET, LOG_LEVEL: 'warn' },
       reuseExistingServer: false,
       timeout: 60_000,
     },
