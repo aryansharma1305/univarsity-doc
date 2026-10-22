@@ -18,6 +18,8 @@ export const errorResponseSchema = z
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 
 export const ERROR_CODES = {
+  publicVerificationUnavailable: 'PUBLIC_VERIFICATION_UNAVAILABLE',
+  publicVerificationRateLimited: 'PUBLIC_VERIFICATION_RATE_LIMITED',
   validationFailed: 'VALIDATION_FAILED',
   authRequired: 'AUTH_REQUIRED',
   authInvalidCredentials: 'AUTH_INVALID_CREDENTIALS',

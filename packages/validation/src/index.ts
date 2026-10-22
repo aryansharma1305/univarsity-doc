@@ -28,3 +28,5 @@ export * from './documents/academic-certificates.js';
 
 export * from './certificate-eligibility/policy.js';
 export * from './certificate-eligibility/contract.js';
+
+export * from './public-verification/schemas.js';

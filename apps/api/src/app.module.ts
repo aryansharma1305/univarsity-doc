@@ -30,6 +30,8 @@ import { StudentAuthGuard } from './student-auth/student-auth.guard.js';
 import { StudentResultsModule } from './student-results/student-results.module.js';
 import { StudentAuthModule } from './student-auth/student-auth.module.js';
 
+import { PublicVerificationModule } from './public-verification/public-verification.module.js';
+
 @Module({})
 export class AppModule {
   /** The validated configuration is passed in explicitly so tests can supply their own. */
@@ -60,6 +62,7 @@ export class AppModule {
         ExaminationsModule,
         ReExamsModule,
         HealthModule,
+        PublicVerificationModule,
       ],
       providers: [
         { provide: APP_FILTER, useClass: GlobalExceptionFilter },

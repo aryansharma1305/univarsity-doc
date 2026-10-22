@@ -85,9 +85,12 @@ test('student results: real server-rendered API error is distinct from empty and
         return;
       }
       try {
-        const upstream = await fetch(`http://127.0.0.1:4100${req.url ?? '/'}`, {
-          headers: { Cookie: req.headers.cookie ?? '' },
-        });
+        const upstream = await fetch(
+          `http://127.0.0.1:${process.env.E2E_API_PORT ?? 4100}${req.url ?? '/'}`,
+          {
+            headers: { Cookie: req.headers.cookie ?? '' },
+          },
+        );
         res.writeHead(upstream.status, {
           'Content-Type': upstream.headers.get('content-type') ?? 'application/json',
           'Cache-Control': 'no-store',
