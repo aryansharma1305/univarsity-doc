@@ -207,3 +207,12 @@ the real button also includes category/usage text. A small browser selector harn
 both failure modes (title matches two; incomplete exact name matches zero) and verified that the
 unique code prefix matches/clicks one with metadata present. The correction uses the existing
 physics-subject selector pattern, retaining strict mode and every accessibility assertion.
+
+## Latest-main reconciliation during CI recovery
+
+Phase 12C.1 PR #25 merged while the browser reruns were executing. Its main commit
+`2dce801015a556f608dc396820f42313bce74d86` has successful CI. This branch merged it intact;
+only the three generated Graphify outputs conflicted, and those were regenerated from the combined
+source. No academic/sample implementation was hand-edited or discarded. Final branch CI verifies
+the integrated code, including Phase 12C.1's additional sample tests. UI-04 source, assets and
+approved screenshots remain unchanged. Claude's independent worktree was not modified.

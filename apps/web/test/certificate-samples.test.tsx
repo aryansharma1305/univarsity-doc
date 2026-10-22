@@ -35,9 +35,9 @@ it('offers only the fixed authenticated preview/download without any personal-da
     'Does not guarantee eligibility or issuance.',
   ])
     expect(screen.getByText(text)).toBeInTheDocument();
+  // Phase 12C.1: academic samples are now offered per course below the training sample.
   expect(
-    screen.getByText(
-      /Transcript, Provisional, Character and Migration samples are not available yet/,
-    ),
+    screen.getByText(/Academic certificate samples for your own courses are listed below/),
   ).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Samples for your courses' })).toBeInTheDocument();
 });

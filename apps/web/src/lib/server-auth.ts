@@ -18,6 +18,8 @@ import {
   studentReExamPaymentViewSchema,
   type StudentProfileRequest,
   studentProfileRequestListSchema,
+  type StudentCertificateEligibilityV1,
+  studentCertificateEligibilityV1Schema,
 } from '@docversity/validation';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
@@ -233,3 +235,14 @@ export const getStudentResults = cache(async () => {
     return null;
   }
 });
+
+/**
+ * The signed-in student's per-registration certificate eligibility (Phase 12C contract v1), or `null`
+ * when unavailable. Display only: the API decides again on every sample request.
+ */
+export const getStudentCertificateEligibility = cache(
+  (): Promise<StudentCertificateEligibilityV1 | null> =>
+    studentGet('/api/v1/student/certificate-eligibility', (body) =>
+      studentCertificateEligibilityV1Schema.safeParse(body),
+    ),
+);
