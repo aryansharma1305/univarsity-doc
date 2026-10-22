@@ -191,8 +191,9 @@ The initial push application job passed, but the PR application job exposed an e
 curriculum-test retry ambiguity. An initial toast color-contrast assertion failed transiently and
 passed on retry; the serial retry created another synthetic subject with the same display title.
 Later title-only selectors matched both `PTC-* E2E Patient Care` subjects and failed strict mode.
-The test now retains the generated care-subject code and selects the exact code/title at both
-call sites. No `.first()` workaround, accessibility exclusion, assertion removal or academic UI
+The test now retains the generated care-subject code and selects the unique code prefix at both call sites, allowing the button’s category/usage
+metadata. The generated year-course code scopes its row/link lookup as well, so serial retries
+cannot open an older course with the same display title. No `.first()` workaround, accessibility exclusion, assertion removal or academic UI
 change is introduced. Changed-test lint and TypeScript checks pass. Full hosted CI on the updated
 SHA is the runtime verification; the shared local heavy-testing window was not reused.
 
@@ -200,3 +201,9 @@ Both initial staging jobs failed before compilation while downloading the pnpm 1
 from npm (30-second timeout). Their completed jobs were retried once available. No package manager,
 Docker infrastructure or security setting was changed to bypass the network dependency. Final
 CI results and links are maintained on the draft PR.
+
+The first CI selector correction used an incomplete exact accessible label and timed out because
+the real button also includes category/usage text. A small browser selector harness reproduced
+both failure modes (title matches two; incomplete exact name matches zero) and verified that the
+unique code prefix matches/clicks one with metadata present. The correction uses the existing
+physics-subject selector pattern, retaining strict mode and every accessibility assertion.

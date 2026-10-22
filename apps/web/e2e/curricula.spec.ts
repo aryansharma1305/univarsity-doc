@@ -220,7 +220,11 @@ test('a registrar builds a year-wise course and reuses a catalogue subject', asy
   });
   await courseDialog.getByRole('button', { name: 'Create course' }).click();
   await expect(page.getByText(`Course ${code} created`)).toBeVisible();
-  await page.getByRole('link', { name: 'E2E Diploma in Synthetic Imaging' }).first().click();
+  await page
+    .getByRole('row')
+    .filter({ hasText: code })
+    .getByRole('link', { name: 'E2E Diploma in Synthetic Imaging', exact: true })
+    .click();
   await newVersion(page, 'Y2026', '2026 year-wise syllabus');
   shared.yearCurriculumUrl = page.url();
   await expect(page.getByRole('tab', { name: /Year 1/ })).toBeVisible();
@@ -341,9 +345,7 @@ test('course management screens fit desktop, laptop, tablet and phone widths', a
     const assignment = page.getByRole('dialog', { name: 'Add subject' });
     await expect(assignment).toBeVisible();
     await assignment.getByRole('textbox', { name: 'Subject' }).fill(shared.careCode);
-    await assignment
-      .getByRole('button', { name: `${shared.careCode} E2E Patient Care`, exact: true })
-      .click();
+    await assignment.getByRole('button', { name: new RegExp(`^${shared.careCode} `) }).click();
     await assignment.getByLabel('Maximum marks').fill('100');
     await assignment.getByLabel('Passing marks').fill('40');
     await assignment.evaluate((element) => {
@@ -454,9 +456,7 @@ test('move and reorder year subjects, supersede a version and retain the archive
   await page.getByRole('button', { name: 'Add subject' }).click();
   const assignment = page.getByRole('dialog', { name: 'Add subject' });
   await assignment.getByRole('textbox', { name: 'Subject' }).fill(shared.careCode);
-  await assignment
-    .getByRole('button', { name: `${shared.careCode} E2E Patient Care`, exact: true })
-    .click();
+  await assignment.getByRole('button', { name: new RegExp(`^${shared.careCode} `) }).click();
   await assignment.getByRole('button', { name: 'Add subject', exact: true }).click();
   await expect(assignment).toBeHidden();
   await page.getByRole('button', { name: `Move ${shared.physicsCode} down`, exact: true }).click();
