@@ -50,6 +50,8 @@ const approver = {
 let certificateRequestId;
 let eligibilityStudent;
 const eligibilityPrograms = {};
+let sampleStudent;
+let singleSampleStudent;
 let fixture;
 const profileStudents = [];
 const examStudents = [];
@@ -315,6 +317,68 @@ try {
     18,
     'MORE_THAN_ONE_YEAR',
   );
+
+  // Phase 12C.1: registration-specific academic samples. Separate synthetic courses and students, so
+  // the Phase 12C fixtures above are unchanged. Approved and withdrawn sets exist only in this
+  // disposable _e2e database; no approval authority is activated in the API.
+  const sampleCourse = async (code, name, durationValue, durationUnit) =>
+    (
+      await db.program.create({
+        data: { code, name, durationValue, durationUnit, departmentId: department.id },
+      })
+    ).id;
+  const m24 = await sampleCourse('E2E-SAMPLE-24M', 'E2E Master of Applied Studies', 2, 'YEARS');
+  const m36 = await sampleCourse('E2E-SAMPLE-36M', 'E2E Bachelor of Science (Honours)', 3, 'YEARS');
+  const m18w = await sampleCourse('E2E-SAMPLE-18W', 'E2E Diploma in Data Practice', 18, 'MONTHS');
+  const approve = async (programId, certificateTypes, durationMonths, tier) => {
+    const set = await proposal(programId, certificateTypes, durationMonths, tier);
+    await db.programCertificateEligibility.update({
+      where: { id: set.id },
+      data: { status: 'APPROVED', version: 2, decidedByUserId: decider.id, decidedAt: new Date() },
+    });
+  };
+  await approve(m24, ['TRANSCRIPT', 'PROVISIONAL', 'CHARACTER'], 24, 'MORE_THAN_ONE_YEAR');
+  await approve(
+    m36,
+    ['TRANSCRIPT', 'PROVISIONAL', 'CHARACTER', 'MIGRATION'],
+    36,
+    'MORE_THAN_TWO_YEARS',
+  );
+  const withdrawn = await proposal(m18w, ['TRANSCRIPT'], 18, 'MORE_THAN_ONE_YEAR');
+  await db.programCertificateEligibility.update({
+    where: { id: withdrawn.id },
+    data: { status: 'WITHDRAWN', version: 2, decidedByUserId: proposer.id, decidedAt: new Date() },
+  });
+  const sampleAccount = async (fullName, programIds, firstNumber) => {
+    const password = randomBytes(18).toString('base64url');
+    const created = await db.student.create({
+      data: {
+        fullName,
+        registrations: {
+          create: programIds.map((programId, i) => ({
+            registrationNumber: `E2E-REG-${firstNumber + i}`,
+            registrationNumberNormalized: `E2E-REG-${firstNumber + i}`,
+            programId,
+            departmentId: department.id,
+            academicSessionId: session.id,
+          })),
+        },
+        account: { create: { passwordHash: await new PasswordService().hashPassword(password) } },
+      },
+    });
+    return {
+      studentId: created.id,
+      studentName: fullName,
+      registrationNumber: `E2E-REG-${firstNumber}`,
+      password,
+    };
+  };
+  sampleStudent = await sampleAccount(
+    'E2E Sample Student',
+    [eligibilityPrograms.m3, m24, m36, m18w, eligibilityPrograms.m12],
+    401,
+  );
+  singleSampleStudent = await sampleAccount('E2E Single Course Student', [m24], 501);
 } finally {
   await db.$disconnect();
 }
@@ -333,6 +397,8 @@ writeFileSync(
     certificateRequestId,
     eligibilityStudent,
     eligibilityPrograms,
+    sampleStudent,
+    singleSampleStudent,
     examAdmin,
     paymentChecker,
     approver,

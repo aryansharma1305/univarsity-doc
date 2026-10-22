@@ -277,6 +277,9 @@ durations fail closed. Students see per-registration labels at `/student/certifi
 application availability, payment, Rector approval or issuance. Read
 [ADR-0018](docs/decisions/ADR-0018-course-certificate-eligibility.md) and
 [docs/api/certificate-eligibility.md](docs/api/certificate-eligibility.md) before changing it.
+Phase 12C.1: `/student/documents` offers fixed, integrity-pinned academic sample PDFs per registration,
+only for types `APPROVED_FOR_COURSE` (registration-scoped endpoint; UI-05's training sample is separate).
+See [ADR-0019](docs/decisions/ADR-0019-registration-scoped-academic-samples.md).
 
 ## 11. Student import workflow (Phase 5)
 

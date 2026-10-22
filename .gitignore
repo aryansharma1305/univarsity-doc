@@ -40,6 +40,8 @@ docker/data/
 /uploaded-files/
 *.pdf
 !references/**/*.pdf
+# Phase 12C.1: fixed synthetic academic samples (fictional, SAMPLE-watermarked, SHA-256 pinned in code).
+!packages/documents/assets/samples/academic/*.pdf
 *.xlsx
 *.xls
 *.csv

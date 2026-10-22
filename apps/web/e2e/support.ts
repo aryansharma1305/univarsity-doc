@@ -25,6 +25,8 @@ export interface E2EFixtures {
   certificateRequestId: string;
   eligibilityStudent: StudentAccount;
   eligibilityPrograms: Record<'m3' | 'm18' | 'm36' | 'm12', string>;
+  sampleStudent: StudentAccount;
+  singleSampleStudent: StudentAccount;
   /** Phase 9: EXAM_ADMIN, a year-wise course and two students of it with portal accounts. */
   examAdmin: Account;
   examStudents: (StudentAccount & { registrationId: string })[];
