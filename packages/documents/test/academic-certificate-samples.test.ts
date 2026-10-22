@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {
   ACADEMIC_SAMPLE_PINS,
   AcademicSampleIntegrityError,
@@ -30,30 +30,59 @@ function normalise(value: unknown): unknown {
   return typeof value;
 }
 
-/** Structural rendering fingerprint: page geometry, drawing operators with arguments, placed text. */
+/** Platform the pinned files were rendered on (Chromium's text shaping differs by OS). */
+const PINS_RENDERED_ON = 'darwin';
+const TEXT_OPS = new Set([
+  OPS.beginText,
+  OPS.endText,
+  OPS.setFont,
+  OPS.setTextMatrix,
+  OPS.showText,
+  OPS.moveText,
+  OPS.beginMarkedContentProps,
+  OPS.endMarkedContent,
+  OPS.dependency,
+]);
+
+/**
+ * Rendering fingerprint. `portable` holds what a template change alters on every platform: page
+ * geometry, the text on each page, the colour palette and the sequence of non-text drawing operators
+ * (paths, clips, transforms, graphics state, images). `exact` adds the full operator sequence, all
+ * arguments (positions to 0.01 pt) and every placed text run, which only the platform that
+ * rendered the pins reproduces.
+ */
 async function fingerprint(bytes: Uint8Array) {
   const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: false });
   const pdf = await task.promise;
-  const pages = [];
+  const portable = [];
+  const exact = [];
   for (let n = 1; n <= pdf.numPages; n++) {
     const page = await pdf.getPage(n);
     const { width, height } = page.getViewport({ scale: 1 });
     const ops = await page.getOperatorList();
-    const text = (await page.getTextContent()).items.flatMap((item) =>
-      'str' in item && item.str.trim()
-        ? [
-            [
-              item.str,
-              normalise(item.transform[4]),
-              normalise(item.transform[5]),
-              normalise(item.height),
-            ],
-          ]
-        : [],
+    const items = (await page.getTextContent()).items.flatMap((item) =>
+      'str' in item && item.str.trim() ? [item] : [],
     );
-    pages.push({
+    const drawing = Array.from(ops.fnArray).filter((fn) => !TEXT_OPS.has(fn));
+    portable.push({
       width: normalise(width),
       height: normalise(height),
+      text: items
+        .map((item) => item.str)
+        .join('')
+        .replace(/\s+/g, ''),
+      palette: [
+        ...new Set(
+          ops.fnArray.flatMap((fn, i) =>
+            fn === OPS.setFillRGBColor || fn === OPS.setStrokeRGBColor
+              ? [String((ops.argsArray[i] as unknown[])[0])]
+              : [],
+          ),
+        ),
+      ].sort(),
+      drawingHash: createHash('sha256').update(JSON.stringify(drawing)).digest('hex'),
+    });
+    exact.push({
       operators: ops.fnArray.length,
       operatorHash: createHash('sha256')
         .update(JSON.stringify(Array.from(ops.fnArray)))
@@ -61,11 +90,16 @@ async function fingerprint(bytes: Uint8Array) {
       argumentHash: createHash('sha256')
         .update(JSON.stringify(ops.argsArray.map(normalise)))
         .digest('hex'),
-      text,
+      text: items.map((item) => [
+        item.str,
+        normalise(item.transform[4]),
+        normalise(item.transform[5]),
+        normalise(item.height),
+      ]),
     });
   }
   await task.destroy();
-  return pages;
+  return { portable, exact };
 }
 
 describe('pinned academic samples', () => {
@@ -153,25 +187,31 @@ describe('academic sample content', () => {
 
 describe('drift check', () => {
   it.each(SAMPLES)(
-    '%s matches a fresh render of its approved template (geometry, operators, arguments, placed text)',
+    '%s matches a fresh render of its approved template (geometry, text, palette, drawing operators)',
     async (id, pin) => {
       const fresh = await renderAcademicCertificatePreview(
         syntheticAcademicCertificate(pin.certificateType, 'standard'),
         academicCertificateTemplate(pin.certificateType, 1),
       );
-      expect(await fingerprint(shipped(id))).toEqual(await fingerprint(fresh.bytes));
+      const [expected, actual] = [await fingerprint(shipped(id)), await fingerprint(fresh.bytes)];
+      expect(actual.portable).toEqual(expected.portable);
+      // Operator-for-operator equality, including every placed text run, on the pinning platform.
+      if (process.platform === PINS_RENDERED_ON) expect(actual.exact).toEqual(expected.exact);
     },
   );
 });
 
 describe('drift check sensitivity', () => {
-  it('detects a change to the rendered content', async () => {
+  it('detects a change to the rendered content on every platform', async () => {
     const altered = await renderAcademicCertificatePreview(
       { ...syntheticAcademicCertificate('CHARACTER', 'standard'), studentName: 'Alex Samplf' },
       academicCertificateTemplate('CHARACTER', 1),
     );
-    expect(await fingerprint(shipped('sample-character-v1'))).not.toEqual(
+    const [expected, actual] = [
+      await fingerprint(shipped('sample-character-v1')),
       await fingerprint(altered.bytes),
-    );
+    ];
+    expect(actual.portable).not.toEqual(expected.portable);
+    if (process.platform === PINS_RENDERED_ON) expect(actual.exact).not.toEqual(expected.exact);
   });
 });

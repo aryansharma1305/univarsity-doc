@@ -72,9 +72,20 @@ by `packages/documents/scripts/generate-academic-samples.mjs` and are pinned by 
 - no QR code, no URL, token or verify link, no link annotation, and no computed result.
 
 The **drift check** re-renders each template and compares a structural fingerprint with the shipped
-file: page geometry, the full drawing-operator sequence, operator arguments (colours, transforms,
-positions, font sizes; pdf.js per-load font handles are normalised) and every placed text run. A
-sensitivity test confirms that a one-character content change alters the fingerprint. The PDFs that
+file. It has two levels, because Chromium shapes and positions text slightly differently on macOS
+and Linux. The first CI run showed this: the same template produced 1,892 operators on macOS and
+1,887 on Linux, glyph runs were split differently, and some positions differed by 0.01 pt.
+
+- **Every platform (including CI):** page count and geometry; the full text of each page; the colour
+  palette; and the sequence of non-text drawing operators (paths, clips, transforms, graphics state,
+  images).
+- **The platform that rendered the pins (macOS):** in addition, the full operator sequence, every
+  operator argument (colours, transforms, positions to 0.01 pt, font sizes; pdf.js per-load font
+  handles are normalised) and every placed text run.
+
+A sensitivity test confirms that a one-character content change alters the fingerprint at both
+levels. Layout shifts that change only coordinates are caught by the macOS level, not on Linux CI.
+The pinned SHA-256 values are unaffected. The PDFs that
 the browser test downloaded through the student page are byte-identical to the pinned files.
 
 ## Verification (real exit codes)
@@ -182,5 +193,6 @@ course name is shown underneath), and the UI-03 shell's bottom navigation overla
 
 Graph refreshed with `graphify update .` (7,212 nodes, 18,885 edges, 271 communities).
 [ADR-0019](../decisions/ADR-0019-registration-scoped-academic-samples.md) records the decisions.
-Nothing is committed or pushed. This phase awaits visual and security approval. Rector approval,
+Final visual and security-design approval was given on 22 October; delivery is a draft PR, not
+merged. The university's certificate approval authority remains unresolved. Rector approval,
 signing, issuance, payments and public verification remain disabled.
