@@ -1,5 +1,6 @@
 /** Audit action names written to `audit_logs.action`. Add new actions here, never inline strings. */
 export const AUDIT_ACTIONS = {
+  publicVerificationUnavailable: 'PUBLIC_VERIFICATION_UNAVAILABLE',
   certificateRequestSubmitted: 'CERTIFICATE_REQUEST_SUBMITTED',
   certificateRequestTransitioned: 'CERTIFICATE_REQUEST_TRANSITIONED',
   trainingCertificatePreviewGenerated: 'TRAINING_CERTIFICATE_PREVIEW_GENERATED',
