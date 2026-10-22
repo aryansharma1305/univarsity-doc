@@ -1,9 +1,7 @@
-/** Landing page sections (anchors work from any public page). */
+/** Existing public pages link back to the verification homepage. */
 export const PUBLIC_SECTIONS = [
-  { href: '/#features', label: 'Features', available: true },
-  { href: '/#get-started', label: 'Get started', available: true },
-  { href: '/#roadmap', label: 'What’s coming', available: true },
-  { href: '/#faq', label: 'FAQ', available: true },
+  { href: '/#services', label: 'Verification services', available: true },
+  { href: '/contact', label: 'Contact', available: true },
 ] as const;
 
 export const PUBLIC_NAV = [

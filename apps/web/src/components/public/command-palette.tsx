@@ -2,13 +2,7 @@
 
 import type { Route } from 'next';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  ArrowRightIcon,
-  CornerDownLeftIcon,
-  HelpCircleIcon,
-  type LucideIcon,
-  SearchIcon,
-} from 'lucide-react';
+import { ArrowRightIcon, CornerDownLeftIcon, type LucideIcon, SearchIcon } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
@@ -17,11 +11,10 @@ import {
   DialogTitle,
 } from '@docversity/ui/components/dialog';
 import { cn } from '@docversity/ui';
-import { FAQS } from '@/components/landing/content';
 
 interface Command {
   label: string;
-  group: 'Go to' | 'Questions';
+  group: 'Go to';
   href: string;
   keywords: string;
   soon?: boolean;
@@ -51,23 +44,9 @@ const PAGES: readonly Command[] = [
     icon: ArrowRightIcon,
   },
   {
-    label: 'Portal features',
-    href: '/#features',
-    keywords: 'profile course documents examinations re-exam payments',
-    group: 'Go to',
-    icon: ArrowRightIcon,
-  },
-  {
-    label: 'Get started',
-    href: '/#get-started',
-    keywords: 'how steps activation',
-    group: 'Go to',
-    icon: ArrowRightIcon,
-  },
-  {
-    label: 'What’s coming',
-    href: '/#roadmap',
-    keywords: 'roadmap results notifications verification planned',
+    label: 'Verification services',
+    href: '/#services',
+    keywords: 'results registration certificate admission verification',
     group: 'Go to',
     icon: ArrowRightIcon,
   },
@@ -96,21 +75,10 @@ const PAGES: readonly Command[] = [
   },
 ];
 
-const COMMANDS: readonly Command[] = [
-  ...PAGES,
-  ...FAQS.map((faq, index) => ({
-    label: faq.question,
-    href: `/#faq-${String(index)}`,
-    keywords: faq.answer,
-    group: 'Questions' as const,
-    icon: HelpCircleIcon,
-  })),
-];
-
 function search(query: string): Command[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [...COMMANDS];
-  const found = COMMANDS.filter((command) => {
+  if (words.length === 0) return [...PAGES];
+  const found = PAGES.filter((command) => {
     const haystack = `${command.label} ${command.keywords}`.toLowerCase();
     return words.every((word) => haystack.includes(word));
   });
@@ -120,7 +88,7 @@ function search(query: string): Command[] {
   return [...found.filter(inTitle), ...found.filter((command) => !inTitle(command))];
 }
 
-/** ⌘K / Ctrl+K search over public pages and student FAQs. */
+/** ⌘K / Ctrl+K search over existing public and access pages. */
 export function CommandPalette() {
   const router = useRouter();
   const pathname = usePathname();
@@ -153,7 +121,7 @@ export function CommandPalette() {
   const go = (command: Command) => {
     setOpen(false);
     const [path, hash] = command.href.split('#');
-    // Same-page anchors: set the hash directly so the FAQ hears `hashchange` and opens the answer.
+    // Keep same-page section links native.
     if (hash && (path === '' || path === pathname)) window.location.hash = hash;
     else router.push(command.href as Route);
   };
@@ -189,7 +157,7 @@ export function CommandPalette() {
         >
           <DialogTitle className="sr-only">Search Docversity</DialogTitle>
           <DialogDescription className="sr-only">
-            Search pages and common student questions. Use the arrow keys to move and Enter to open.
+            Search pages. Use the arrow keys to move and Enter to open.
           </DialogDescription>
           <div className="flex items-center gap-3 border-b border-lp-hairline px-4">
             <SearchIcon aria-hidden="true" className="size-4 shrink-0 text-lp-ink-soft" />
@@ -221,7 +189,7 @@ export function CommandPalette() {
                   }
                 }
               }}
-              placeholder="Search, e.g. “password” or “re-exam”"
+              placeholder="Search, e.g. “results” or “student login”"
               className="h-14 flex-1 bg-transparent text-[0.9375rem] text-lp-ink outline-none placeholder:text-lp-ink-soft"
             />
             <kbd className="rounded border border-lp-hairline-strong px-1.5 text-[0.6875rem] text-lp-ink-soft">

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Docversity UI-04 review comparison</title
+  ><style>
+    body {
+      font:
+        16px/1.6 system-ui,
+        sans-serif;
+      color: #10213d;
+      background: #eef2f8;
+      margin: 24px auto;
+      padding: 0 20px;
+      max-width: 1440px;
+    }
+    h1 {
+      font-size: 28px;
+    }
+    h2 {
+      margin-top: 40px;
+    }
+    .pair {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+    figure {
+      margin: 0;
+    }
+    figcaption {
+      font-weight: 650;
+      margin: 8px 0;
+    }
+    img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border: 1px solid #c8d2e3;
+    }
+    a:focus-visible {
+      outline: 3px solid #0759d7;
+      outline-offset: 4px;
+    }
+    @media (max-width: 650px) {
+      .pair {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <h1>Docversity UI-04: reference and implementation</h1>
+  <p>
+    Actual full-page captures at matching widths. Select an image to inspect it at full size. All
+    four services remain unavailable; the implementation collects no references and submits no
+    verification requests.
+  </p>
+  <section>
+    <h2>1440px</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Original mentor HTML</figcaption>
+        <a href="reference-1440.png"
+          ><img src="reference-1440.png" alt="Original HTML at 1440 pixels"
+        /></a>
+      </figure>
+      <figure>
+        <figcaption>UI-04 integration</figcaption>
+        <a href="home-1440.png"
+          ><img src="home-1440.png" alt="UI-04 integration at 1440 pixels"
+        /></a>
+      </figure>
+    </div>
+  </section>
+  <section>
+    <h2>768px</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Original mentor HTML</figcaption>
+        <a href="reference-768.png"
+          ><img src="reference-768.png" alt="Original HTML at 768 pixels"
+        /></a>
+      </figure>
+      <figure>
+        <figcaption>UI-04 integration</figcaption>
+        <a href="home-768.png"><img src="home-768.png" alt="UI-04 integration at 768 pixels" /></a>
+      </figure>
+    </div>
+  </section>
+  <section>
+    <h2>390px</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Original mentor HTML</figcaption>
+        <a href="reference-390.png"
+          ><img src="reference-390.png" alt="Original HTML at 390 pixels"
+        /></a>
+      </figure>
+      <figure>
+        <figcaption>UI-04 integration</figcaption>
+        <a href="home-390.png"><img src="home-390.png" alt="UI-04 integration at 390 pixels" /></a>
+      </figure>
+    </div>
+  </section>
+  <section>
+    <h2>320px</h2>
+    <div class="pair">
+      <figure>
+        <figcaption>Original mentor HTML</figcaption>
+        <a href="reference-320.png"
+          ><img src="reference-320.png" alt="Original HTML at 320 pixels"
+        /></a>
+      </figure>
+      <figure>
+        <figcaption>UI-04 integration</figcaption>
+        <a href="home-320.png"><img src="home-320.png" alt="UI-04 integration at 320 pixels" /></a>
+      </figure>
+    </div>
+  </section>
+  <section>
+    <h2>Selected service panels</h2>
+    <p>
+      <a href="home-1440.png">Result Checking</a> ·
+      <a href="service-registration.png">Registration Verification</a> ·
+      <a href="service-certificate.png">Certificate Verification</a> ·
+      <a href="service-admission-letter.png">Admission Letter Verification</a>
+    </p>
+    <p><a href="text-scale-320.png">320px at 200% text scale</a></p>
+  </section>
+</html>

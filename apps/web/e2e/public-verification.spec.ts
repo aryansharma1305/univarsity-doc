@@ -1,101 +1,86 @@
-import { unavailableVerificationResponseSchema } from '@docversity/validation';
+import {
+  errorResponseSchema,
+  publicVerificationServices,
+  unavailableVerificationResponseSchema,
+} from '@docversity/validation';
 import { expect, test } from '@playwright/test';
-import { capture, expectNoHorizontalOverflow, expectNoSeriousA11yViolations } from './support';
-const services = [
-  'Result Checking',
-  'Registration Verification',
-  'Certificate Verification',
-  'Admission Letter Verification',
-];
-for (const width of [1440, 768, 390]) {
-  test(`public verification is fail-closed and accessible at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
-    await page.goto('/verify');
-    await expect(page.getByRole('tab', { name: /Result Checking/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    const cards = await page.getByRole('tablist').boundingBox();
-    const panel = await page.getByRole('tabpanel').boundingBox();
-    expect(cards).not.toBeNull();
-    expect(panel).not.toBeNull();
-    if (cards && panel) expect(panel.y).toBeGreaterThanOrEqual(cards.y + cards.height);
-    for (const service of services) {
-      await page.getByRole('tab', { name: new RegExp(service) }).click();
-      await expect(page.getByRole('heading', { name: service, exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Check service availability' }).click();
-      await expect(page.getByRole('tabpanel').getByRole('alert')).toContainText(
-        'Enter a reference',
-      );
-      await page.getByLabel('Reference', { exact: true }).fill('SYNTHETIC-13A');
-      const request = page.waitForResponse(
-        (response) =>
-          response.url().includes('/api/v1/public/verify/') &&
-          response.request().method() === 'POST',
-      );
-      await page.getByRole('button', { name: 'Check service availability' }).click();
-      const response = await request;
-      expect(response.status()).toBe(200);
-      expect(unavailableVerificationResponseSchema.parse(await response.json()).status).toBe(
-        'UNAVAILABLE',
-      );
-      await expect(page.getByRole('status')).toContainText('No record has been checked');
-      await expect(page.getByLabel('Reference', { exact: true })).toHaveValue('');
-      await expectNoHorizontalOverflow(page);
-      await expectNoSeriousA11yViolations(page);
-    }
-    await page.getByRole('tab', { name: /Result Checking/ }).click();
-    await capture(page, `phase13a-verification-${width}`);
-  });
-}
-test('keyboard tabs, reduced motion, loading, errors and unexpected success stay safe', async ({
+import { expectNoHorizontalOverflow } from './support';
+
+test('/verify redirects to the one homepage and drops unsolicited reference query data', async ({
   page,
+  request,
 }) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/verify');
-  expect(
-    await page
-      .getByRole('region', { name: 'Result Checking', exact: true })
-      .evaluate((element) => element.getAnimations().length),
-  ).toBe(0);
-  const first = page.getByRole('tab', { name: /Result Checking/ });
-  await first.focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: /Registration Verification/ })).toBeFocused();
-  await page.keyboard.press('End');
-  await expect(page.getByRole('tab', { name: /Admission Letter Verification/ })).toBeFocused();
-  await page.getByLabel('Reference', { exact: true }).fill('SYNTHETIC-13A');
-  let release: () => void = () => {
-    throw new Error('Test response gate not initialized');
-  };
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route('**/api/v1/public/verify/**', async (route) => {
-    await held;
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        contractVersion: 1,
-        service: 'admission-letter',
-        status: 'VERIFIED',
-        message: 'Synthetic automated-test success must never render.',
-      }),
+  const response = await request.get('/verify', { maxRedirects: 0 });
+  expect(response.status()).toBe(307);
+  expect(response.headers().location).toBe('/');
+  await page.goto('/verify?reference=SYNTHETIC-UNSOLICITED-REFERENCE');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('tab')).toHaveCount(4);
+  await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
+  await expect(page.getByText('SYNTHETIC-UNSOLICITED-REFERENCE')).toHaveCount(0);
+});
+
+test('all four real API contracts remain fail-closed, no-store and strictly validated', async ({
+  request,
+}) => {
+  for (const service of publicVerificationServices) {
+    const path = `/api/v1/public/verify/${service}`;
+    const response = await request.post(path, {
+      data: { contractVersion: 1, reference: 'SYNTHETIC-UI04-REFERENCE' },
     });
+    expect(response.status()).toBe(200);
+    expect(unavailableVerificationResponseSchema.parse(await response.json())).toMatchObject({
+      service,
+      status: 'UNAVAILABLE',
+    });
+    expect(response.headers()['cache-control']).toBe('no-store');
+    expect(response.headers()['set-cookie']).toBeUndefined();
+    const absent = await request.post(path, {
+      data: { contractVersion: 1, reference: 'DOES-NOT-EXIST-UI04' },
+    });
+    expect(absent.status()).toBe(200);
+    expect(await absent.json()).toEqual(await response.json());
+    const invalid = await request.post(path, {
+      data: { contractVersion: 1, reference: 'https://invalid.example/private' },
+    });
+    expect(invalid.status()).toBe(400);
+    expect(errorResponseSchema.parse(await invalid.json()).error.code).toBe('VALIDATION_FAILED');
+    const query = await request.post(`${path}?reference=private`, {
+      data: { contractVersion: 1, reference: 'SYNTHETIC-UI04' },
+    });
+    expect(query.status()).toBe(400);
+  }
+});
+
+test('without JavaScript the homepage discloses unavailability and preserves direct portal links', async ({
+  browser,
+}, testInfo) => {
+  const context = await browser.newContext({
+    javaScriptEnabled: false,
+    viewport: { width: 390, height: 844 },
+    baseURL: testInfo.project.use.baseURL,
   });
-  await page.getByRole('button', { name: 'Check service availability' }).click();
-  await expect(page.getByRole('button', { name: 'Checking availability…' })).toBeDisabled();
-  release();
-  await expect(page.getByRole('status')).toContainText('No record has been checked');
-  await expect(page.getByText('Synthetic automated-test success must never render.')).toHaveCount(
-    0,
-  );
-  await page.unrouteAll();
-  await page.route('**/api/v1/public/verify/**', (route) =>
-    route.fulfill({ status: 429, json: { error: { code: 'PUBLIC_VERIFICATION_RATE_LIMITED' } } }),
-  );
-  await page.getByRole('button', { name: 'Check service availability' }).click();
-  await expect(page.getByRole('status')).toContainText('Too many requests');
-  await expectNoSeriousA11yViolations(page);
+  try {
+    const page = await context.newPage();
+    await page.goto('/');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Verify. Trust. Confirm.' }),
+    ).toBeVisible();
+    await expect(page.getByRole('tab')).toHaveCount(4);
+    for (const tab of await page.getByRole('tab').all())
+      await expect(tab).toContainText('Not available yet');
+    await expect(page.getByRole('tabpanel').getByRole('status')).toHaveText('Not available yet');
+    await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Student portal', exact: true })).toHaveAttribute(
+      'href',
+      '/student/login',
+    );
+    await expect(page.getByRole('link', { name: 'Staff access', exact: true })).toHaveAttribute(
+      'href',
+      '/admin/login',
+    );
+    await expectNoHorizontalOverflow(page);
+  } finally {
+    await context.close();
+  }
 });
