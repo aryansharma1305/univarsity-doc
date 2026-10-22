@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
-import { importLimitsEnvSchema } from '@docversity/validation';
+import { importLimitsEnvSchema, uploadRequestBodyLimitBytes } from '@docversity/validation';
 import { loadWebEnv } from './src/lib/env';
 
 // Local development keeps a single .env at the monorepo root. Variables already present in the
@@ -15,8 +15,9 @@ if (existsSync(rootEnvFile)) {
 loadWebEnv();
 
 // The same-origin proxy buffers request bodies up to this size before forwarding them to the API.
-// It must exceed the API's upload limit (plus multipart overhead) so the API — not a truncated
-// body — decides, and answers oversized workbooks with a clear "file too large" message.
+// It covers the largest upload of any endpoint (historical documents, not only workbooks) plus
+// multipart overhead, so the API — not a truncated body — decides and answers oversized files
+// with a clear "file too large" message. The reviewer-gate Caddy allows exactly the same size.
 const { IMPORT_MAX_FILE_MB } = importLimitsEnvSchema.parse(process.env);
 
 const securityHeaders = [
@@ -36,7 +37,7 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   experimental: {
     cpus: 2,
-    proxyClientMaxBodySize: (IMPORT_MAX_FILE_MB + 1) * 1024 * 1024,
+    proxyClientMaxBodySize: uploadRequestBodyLimitBytes(IMPORT_MAX_FILE_MB),
   },
   headers() {
     return Promise.resolve([{ source: '/:path*', headers: securityHeaders }]);

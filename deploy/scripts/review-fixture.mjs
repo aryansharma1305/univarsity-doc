@@ -7,7 +7,9 @@ import { PasswordService } from '/app/apps/api/dist/auth/password.service.js';
 import { ensureRoles } from '/app/apps/api/dist/cli/roles.js';
 
 const url = new URL(process.env.DATABASE_URL);
-if (url.hostname !== 'postgres' || url.pathname !== '/docversity_staging')
+// The Compose service, or (Phase 14C) the exact Render staging host validated by render.py.
+const stagingHost = process.env.STAGING_DATABASE_HOST ?? 'postgres';
+if (url.hostname !== stagingHost || url.pathname !== '/docversity_staging')
   throw Error('Not isolated staging');
 const reviewers = JSON.parse(readFileSync('/credentials/reviewers.json', 'utf8'));
 const passwords = new PasswordService();

@@ -291,6 +291,12 @@ synthetic reviewer accounts and `apps/web` `test:staging`. Review/public instanc
 direct Compose/Caddy startup. Read
 [docs/development/phase-14b-live-staging-deployment.md](docs/development/phase-14b-live-staging-deployment.md)
 before changing it; `deploy/scripts/gate_regression.py` must keep passing.
+Phase 14C (temporary Render bridge, Option B): `deploy/render/` reuses the 14B images and gate on
+Render (only the Caddy edge is public; Next.js/API private; managed PostgreSQL/Key Value; private R2).
+Operated only through `python3 deploy/render/render.py`; live actions need `--authorized`. The gate
+body limit (`review-site.caddy`) must equal `uploadRequestBodyLimitBytes()` (16 MiB). Read
+[docs/development/phase-14c-render-staging.md](docs/development/phase-14c-render-staging.md) first;
+`edge_regression.py` and `roles_rehearsal.py` must keep passing.
 
 ## 11. Student import workflow (Phase 5)
 

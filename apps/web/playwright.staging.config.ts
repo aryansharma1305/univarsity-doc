@@ -11,7 +11,13 @@ import { defineConfig, devices } from '@playwright/test';
  * Local stacks use Caddy's internal CA. Chromium trusts only that CA's intermediate key (exported by
  * `staging.py ca`); TLS validation is never disabled. A public host uses its real certificate.
  */
-const secrets = fileURLToPath(new URL('../../.local/staging/', import.meta.url));
+// Phase 14C (Render) keeps its instance in .local/render: STAGING_SECRETS_DIR=render.
+const secrets = fileURLToPath(
+  new URL(
+    `../../.local/${process.env.STAGING_SECRETS_DIR === 'render' ? 'render' : 'staging'}/`,
+    import.meta.url,
+  ),
+);
 const instance = JSON.parse(readFileSync(`${secrets}instance.json`, 'utf8')) as {
   origin: string;
   public: boolean;

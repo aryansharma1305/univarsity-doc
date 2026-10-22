@@ -77,3 +77,4 @@ graphify-out/20*/
 # Isolated staging credentials, certificates and backup data
 .local/
 deploy/scripts/__pycache__/
+deploy/render/__pycache__/

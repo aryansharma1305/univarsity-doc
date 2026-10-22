@@ -9,6 +9,7 @@ export * from './imports/index.js';
 export * from './student-accounts/schemas.js';
 export * from './student-profile/schemas.js';
 export * from './historical-documents/schemas.js';
+export * from './uploads.js';
 export * from './examinations/schemas.js';
 export * from './examinations/re-exams.js';
 export * from './examinations/payment-common.js';

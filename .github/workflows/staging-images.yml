@@ -1,0 +1,78 @@
+# Phase 14C: linux/amd64 images for the temporary Render staging. Nothing is deployed from here.
+# - Pull requests: build the four images and check the edge fails closed. Never pushes.
+# - Manual dispatch with `publish`: pushes to the PRIVATE GHCR package ghcr.io/<owner>/docversity14c-staging
+#   by immutable tag <role>-<commit SHA>. Only from main or the Phase 14C branch, only through the
+#   protected `staging-images` environment (a required reviewer must approve each run), and only with
+#   the job's short-lived GITHUB_TOKEN. Package visibility is never changed; every pushed image must
+#   refuse anonymous reads. See docs/development/phase-14c-render-staging.md.
+name: Staging images
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'deploy/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/staging-images.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Push the four images to the private GHCR package (needs staging-images approval)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-images-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build linux/amd64 images (no push)
+    if: github.event_name == 'pull_request' || !inputs.publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Free runner disk for the Chromium and Next.js image builds
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Build and check fail-closed edge
+        env:
+          IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/docversity14c-staging
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: deploy/render/images.sh build
+
+  publish:
+    name: Publish private images (approved runs only)
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.publish &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature/phase-14c-render-staging')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: staging-images
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Refuse an unprotected environment
+        # GitHub creates a missing environment on first use WITHOUT protection; never publish then.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rules=$(gh api "repos/${{ github.repository }}/environments/staging-images" --jq '[.protection_rules[] | select(.type == "required_reviewers")] | length')
+          test "$rules" -ge 1 || { echo '::error::staging-images has no required reviewer; refusing to publish'; exit 1; }
+      - name: Free runner disk for the Chromium and Next.js image builds
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Log in to GHCR with the job token
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build, push by immutable tag, prove privacy
+        env:
+          IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/docversity14c-staging
+        run: deploy/render/images.sh push
+      - name: Log out
+        if: always()
+        run: docker logout ghcr.io

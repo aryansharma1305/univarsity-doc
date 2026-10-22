@@ -3,7 +3,9 @@ import { createPrismaClient } from '/app/packages/database/dist/index.js';
 import { createAdmin } from '/app/apps/api/dist/cli/create-admin-core.js';
 import { PasswordService } from '/app/apps/api/dist/auth/password.service.js';
 const url = new URL(process.env.DATABASE_URL);
-if (url.hostname !== 'postgres' || url.pathname !== '/docversity_staging')
+// The Compose service, or (Phase 14C) the exact Render staging host validated by render.py.
+const stagingHost = process.env.STAGING_DATABASE_HOST ?? 'postgres';
+if (url.hostname !== stagingHost || url.pathname !== '/docversity_staging')
   throw Error('Not isolated staging');
 const db = createPrismaClient({ connectionString: url.toString() });
 try {
