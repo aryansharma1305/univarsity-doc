@@ -50,7 +50,9 @@ for c in [review, public]:
     for volume in c['services']['proxy']['volumes']:
         if volume['target'].startswith('/etc/caddy/'):
             assert volume['type'] == 'bind' and volume.get('read_only') is True, volume['target']
-            assert volume.get('bind', {}).get('create_host_path') is False, volume['target']
+            # Long-syntax binds default to create_host_path=false; some Compose versions omit the
+            # default from `config` output. The runtime refusal is proven by gate_regression.py.
+            assert volume.get('bind', {}).get('create_host_path', False) is False, volume['target']
     assert c['networks']['backend']['internal'] is True
     assert [n for n, s in c['services'].items() if s.get('ports') and n != 'proxy'] == []
 assert [(p.get('host_ip'), p['published'], p['target']) for p in review['services']['proxy']['ports']] == [('127.0.0.1', '3443', 443)]
