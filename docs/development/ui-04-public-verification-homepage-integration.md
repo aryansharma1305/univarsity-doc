@@ -184,3 +184,19 @@ Existing nonfatal tooling warnings include React Compiler/TanStack, Next standal
 metadataBase, test NODE_ENV/color flags and pg concurrent-client-query deprecation. These were not
 changed as part of this public UI integration. No production deployment or live verification is
 claimed. Global design-context drift remains documented without an unrelated rewrite.
+
+## Focused CI recovery after initial delivery
+
+The initial push application job passed, but the PR application job exposed an existing serial
+curriculum-test retry ambiguity. An initial toast color-contrast assertion failed transiently and
+passed on retry; the serial retry created another synthetic subject with the same display title.
+Later title-only selectors matched both `PTC-* E2E Patient Care` subjects and failed strict mode.
+The test now retains the generated care-subject code and selects the exact code/title at both
+call sites. No `.first()` workaround, accessibility exclusion, assertion removal or academic UI
+change is introduced. Changed-test lint and TypeScript checks pass. Full hosted CI on the updated
+SHA is the runtime verification; the shared local heavy-testing window was not reused.
+
+Both initial staging jobs failed before compilation while downloading the pnpm 12.10.1 executable
+from npm (30-second timeout). Their completed jobs were retried once available. No package manager,
+Docker infrastructure or security setting was changed to bypass the network dependency. Final
+CI results and links are maintained on the draft PR.

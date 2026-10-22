@@ -1,7 +1,7 @@
 # Graph Report - docversity-ui04-integration  (2026-10-22)
 
 ## Corpus Check
-- 856 files · ~2,308,532 words
+- 856 files · ~2,308,590 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 21 file(s) not represented in the graph (top: (none) 9, .css 4, .ttf 4)
 
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `2d05e59e`
+- Built from commit: `f77db428`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1397,11 +1397,11 @@ _Questions this graph is uniquely positioned to answer:_
 - **What is the exact relationship between `Six-Step Import Wizard Stepper` and `Registry Pipeline v2.4`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
 - **Why does `CLAUDE.md — Docversity` connect `CLAUDE.md — Docversity` to `common.ts`, `policy.ts`, `packages_types_dist_index`, `CLAUDE.md`, `Phase 10: Manual Marks Entry & Excel Results Import Foundation`?**
-  _High betweenness centrality (0.068) - this node is a cross-community bridge._
+  _High betweenness centrality (0.063) - this node is a cross-community bridge._
 - **Why does `next` connect `next` to `curriculum-editor-view.tsx`, `server-auth.ts`, `profile/page.tsx`, `packages_validation_dist_index`, `ref_react`, `capabilities.tsx`, `packages_types_dist_index`, `status/page.tsx`, `errorMessage`, `document-detail-view.tsx`, `course/page.tsx`, `web/package.json`, `formatDateTime`, `(portal)/examinations/page.tsx`, `cn`, `src/env.ts`, `(portal)/results/page.tsx`, `lib/api.ts`, `coming-soon.tsx`, `admin/login/page.tsx`, `student-results.tsx`, `primitives.tsx`, `app/layout.tsx`, `opengraph-image.tsx`, `verification-home.tsx`?**
-  _High betweenness centrality (0.058) - this node is a cross-community bridge._
-- **Why does `6. Backend conventions (apps/api)` connect `common.ts` to `CLAUDE.md — Docversity`, `registration-rules.ts`, `result-imports.service.ts`, `AppError`, `@nestjs/common`, `PermissionsGuard`, `app.module.ts`?**
-  _High betweenness centrality (0.047) - this node is a cross-community bridge._
+  _High betweenness centrality (0.057) - this node is a cross-community bridge._
+- **Why does `@nestjs/common` connect `@nestjs/common` to `document-file.ts`, `PrismaService`, `ref_vitest`, `result-imports.service.ts`, `profile-photo.ts`, `academic.controllers.ts`, `academic-sessions.service.ts`, `app.module.ts`, `api/package.json`, `academic.module.ts`, `ref_zod`, `app.setup.ts`, `ExaminationsController`, `re-exams.controller.ts`, `student-auth.controller.ts`, `StudentContext`, `imports/support.ts`, `certificate-eligibility.service.ts`, `curricula.controllers.ts`, `historical-documents.service.ts`, `re-exam-payments.service.ts`, `student-accounts.controller.ts`, `profile-requests.service.ts`, `examinations.controller.ts`, `certificate-templates.service.ts`, `examinations/re-exam-payments.test.ts`, `activity.ts`, `historical-documents/historical-documents.test.ts`, `imports.service.ts`, `programs.service.ts`, `http-exception.filter.ts`?**
+  _High betweenness centrality (0.045) - this node is a cross-community bridge._
 - **What connects `singleQuote`, `trailingComma`, `printWidth` to the rest of the system?**
   _2317 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `curriculum-editor-view.tsx` be split into smaller, more focused modules?**

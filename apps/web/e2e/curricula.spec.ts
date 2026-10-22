@@ -15,6 +15,7 @@ const shared = {
   semesterCurriculumUrl: '',
   yearCurriculumUrl: '',
   physicsCode: '',
+  careCode: '',
 };
 
 async function choose(page: Page, dialog: Locator, label: string, option: string | RegExp) {
@@ -157,6 +158,7 @@ test('a registrar builds and activates a semester-wise course curriculum', async
   await expect(dialog).toBeHidden();
 
   const careCode = uniqueCode('PTC');
+  shared.careCode = careCode;
   dialog = await addNewSubject(page, { code: careCode, title: 'E2E Patient Care', credits: '3' });
   await dialog.getByRole('button', { name: 'Add subject', exact: true }).click();
   await expect(dialog).toBeHidden();
@@ -338,8 +340,10 @@ test('course management screens fit desktop, laptop, tablet and phone widths', a
     await page.getByRole('button', { name: 'Add subject' }).click();
     const assignment = page.getByRole('dialog', { name: 'Add subject' });
     await expect(assignment).toBeVisible();
-    await assignment.getByRole('textbox', { name: 'Subject' }).fill('E2E Patient Care');
-    await assignment.getByRole('button', { name: /E2E Patient Care/ }).click();
+    await assignment.getByRole('textbox', { name: 'Subject' }).fill(shared.careCode);
+    await assignment
+      .getByRole('button', { name: `${shared.careCode} E2E Patient Care`, exact: true })
+      .click();
     await assignment.getByLabel('Maximum marks').fill('100');
     await assignment.getByLabel('Passing marks').fill('40');
     await assignment.evaluate((element) => {
@@ -449,8 +453,10 @@ test('move and reorder year subjects, supersede a version and retain the archive
   await page.goto(shared.yearCurriculumUrl);
   await page.getByRole('button', { name: 'Add subject' }).click();
   const assignment = page.getByRole('dialog', { name: 'Add subject' });
-  await assignment.getByRole('textbox', { name: 'Subject' }).fill('E2E Patient Care');
-  await assignment.getByRole('button', { name: /E2E Patient Care/ }).click();
+  await assignment.getByRole('textbox', { name: 'Subject' }).fill(shared.careCode);
+  await assignment
+    .getByRole('button', { name: `${shared.careCode} E2E Patient Care`, exact: true })
+    .click();
   await assignment.getByRole('button', { name: 'Add subject', exact: true }).click();
   await expect(assignment).toBeHidden();
   await page.getByRole('button', { name: `Move ${shared.physicsCode} down`, exact: true }).click();

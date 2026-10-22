@@ -21752,7 +21752,7 @@
       "file_type": "code",
       "norm_label": "addnewsubject()",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L56"
+      "source_location": "L57"
     },
     {
       "id": "apps_web_e2e_curricula_spec_choose",
@@ -21764,7 +21764,7 @@
       "file_type": "code",
       "norm_label": "choose()",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L20"
+      "source_location": "L21"
     },
     {
       "id": "apps_web_e2e_curricula_spec_createcourse",
@@ -21776,7 +21776,7 @@
       "file_type": "code",
       "norm_label": "createcourse()",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L25"
+      "source_location": "L26"
     },
     {
       "id": "apps_web_e2e_curricula_spec_newversion",
@@ -21788,7 +21788,7 @@
       "file_type": "code",
       "norm_label": "newversion()",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L46"
+      "source_location": "L47"
     },
     {
       "id": "apps_api_test_certificate_requests_requests_test_body",
@@ -97674,7 +97674,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L73",
+      "source_location": "L74",
       "weight": 1.0
     },
     {
@@ -97686,7 +97686,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L29",
+      "source_location": "L30",
       "weight": 1.0
     },
     {
@@ -97698,7 +97698,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L38",
+      "source_location": "L39",
       "weight": 1.0
     },
     {
@@ -109266,7 +109266,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L20",
+      "source_location": "L21",
       "weight": 1.0
     },
     {
@@ -109278,7 +109278,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L25",
+      "source_location": "L26",
       "weight": 1.0
     },
     {
@@ -109290,7 +109290,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L46",
+      "source_location": "L47",
       "weight": 1.0
     },
     {
@@ -109302,7 +109302,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "apps/web/e2e/curricula.spec.ts",
-      "source_location": "L56",
+      "source_location": "L57",
       "weight": 1.0
     },
     {
@@ -307653,5 +307653,5 @@
       "source_file": "docs/api/README.md"
     }
   ],
-  "built_at_commit": "2d05e59e1ce4dc15359e3b9bf164cfdd449e2613"
+  "built_at_commit": "f77db428188c26d2917ce5496527f5733f150eae"
 }
