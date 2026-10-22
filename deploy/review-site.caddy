@@ -1,0 +1,26 @@
+# Phase 14B reviewer site, shared by the local and the public staging Caddyfiles.
+# Everything except robots.txt requires the reviewer gate before any request reaches the app.
+# `reviewer_gate` is defined only by the private gate file: if that file is missing, empty or
+# wrongly referenced, this import fails and Caddy refuses to start (fail closed).
+encode zstd gzip
+request_body {
+	max_size 12MB
+}
+header {
+	X-Robots-Tag "noindex, nofollow, noarchive"
+	Referrer-Policy "same-origin"
+	-Server
+}
+@gated not path /robots.txt
+import reviewer_gate
+handle /robots.txt {
+	respond `User-agent: *
+Disallow: /
+` 200
+}
+handle /health {
+	reverse_proxy api:4000
+}
+handle {
+	reverse_proxy web:3000
+}

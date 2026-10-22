@@ -1,9 +1,20 @@
 import assert from 'node:assert/strict';
 import https from 'node:https';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const fixture = JSON.parse(readFileSync('/credentials/fixture.json', 'utf8'));
 const ca = readFileSync('/credentials/local-ca.crt');
+// The configured origin (Phase 14B instances use their own port) and, behind the Phase 14B
+// reviewer gate, its credentials.
+const origin = new URL(process.env.WEB_URL);
+const gate = existsSync('/credentials/reviewers.json')
+  ? JSON.parse(readFileSync('/credentials/reviewers.json', 'utf8')).gate
+  : null;
+const authorization = gate
+  ? {
+      Authorization: `Basic ${Buffer.from(`${gate.username}:${gate.password}`).toString('base64')}`,
+    }
+  : {};
 const { createPrismaClient } = await import('/app/packages/database/dist/index.js');
 const db = createPrismaClient({ connectionString: process.env.DATABASE_URL });
 try {
@@ -22,21 +33,22 @@ try {
 
 async function request(
   path,
-  { method = 'GET', data, cookies = '', origin = 'https://localhost:3443', token } = {},
+  { method = 'GET', data, cookies = '', origin: requestOrigin = origin.origin, token } = {},
 ) {
   return new Promise((resolve, reject) => {
     const req = https.request(
       {
         hostname: 'proxy',
         port: 443,
-        servername: 'localhost',
-        ca,
+        servername: origin.hostname,
+        ...(ca.length ? { ca } : {}),
         path,
         method,
         timeout: 30000,
         headers: {
-          Host: 'localhost:3443',
-          Origin: origin,
+          Host: origin.host,
+          Origin: requestOrigin,
+          ...authorization,
           Cookie: cookies,
           ...(data ? { 'Content-Type': 'application/json' } : {}),
           ...(token ? { 'X-CSRF-Token': token } : {}),

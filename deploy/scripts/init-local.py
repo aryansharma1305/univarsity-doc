@@ -1,8 +1,27 @@
 #!/usr/bin/env python3
 """Generate local-only staging secrets once. Never reads the development .env."""
 from pathlib import Path
+import argparse
+import re
 import secrets
 import json
+
+parser = argparse.ArgumentParser(description=__doc__)
+# Defaults reproduce Phase 14A exactly. Another worktree's stack takes its own project and port.
+parser.add_argument('--project', default='docversity14a')
+parser.add_argument('--https-port', type=int, default=3443)
+parser.add_argument('--public-origin', help='Exact https origin of an authorized public staging host')
+parser.add_argument('--acme-email', help="Operator email for Let's Encrypt (public origin only)")
+args = parser.parse_args()
+if bool(args.public_origin) != bool(args.acme_email):
+    raise SystemExit('--public-origin and --acme-email are required together')
+if not re.fullmatch(r'docversity14[a-z]', args.project):
+    raise SystemExit('Project must be a fixed docversity14<letter> staging name')
+if not 1024 < args.https_port < 65536:
+    raise SystemExit('Local HTTPS port must be an unprivileged port')
+origin = args.public_origin or f'https://localhost:{args.https_port}'
+if args.public_origin and not re.fullmatch(r'https://[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+', args.public_origin):
+    raise SystemExit('Public origin must be an exact https://host with no port, path or trailing slash')
 
 root = Path(__file__).resolve().parents[2]
 directory = root / '.local/staging'
@@ -24,8 +43,8 @@ files = {
 LOG_LEVEL=log
 API_HOST=0.0.0.0
 API_PORT=4000
-WEB_URL=https://localhost:3443
-CORS_ORIGINS=https://localhost:3443
+WEB_URL={origin}
+CORS_ORIGINS={origin}
 SWAGGER_ENABLED=false
 TRUST_PROXY=2
 COOKIE_SECURE=true
@@ -47,6 +66,18 @@ IMPORT_CONCURRENCY=1
 worker_keys = {'NODE_ENV', 'LOG_LEVEL', 'DATABASE_URL', 'REDIS_URL', 'QUEUE_PREFIX', 'S3_ENDPOINT', 'S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_FORCE_PATH_STYLE', 'WORKER_CONCURRENCY', 'IMPORT_CONCURRENCY'}
 files['worker_runtime'] = '\n'.join(line for line in files['runtime'].splitlines() if line.split('=', 1)[0] in worker_keys or line.startswith('IMPORT_'))
 files['local-ca.crt'] = ''
+# Least-privilege synthetic reviewer accounts (Phase 14B). Passwords stay in this private directory.
+password = lambda: secrets.token_urlsafe(24)
+files['reviewers.json'] = json.dumps({
+    'gate': {'username': 'reviewer', 'password': password()},
+    'staff': [
+        {'role': 'SUPER_ADMIN', 'email': 'review.admin@example.invalid', 'displayName': 'SYNTHETIC University Administrator (review)', 'password': password()},
+        {'role': 'REGISTRAR', 'email': 'review.registrar@example.invalid', 'displayName': 'SYNTHETIC Registrar (review)', 'password': password()},
+        {'role': 'EXAM_ADMIN', 'email': 'review.exams@example.invalid', 'displayName': 'SYNTHETIC Examination Staff (review)', 'password': password()},
+    ],
+    'student': {'registrationNumber': 'REVIEW-REG-1001', 'password': password()},
+})
+files['instance.json'] = json.dumps({'project': args.project, 'httpsPort': args.https_port, 'origin': origin, 'public': bool(args.public_origin), 'acmeEmail': args.acme_email})
 files['fixture.json'] = json.dumps({'email': 'staging.admin@example.invalid', 'staffPassword': secrets.token_urlsafe(24), 'registrationNumber': 'STAGING-REG-0001', 'studentPassword': secrets.token_urlsafe(24)})
 for name, text in files.items():
     path = directory / name

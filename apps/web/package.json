@@ -12,6 +12,7 @@
     "lint": "next typegen && eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:staging": "NODE_EXTRA_CA_CERTS=../../.local/staging/local-ca.crt playwright test -c playwright.staging.config.ts",
     "clean": "rm -rf .next"
   },
   "dependencies": {
