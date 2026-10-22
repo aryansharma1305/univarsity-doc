@@ -1,0 +1,99 @@
+# Phase 14C: temporary Render staging for university review (Option B). NOT applied automatically:
+# it lives outside the repository root, so Render never detects it. The operator applies it only after
+# the project owner approves provisioning (docs/development/phase-14c-render-staging.md).
+#
+# - Only `docversity14c-edge` (the reviewer-gated Caddy) is public. Next.js and the API are private
+#   services; the worker has no network listener; PostgreSQL and Key Value accept no external
+#   connections (empty ipAllowList). Everything is in one region on Render's private network.
+# - Images are the Phase 14B builds for linux/amd64, built by .github/workflows/staging-images.yml and
+#   pushed to the PRIVATE package ghcr.io/<IMAGE_OWNER>/docversity14c-staging (tag <role>-<commit SHA>),
+#   pinned here by digest. Render pulls with the read-only credential docversity14c-ghcr-read.
+#   <IMAGE_OWNER> and the digests are filled in at approval time; Render refuses placeholders.
+# - Secrets are NOT declared here. They are Render Secret Files uploaded after creation
+#   (render.py assemble). Until they exist every service fails closed: the edge refuses to start
+#   without its gate, and the apps refuse to start without their runtime file.
+previews:
+  generation: 'off'
+services:
+  - type: web
+    name: docversity14c-edge
+    runtime: image
+    image:
+      url: ghcr.io/<IMAGE_OWNER>/docversity14c-staging@sha256:<EDGE_DIGEST>
+      creds:
+        fromRegistryCreds:
+          name: docversity14c-ghcr-read
+    plan: 0.5c-512mb
+    region: singapore
+    healthCheckPath: /robots.txt
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: PORT
+        value: '10000'
+      - key: WEB_UPSTREAM
+        sync: false # Next.js private address, e.g. docversity14c-web:3000
+      - key: API_UPSTREAM
+        sync: false # API private address, e.g. docversity14c-api:4000
+      - key: RENDER_TRUSTED_PROXIES
+        sync: false # measured (G3); edge-start refuses an empty or malformed value
+      - key: RENDER_CLIENT_IP_HEADER
+        sync: false
+  - type: pserv
+    name: docversity14c-web
+    runtime: image
+    image:
+      url: ghcr.io/<IMAGE_OWNER>/docversity14c-staging@sha256:<WEB_DIGEST>
+      creds:
+        fromRegistryCreds:
+          name: docversity14c-ghcr-read
+    plan: 0.5c-512mb
+    region: singapore
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: RUNTIME_ENV_FILE
+        value: /etc/secrets/web_runtime
+  - type: pserv
+    name: docversity14c-api
+    runtime: image
+    image:
+      url: ghcr.io/<IMAGE_OWNER>/docversity14c-staging@sha256:<API_DIGEST>
+      creds:
+        fromRegistryCreds:
+          name: docversity14c-ghcr-read
+    # Chromium PDF previews: measured peak 437 MiB for four concurrent renders (+~250 MiB API at rest).
+    plan: 1c-2g
+    region: singapore
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: RUNTIME_ENV_FILE
+        value: /etc/secrets/runtime
+  - type: worker
+    name: docversity14c-worker
+    runtime: image
+    image:
+      url: ghcr.io/<IMAGE_OWNER>/docversity14c-staging@sha256:<WORKER_DIGEST>
+      creds:
+        fromRegistryCreds:
+          name: docversity14c-ghcr-read
+    plan: 0.5c-512mb
+    region: singapore
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: RUNTIME_ENV_FILE
+        value: /etc/secrets/runtime
+  - type: keyvalue
+    name: docversity14c-kv
+    plan: 256mb
+    region: singapore
+    maxmemoryPolicy: noeviction # BullMQ must never lose keys
+    persistenceMode: journal-snapshot
+    ipAllowList: [] # internal connections only
+databases:
+  - name: docversity14c-db
+    plan: 0.1c-256mb
+    region: singapore
+    postgresMajorVersion: '17'
+    databaseName: docversity_staging
+    user: docversity_admin
+    diskSizeGB: 1
+    ipAllowList: [] # the operator's /32 is added only while running roles/migrate/fixture, then removed

@@ -1,10 +1,13 @@
-# Phase 14B reviewer site, shared by the local and the public staging Caddyfiles.
+# Phase 14B reviewer site, shared by the local, public and Render staging Caddyfiles.
 # Everything except robots.txt requires the reviewer gate before any request reaches the app.
 # `reviewer_gate` is defined only by the private gate file: if that file is missing, empty or
 # wrongly referenced, this import fails and Caddy refuses to start (fail closed).
+# Upstreams default to the Compose service names; Render (Phase 14C) sets its private addresses.
 encode zstd gzip
 request_body {
-	max_size 12MB
+	# Exactly the web proxy's buffer (uploadRequestBodyLimitBytes, @docversity/validation): the
+	# largest upload of any endpoint (historical documents, 15 MiB) plus 1 MiB multipart overhead.
+	max_size 16MiB
 }
 header {
 	X-Robots-Tag "noindex, nofollow, noarchive"
@@ -18,9 +21,16 @@ handle /robots.txt {
 Disallow: /
 ` 200
 }
+# The application always receives exactly one X-Forwarded-For entry: the client IP as Caddy
+# determined it (the peer itself, unless a trusted front proxy is configured globally). Anything a
+# client sends is replaced, so the downstream hop count (TRUST_PROXY=2) never depends on the host.
 handle /health {
-	reverse_proxy api:4000
+	reverse_proxy {$API_UPSTREAM:api:4000} {
+		header_up X-Forwarded-For {client_ip}
+	}
 }
 handle {
-	reverse_proxy web:3000
+	reverse_proxy {$WEB_UPSTREAM:web:3000} {
+		header_up X-Forwarded-For {client_ip}
+	}
 }

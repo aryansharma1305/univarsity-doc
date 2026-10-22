@@ -1,4 +1,5 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
+import { HISTORICAL_DOCUMENT_RULES } from '@docversity/validation';
 import {
   type Account,
   type StudentAccount,
@@ -505,5 +506,57 @@ test('image scans: staff see a location warning; students get a copy without emb
   await expectNoSeriousA11yViolations(mobile);
   await capture(mobile, 'historical-detail-image-metadata-mobile');
   await mobile.context().close();
+  await staff.context().close();
+});
+
+test('a document near the 15 MiB limit passes the web proxy intact; a larger one gets the API 413', async ({
+  browser,
+}) => {
+  // Phase 14C: the proxy once buffered only the import limit + 1 MiB (11 MiB), so documents between
+  // 11 and 15 MiB were truncated before reaching the API. Same-origin proxy, both directions.
+  const { registrar, profileStudents } = fixtures();
+  const student = profileStudents[1];
+  if (!student) throw new Error('missing fixture');
+  const nearLimit = HISTORICAL_DOCUMENT_RULES.maxBytes - 64 * 1024;
+  const padding = (size: number) =>
+    `4 0 obj << /Length ${size} >>\nstream\n${'0'.repeat(size)}\nendstream endobj`;
+  const large = pdf(
+    'E2E-NEAR-LIMIT',
+    padding(nearLimit - pdf('E2E-NEAR-LIMIT', padding(0)).length),
+  );
+  expect(large.length).toBeGreaterThan(14 * 1024 * 1024);
+  expect(large.length).toBeLessThanOrEqual(HISTORICAL_DOCUMENT_RULES.maxBytes);
+  const staff = await staffPage(browser, registrar);
+  await uploadDocument(staff, {
+    registrationNumber: student.registrationNumber,
+    title: 'E2E Near-limit scan',
+    type: 'Other document',
+    file: { name: 'near-limit.pdf', mimeType: 'application/pdf', buffer: large },
+  });
+  await staff.getByRole('button', { name: 'Upload as draft' }).click();
+  await expect(staff).toHaveURL(/\/admin\/historical-documents\/[0-9a-f-]{36}$/, {
+    timeout: 60_000,
+  });
+  const id = staff.url().split('/').at(-1) ?? '';
+  const download = await staff.request.get(
+    `/api/v1/historical-documents/${id}/file?disposition=attachment`,
+  );
+  expect(download.status()).toBe(200);
+  expect(Buffer.from(await download.body()).equals(large)).toBe(true);
+
+  const { csrfToken } = (await (await staff.request.get('/api/v1/auth/csrf')).json()) as {
+    csrfToken: string;
+  };
+  const oversized = await staff.request.post('/api/v1/historical-documents', {
+    headers: { 'X-CSRF-Token': csrfToken },
+    multipart: {
+      file: {
+        name: 'oversized.pdf',
+        mimeType: 'application/pdf',
+        buffer: Buffer.concat([large, Buffer.alloc(128 * 1024, 0x30)]),
+      },
+    },
+  });
+  expect(oversized.status()).toBe(413);
   await staff.context().close();
 });

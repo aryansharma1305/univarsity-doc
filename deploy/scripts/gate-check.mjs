@@ -1,10 +1,15 @@
 // Phase 14B: proves the reviewer gate from inside the backend network after every start.
 // Anonymous and wrong-credential requests must be refused on every route class; robots.txt only is
 // public. Exits non-zero on any other answer, so staging.py stops the proxy (fail closed).
+// Phase 14C (Render): GATE_CHECK_HOST targets the public edge itself, verified with system trust,
+// and render.py suspends the edge on failure.
 import https from 'node:https';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 const origin = new URL(process.env.WEB_URL);
-const ca = readFileSync('/credentials/local-ca.crt');
+const target = process.env.GATE_CHECK_HOST ?? 'proxy';
+const ca = existsSync('/credentials/local-ca.crt')
+  ? readFileSync('/credentials/local-ca.crt')
+  : Buffer.alloc(0);
 const { gate } = JSON.parse(readFileSync('/credentials/reviewers.json', 'utf8'));
 const basic = (username, password) =>
   `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
@@ -12,7 +17,7 @@ const request = (path, method, authorization) =>
   new Promise((resolve, reject) => {
     const req = https.request(
       {
-        hostname: 'proxy',
+        hostname: target,
         port: 443,
         servername: origin.hostname,
         ...(ca.length > 1 ? { ca } : {}),

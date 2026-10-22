@@ -1,0 +1,14 @@
+# Phase 14C reviewer-gated edge for Render: the pinned Phase 14B Caddy image plus the shared site.
+# The gate snippet is never baked in; Render mounts it as the Secret File review_gate.caddy.
+# Build context is deploy/ (the repository .dockerignore excludes it):
+#   docker build -f deploy/render/Dockerfile.edge deploy
+FROM caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+# The stock binary carries cap_net_bind_service, which a non-root process without capabilities
+# cannot exec. Port 10000 needs no privilege: run a plain copy (cp does not keep file capabilities).
+RUN cp /usr/bin/caddy /usr/local/bin/caddy-unprivileged
+COPY render/Caddyfile.render /etc/caddy/Caddyfile
+COPY review-site.caddy /etc/caddy/review-site.caddy
+COPY --chmod=0555 render/edge-start.sh /usr/local/bin/edge-start
+ENV XDG_CONFIG_HOME=/tmp/caddy-config XDG_DATA_HOME=/tmp/caddy-data
+USER 65534:65534
+ENTRYPOINT ["/usr/local/bin/edge-start"]

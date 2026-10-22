@@ -1,0 +1,31 @@
+# Phase 14C: the reviewer-gated edge on Render, the ONLY public service of the Render staging.
+# Render terminates TLS and forwards plain HTTP to $PORT; Next.js and the API are private services.
+{
+	admin off
+	auto_https off
+	persist_config off
+	servers {
+		# Render's own proxies, measured live (G3). Only they may supply the client IP header; a
+		# client-supplied value is ignored unless it arrives through a trusted proxy, and with
+		# trusted_proxies_strict the right-most untrusted address wins (spoof-resistant).
+		trusted_proxies static {$RENDER_TRUSTED_PROXIES}
+		trusted_proxies_strict
+		client_ip_headers {$RENDER_CLIENT_IP_HEADER}
+	}
+}
+# Defines the reviewer_gate snippet. Render Secret File; if it is missing, unreadable, empty or
+# malformed, Caddy refuses to start and Render keeps no unprotected instance live (fail closed).
+import /etc/secrets/review_gate.caddy
+http://:{$PORT} {
+	# Access log for Render's log view: who (client_ip as resolved above), what and the status. No
+	# request or response headers are logged, so no credentials or cookies are recorded.
+	log {
+		output stdout
+		format filter {
+			request>headers delete
+			resp_headers delete
+		}
+	}
+	import /etc/caddy/review-site.caddy
+	header Strict-Transport-Security "max-age=31536000"
+}

@@ -103,8 +103,19 @@ jobs:
           python3 deploy/scripts/test_staging.py
       - name: Reviewer gate fails closed (real Caddy startup configuration)
         run: python3 deploy/scripts/gate_regression.py
+      - name: Render staging configuration (Phase 14C)
+        run: |
+          python3 deploy/render/check_render.py
+          python3 deploy/render/test_render.py
       - name: Build production containers
         run: python3 deploy/scripts/staging.py build
+      - name: Render edge and managed-database rehearsals (Phase 14C)
+        env:
+          RENDER_TOOLS_IMAGE: docversity14a-tools:local
+          RENDER_ECHO_IMAGE: docversity14a-web:local
+        run: |
+          python3 deploy/render/edge_regression.py
+          python3 deploy/render/roles_rehearsal.py
       - name: Start isolated production-mode staging
         run: python3 deploy/scripts/staging.py up
       - name: Create synthetic accounts and verify trusted local HTTPS
