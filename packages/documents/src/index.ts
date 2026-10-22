@@ -7,3 +7,4 @@ export * from './training-renderer.js';
 export * from './student-certificate-sample.js';
 export * from './academic-templates.js';
 export * from './academic-renderer.js';
+export * from './academic-certificate-samples.js';

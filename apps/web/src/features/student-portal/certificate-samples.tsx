@@ -1,12 +1,19 @@
 import { DownloadIcon, ExternalLinkIcon, FileBadgeIcon } from 'lucide-react';
 import { Button } from '@docversity/ui/components/button';
+import type { StudentRegistrationEligibilityV1 } from '@docversity/validation';
+import { CourseCertificateSamples } from './course-certificate-samples';
 import { PortalCard } from './portal-ui';
 import { StudentActionMotion } from './student-motion';
 
 const sampleFile = '/api/v1/student/certificate-samples/sample-training-v1/file';
 
 /** No student props: the sample is the same fixed fictional document for every student. */
-export function StudentCertificateSamples() {
+export function StudentCertificateSamples({
+  courseSamples = null,
+}: {
+  /** Phase 12C.1: the student's registrations with their course offerings; null when unavailable. */
+  courseSamples?: StudentRegistrationEligibilityV1[] | null;
+}) {
   return (
     <div
       id="certificate-samples"
@@ -58,11 +65,20 @@ export function StudentCertificateSamples() {
               </ul>
               <p className="mt-4 text-sm font-medium text-navy-950">Other sample formats</p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                Transcript, Provisional, Character and Migration samples are not available yet. The
-                Training Certificate is not their official format.
+                Academic certificate samples for your own courses are listed below. The Training
+                Certificate is not their official format.
               </p>
             </div>
           </div>
+          <section
+            aria-labelledby="course-samples-heading"
+            className="mt-6 border-t border-border pt-5"
+          >
+            <h3 id="course-samples-heading" className="text-lg font-semibold text-navy-950">
+              Samples for your courses
+            </h3>
+            <CourseCertificateSamples registrations={courseSamples} />
+          </section>
         </PortalCard>
       </StudentActionMotion>
     </div>

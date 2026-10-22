@@ -10,6 +10,7 @@ import {
   HISTORICAL_DOCUMENT_TYPE_LABELS,
   type StudentDocument,
 } from '@docversity/validation';
+import type { StudentRegistrationEligibilityV1 } from '@docversity/validation';
 import { StudentCertificateSamples } from './certificate-samples';
 import { formatDate } from '@/lib/format';
 import { PageIntro, PortalCard, PortalEmptyState } from './portal-ui';
@@ -119,14 +120,20 @@ function DocumentCard({ document }: { document: StudentDocument }) {
   );
 }
 
-export function StudentDocuments({ documents }: { documents: StudentDocument[] | null }) {
+export function StudentDocuments({
+  documents,
+  courseSamples = null,
+}: {
+  documents: StudentDocument[] | null;
+  courseSamples?: StudentRegistrationEligibilityV1[] | null;
+}) {
   return (
     <>
       <PageIntro
         title="My Documents"
         description="Certificates and records the university has published to you. You can view and download them; only the university can add or change documents."
       />
-      <StudentCertificateSamples />
+      <StudentCertificateSamples courseSamples={courseSamples} />
       {documents === null ? (
         <PortalCard title="Documents" icon={FileTextIcon}>
           <p role="alert" className="text-sm text-danger-text">

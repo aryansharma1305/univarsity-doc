@@ -72,3 +72,24 @@ durationMonths }`, `duration { outcome, tier, unresolvedReason }`, `courseConfig
   or issuance. Today no type is `APPROVED_FOR_COURSE` in production (approval authority pending), so
   UI-05 must render an honest empty/pending state.
 - A breaking change ships as `contractVersion: 2` on a new path or alongside v1; v1 is not mutated.
+
+## Student academic certificate samples (Phase 12C.1)
+
+`GET /api/v1/student/certificate-samples/registrations/:registrationId/:sampleId/file?disposition=inline|attachment`
+
+- Student session only. `sampleId` is one of `sample-course-completion-v1`, `sample-transcript-v1`,
+  `sample-provisional-v1`, `sample-character-v1`, `sample-migration-v1`. Any other identifier, and any
+  extra query parameter, is rejected (400). The training sample keeps its own UI-05 endpoint.
+- The certificate type is derived from `sampleId` on the server. The registration must belong to the
+  signed-in student, and that type must be `APPROVED_FOR_COURSE` for the registration's course under
+  the current policy. That is the same resolver as the student eligibility contract. Otherwise the
+  response is 404, which is indistinguishable for another student's registration, an unknown one,
+  pending, withdrawn, out-of-date, not-offered and unresolved types.
+- Serves fixed, integrity-pinned synthetic bytes (no rendering, student data or storage access).
+  If the pinned file fails verification, the response is 503 "This sample is temporarily unavailable."
+  The log records only the sample identifier and the failed check.
+- Shares the UI-05 per-account rate limit (30 per minute across training and academic samples),
+  checked before any lookup. `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: default-src 'none'; frame-ancestors 'self'`, filename `<sampleId>.pdf`.
+- A sample shows a layout only. It never means completion, qualification, payment, Rector approval
+  or issuance.
