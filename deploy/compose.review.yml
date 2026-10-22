@@ -1,0 +1,27 @@
+# Phase 14B reviewer overlay. Applied ONLY by deploy/scripts/staging.py, which validates the gate
+# first and probes it after every start; never start review/public instances with Compose directly.
+# Bind sources must already exist: a missing gate file stops Compose instead of mounting an empty
+# directory in its place (fail closed).
+services:
+  proxy:
+    volumes:
+      - type: bind
+        source: ./Caddyfile.review
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ./review-site.caddy
+        target: /etc/caddy/review-site.caddy
+        read_only: true
+        bind: { create_host_path: false }
+      - type: bind
+        source: ../.local/staging/review_gate.caddy
+        target: /etc/caddy/review-gate.caddy
+        read_only: true
+        bind: { create_host_path: false }
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:8081/health']
+  tools:
+    volumes:
+      - ../.local/staging/reviewers.json:/credentials/reviewers.json:ro

@@ -6,8 +6,12 @@ if (url.hostname !== 'postgres' || url.pathname !== '/docversity_staging') {
 }
 const db = createPrismaClient({ connectionString: url.toString() });
 try {
-  const student = await db.student.findFirst();
-  if ((await db.student.count()) !== 1 || student?.fullName !== 'SYNTHETIC Staging Student') {
+  // The base fixture is present and every restored student is synthetic (Phase 14B adds review data).
+  const base = await db.student.count({ where: { fullName: 'SYNTHETIC Staging Student' } });
+  const other = await db.student.count({
+    where: { NOT: { fullName: { startsWith: 'SYNTHETIC ' } } },
+  });
+  if (base !== 1 || other !== 0) {
     throw new Error('Restored synthetic database fixture mismatch');
   }
 } finally {

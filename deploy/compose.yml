@@ -1,4 +1,4 @@
-name: docversity14a
+name: ${STAGING_PROJECT:-docversity14a}
 x-app: &app
   restart: unless-stopped
   init: true
@@ -18,7 +18,7 @@ x-app: &app
 services:
   tools:
     <<: *app
-    image: docversity14a-tools:${IMAGE_TAG:-local}
+    image: ${STAGING_PROJECT:-docversity14a}-tools:${IMAGE_TAG:-local}
     profiles: [operator]
     restart: 'no'
     volumes:
@@ -117,7 +117,7 @@ services:
     logging: *logging
   migrate:
     <<: *app
-    image: docversity14a-tools:${IMAGE_TAG:-local}
+    image: ${STAGING_PROJECT:-docversity14a}-tools:${IMAGE_TAG:-local}
     build: { context: .., dockerfile: deploy/Dockerfile, target: tools }
     restart: 'no'
     secrets:
@@ -136,7 +136,7 @@ services:
       ]
   api:
     <<: *app
-    image: docversity14a-api:${IMAGE_TAG:-local}
+    image: ${STAGING_PROJECT:-docversity14a}-api:${IMAGE_TAG:-local}
     build: { context: .., dockerfile: deploy/Dockerfile, target: api }
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -160,7 +160,7 @@ services:
     secrets:
       - source: worker_runtime
         target: runtime
-    image: docversity14a-worker:${IMAGE_TAG:-local}
+    image: ${STAGING_PROJECT:-docversity14a}-worker:${IMAGE_TAG:-local}
     build: { context: .., dockerfile: deploy/Dockerfile, target: worker }
     depends_on:
       api: { condition: service_healthy }
@@ -172,7 +172,7 @@ services:
       start_period: 30s
   web:
     <<: *app
-    image: docversity14a-web:${IMAGE_TAG:-local}
+    image: ${STAGING_PROJECT:-docversity14a}-web:${IMAGE_TAG:-local}
     build: { context: .., dockerfile: deploy/Dockerfile, target: web }
     networks: [backend, edge]
     tmpfs: ['/tmp:size=64m,mode=1777', '/app/apps/web/.next/cache:size=32m,uid=1000,gid=1000']

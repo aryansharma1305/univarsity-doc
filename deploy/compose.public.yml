@@ -1,0 +1,17 @@
+# Phase 14B public staging overlay. Applied ONLY by deploy/scripts/staging.py (never Compose directly).
+# Only for a separately authorized, dedicated staging host;
+# staging.py applies it only when init-local.py was given --public-origin. Caddy alone is published.
+services:
+  proxy:
+    ports: !override
+      - '80:80'
+      - '443:443'
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?PUBLIC_DOMAIN is required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+    volumes:
+      - type: bind
+        source: ./Caddyfile.review-public
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind: { create_host_path: false }

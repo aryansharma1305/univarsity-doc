@@ -281,6 +281,17 @@ Phase 12C.1: `/student/documents` offers fixed, integrity-pinned academic sample
 only for types `APPROVED_FOR_COURSE` (registration-scoped endpoint; UI-05's training sample is separate).
 See [ADR-0019](docs/decisions/ADR-0019-registration-scoped-academic-samples.md).
 
+## 10h. Reviewer staging (Phase 14B)
+
+`deploy/` (Phase 14A) runs a production-mode stack; Phase 14B adds isolated instances (`init-local.py
+--project docversity14<letter>`), a fail-closed Caddy reviewer gate (`compose.review.yml`,
+`review-site.caddy`, private `review_gate.caddy`), a public VPS overlay that is never run locally,
+synthetic reviewer accounts and `apps/web` `test:staging`. Review/public instances are operated
+**only** through `python3 deploy/scripts/staging.py` (gate validation + post-start probe); never via
+direct Compose/Caddy startup. Read
+[docs/development/phase-14b-live-staging-deployment.md](docs/development/phase-14b-live-staging-deployment.md)
+before changing it; `deploy/scripts/gate_regression.py` must keep passing.
+
 ## 11. Student import workflow (Phase 5)
 
 `/admin/imports` → download template → upload `.xlsx` → worker reads the workbook → choose worksheet and
