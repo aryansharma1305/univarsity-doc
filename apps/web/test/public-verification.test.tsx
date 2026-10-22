@@ -1,69 +1,54 @@
 // @vitest-environment jsdom
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { PUBLIC_VERIFICATION_UNAVAILABLE } from '@docversity/validation';
 import { VerificationPanel } from '@/features/public-verification/verification-panel';
+
 afterEach(() => vi.unstubAllGlobals());
-it('defaults to Result Checking and validates locally before any request', () => {
-  const fetcher = vi.fn();
-  vi.stubGlobal('fetch', fetcher);
+const titles = [
+  'Result Checking',
+  'Registration Verification',
+  'Certificate Verification',
+  'Admission Letter Verification',
+];
+it('defaults to Result Checking with exactly the four unavailable services', () => {
   render(<VerificationPanel />);
-  expect(screen.getByRole('tab', { name: /Result Checking/ })).toHaveAttribute(
+  expect(screen.getAllByRole('tab')).toHaveLength(4);
+  for (const title of titles)
+    expect(screen.getByRole('tab', { name: title })).toHaveTextContent('Not available yet');
+  expect(screen.getByRole('tab', { name: 'Result Checking' })).toHaveAttribute(
     'aria-selected',
     'true',
   );
-  expect(screen.getAllByRole('tab')).toHaveLength(4);
-  fireEvent.click(screen.getByRole('button', { name: 'Check service availability' }));
-  expect(screen.getByRole('alert')).toHaveTextContent('Enter a reference');
+  expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+});
+it('switches every service without collecting identifiers or making verification requests', () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal('fetch', fetcher);
+  const { container } = render(<VerificationPanel />);
+  for (const title of titles) {
+    fireEvent.mouseDown(screen.getByRole('tab', { name: title }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.getByRole('heading', { name: title })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Not available yet');
+    expect(container.querySelectorAll('form,input,textarea,select')).toHaveLength(0);
+  }
   expect(fetcher).not.toHaveBeenCalled();
 });
-it('omits session credentials, clears reference and renders only a validated unavailable response', async () => {
+it('never requests or renders an unexpected success payload while unavailable', () => {
   const fetcher = vi.fn().mockResolvedValue({
     ok: true,
-    status: 200,
-    json: () =>
-      Promise.resolve({
-        contractVersion: 1,
-        service: 'result',
-        status: 'UNAVAILABLE',
-        message: PUBLIC_VERIFICATION_UNAVAILABLE,
-      }),
+    json: () => Promise.resolve({ status: 'VERIFIED', fullName: 'PRIVATE SYNTHETIC NAME' }),
   });
   vi.stubGlobal('fetch', fetcher);
   render(<VerificationPanel />);
-  fireEvent.change(screen.getByLabelText('Reference'), { target: { value: 'SYNTHETIC-13A' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Check service availability' }));
-  await waitFor(() =>
-    expect(screen.getByRole('status')).toHaveTextContent('No record has been checked'),
-  );
-  expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
-    method: 'POST',
-    credentials: 'omit',
-    cache: 'no-store',
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Certificate Verification' }), {
+    button: 0,
+    ctrlKey: false,
   });
-  expect(screen.getByLabelText('Reference')).toHaveValue('');
-});
-it('rejects synthetic success and unsafe disclosure from an unexpected backend', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () =>
-        Promise.resolve({
-          contractVersion: 1,
-          service: 'result',
-          status: 'VERIFIED',
-          message: 'PRIVATE SUCCESS',
-          fullName: 'PRIVATE NAME',
-        }),
-    }),
-  );
-  render(<VerificationPanel />);
-  fireEvent.change(screen.getByLabelText('Reference'), { target: { value: 'SYNTHETIC-13A' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Check service availability' }));
-  await waitFor(() =>
-    expect(screen.getByRole('status')).toHaveTextContent('No record has been checked'),
-  );
-  expect(screen.queryByText(/PRIVATE/)).not.toBeInTheDocument();
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(screen.queryByText(/PRIVATE SYNTHETIC NAME|VERIFIED/)).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('Not available yet');
+  expect(screen.getByText(/SAMPLE PDFs and course eligibility/)).toBeInTheDocument();
 });
