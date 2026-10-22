@@ -14,8 +14,8 @@ import { testStorageBucket } from '@docversity/validation';
 const rootEnv = fileURLToPath(new URL('../../.env', import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
-const WEB_PORT = 3100;
-const API_PORT = 4100;
+const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 3100);
+const API_PORT = Number(process.env.E2E_API_PORT ?? 4100);
 /** BullMQ prefix shared by the e2e API (producer) and e2e worker (consumer) — never the dev one. */
 const QUEUE_PREFIX = 'dve2eq';
 // Session and rate-limit keys belong to this test run, including repeated local runs.

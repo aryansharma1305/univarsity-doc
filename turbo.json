@@ -39,7 +39,9 @@
     "ADMIN_EMAIL",
     "ADMIN_DISPLAY_NAME",
     "ADMIN_PASSWORD",
-    "E2E_BASE_DATABASE_URL"
+    "E2E_BASE_DATABASE_URL",
+    "E2E_WEB_PORT",
+    "E2E_API_PORT"
   ],
   "tasks": {
     "db:generate": {

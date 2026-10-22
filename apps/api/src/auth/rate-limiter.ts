@@ -39,12 +39,16 @@ export class RateLimiter {
       for (const key of keys) pipeline.incr(key).expire(key, windowSeconds, 'NX').ttl(key);
       return pipeline.exec();
     });
+    // EXEC can resolve with command errors (ACL/OOM), or null when aborted. Never treat these as zero attempts.
+    if (results?.length !== rules.length * 3 || results.some(([error]) => error)) {
+      throw Errors.authUnavailable();
+    }
     let limited = false;
     let justExceeded = false;
     let retryAfterSeconds = 0;
     rules.forEach((rule, index) => {
-      const count = Number(results?.[index * 3]?.[1] ?? 0);
-      const ttl = Number(results?.[index * 3 + 2]?.[1] ?? windowSeconds);
+      const count = Number(results[index * 3]?.[1] ?? 0);
+      const ttl = Number(results[index * 3 + 2]?.[1] ?? windowSeconds);
       if (count > rule.limit) {
         limited = true;
         retryAfterSeconds = Math.max(retryAfterSeconds, ttl > 0 ? ttl : windowSeconds);
