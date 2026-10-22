@@ -101,6 +101,23 @@ the browser test downloaded through the student page are byte-identical to the p
 | `pnpm test --force`              | 0    | **891 passed**, 0 cached (846 + 17 documents + 23 API + 5 web)                                          |
 | `pnpm test:e2e`                  | 0    | **68 passed** (65 + 3 new), 0 failed, 0 retries, 9.1 min, with the machine kept awake (`caffeinate -i`) |
 
+**After merging `origin/main` at `2d05e59` (Phase 13A; main CI green), with the platform-aware
+drift check:**
+
+| Gate                             | Exit | Result                                        |
+| -------------------------------- | ---- | --------------------------------------------- |
+| `pnpm install --frozen-lockfile` | 0    |                                               |
+| `pnpm format:check`              | 0    |                                               |
+| `pnpm lint --force`              | 0    | uncached                                      |
+| `pnpm typecheck --force`         | 0    | uncached                                      |
+| `pnpm build --force`             | 0    | uncached                                      |
+| `pnpm db:check`                  | 0    | No difference detected                        |
+| `pnpm test --force`              | 0    | **916 passed**, 0 failed (includes Phase 13A) |
+| `pnpm test:e2e`                  | 0    | **72 passed**, 0 failed, 9.0 min              |
+
+The only merge conflicts were in generated `graphify-out` files. The graph was regenerated with
+`graphify update .` (7,304 nodes, 19,123 edges, 283 communities).
+
 New tests:
 
 - **API (23).** Approved types served for one and several registrations: Course Completion (3
@@ -191,7 +208,7 @@ course name is shown underneath), and the UI-03 shell's bottom navigation overla
   unresolved 1-year course, and the single-registration view at desktop and mobile.
 - PDFs: the five samples downloaded through the student UI were byte-identical to the pinned assets committed in `packages/documents/assets/samples/academic/` (SHA-256 in that folder's README). The repository ignores `*.pdf` elsewhere, so the downloaded copies are not committed separately; only the pinned sample folder is excepted, in `.gitignore`.
 
-Graph refreshed with `graphify update .` (7,212 nodes, 18,885 edges, 271 communities).
+Graph refreshed with `graphify update .` (latest: 7,304 nodes, 19,123 edges, 283 communities, after the merge).
 [ADR-0019](../decisions/ADR-0019-registration-scoped-academic-samples.md) records the decisions.
 Final visual and security-design approval was given on 22 October; delivery is a draft PR, not
 merged. The university's certificate approval authority remains unresolved. Rector approval,
