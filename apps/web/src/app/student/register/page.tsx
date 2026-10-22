@@ -16,6 +16,7 @@ export default async function StudentRegisterPage() {
       title="Activate your account"
       description="Enter your registration number and the activation code issued by the university, then choose a password. A new code also lets you reset a forgotten password."
       unavailable={state.status === 'unavailable'}
+      variant="activation"
     >
       <StudentActivationForm />
     </StudentAuthPage>

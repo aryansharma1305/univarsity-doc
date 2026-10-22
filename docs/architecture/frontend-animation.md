@@ -31,6 +31,13 @@ Use **only** for:
 - the explicitly requested Phase 11A student Results entrance: a scoped, dynamically loaded
   4px translation over 280ms, without hiding content or delaying result/error visibility
 
+- the explicitly requested UI-06 public homepage: the hero entrance (masked headline, crest orbits,
+  pointer tilt and scroll parallax) plus ScrollTrigger reveals, the how-it-works rail and the
+  safeguards shield, all in `features/public-verification/use-landing-motion.ts`. Reveals animate
+  opacity/transform only (never `visibility`), every tween starts from laid-out content, and a switch
+  to reduced motion reverts all tweens and ScrollTriggers. The hero's network canvas and the sign-in
+  pages' orbit rings use a single `requestAnimationFrame` loop instead of an animation library.
+
 **Do not use GSAP for ordinary UI transitions beyond these explicitly approved sequences.**
 
 ## General rules

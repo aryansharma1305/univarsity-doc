@@ -1,48 +1,94 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Wordmark } from '@/components/brand/wordmark';
+import {
+  BookOpenCheckIcon,
+  FileTextIcon,
+  KeyRoundIcon,
+  LogInIcon,
+  MonitorPlayIcon,
+  TicketIcon,
+  UserRoundPenIcon,
+} from 'lucide-react';
+import { AuthShell, type AuthHighlight } from '@/components/auth/auth-shell';
+
+const SIGN_IN_HIGHLIGHTS: readonly AuthHighlight[] = [
+  {
+    icon: UserRoundPenIcon,
+    title: 'Profile and corrections',
+    body: 'Your official record, and requests for staff to review.',
+  },
+  {
+    icon: BookOpenCheckIcon,
+    title: 'Course details',
+    body: 'The curriculum assigned to your registration.',
+  },
+  {
+    icon: FileTextIcon,
+    title: 'Published documents',
+    body: 'Certificates and marksheets staff have published to you.',
+  },
+  {
+    icon: MonitorPlayIcon,
+    title: 'Examinations and re-exams',
+    body: 'Examination app links and your re-exam applications.',
+  },
+];
+
+const ACTIVATION_STEPS: readonly AuthHighlight[] = [
+  {
+    icon: TicketIcon,
+    title: 'Your code from the registrar',
+    body: 'Registration number plus the single-use activation code.',
+    step: 'code',
+  },
+  {
+    icon: KeyRoundIcon,
+    title: 'A password only you know',
+    body: 'At least 12 characters — a short sentence works well.',
+    step: 'password',
+  },
+  {
+    icon: LogInIcon,
+    title: 'Straight into your portal',
+    body: 'You are signed in as soon as the account is active.',
+    step: 'portal',
+  },
+];
 
 /** Frame for the student sign-in and activation pages (separate from staff sign-in). */
 export function StudentAuthPage({
   title,
   description,
   unavailable,
+  variant = 'sign-in',
   children,
 }: {
   title: string;
   description: string;
   unavailable: boolean;
+  variant?: 'sign-in' | 'activation';
   children: ReactNode;
 }) {
+  const activation = variant === 'activation';
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-info-soft to-background px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex justify-center">
-          <Link href="/" className="rounded-md" aria-label="Docversity home">
-            <Wordmark />
-          </Link>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-6 shadow-raised">
-          <p className="text-meta font-medium tracking-wide uppercase">Student portal</p>
-          <h1 className="text-section-title text-navy-950">{title}</h1>
-          <p className="mt-1 mb-6 text-sm text-muted-foreground">{description}</p>
-          {unavailable && (
-            <p
-              role="status"
-              className="mb-4 rounded-md border border-warning/30 bg-warning-soft p-3 text-sm text-warning-text"
-            >
-              Sign-in is temporarily unavailable. Please try again shortly.
-            </p>
-          )}
-          {children}
-        </div>
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          University staff?{' '}
-          <Link href="/admin/login" className="font-medium text-brand hover:underline">
-            Staff sign in
-          </Link>
-        </p>
-      </div>
-    </main>
+    <AuthShell
+      audience={activation ? 'activation' : 'student'}
+      title={title}
+      description={description}
+      unavailable={unavailable}
+      statement={
+        activation ? (
+          <>
+            Open your account <em>in three steps.</em>
+          </>
+        ) : (
+          <>
+            Welcome back. <em>Your records are waiting.</em>
+          </>
+        )
+      }
+      highlights={activation ? ACTIVATION_STEPS : SIGN_IN_HIGHLIGHTS}
+    >
+      {children}
+    </AuthShell>
   );
 }
