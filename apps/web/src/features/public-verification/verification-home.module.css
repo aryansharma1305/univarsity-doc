@@ -1,31 +1,27 @@
+/*
+ * UI-06 homepage: the UI-04 navy/blue ground with the scoped bright gold, extended into a full
+ * student-facing page. Colours are the theme tokens (packages/ui) plus the existing UI-04 gold;
+ * everything else is a tint or opacity of those.
+ */
 .page {
   --verification-gold: #ffc928;
   --verification-muted: #bccce3;
+  --page-ease: cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   isolation: isolate;
   min-height: 100svh;
   overflow: clip;
   color: white;
   background:
-    radial-gradient(circle at 12% 20%, rgb(22 140 255 / 16%), transparent 30%),
-    radial-gradient(circle at 88% 75%, rgb(255 201 40 / 8%), transparent 28%),
-    linear-gradient(135deg, var(--dv-navy-950), var(--dv-navy-900) 52%, #042c73);
-}
-
-.page::after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  width: 680px;
-  height: 680px;
-  right: -360px;
-  top: -320px;
-  border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 80px rgb(255 255 255 / 1.8%),
-    0 0 0 160px rgb(255 255 255 / 1.4%);
-  pointer-events: none;
+    radial-gradient(circle at 12% 6%, rgb(22 140 255 / 16%), transparent 32%),
+    radial-gradient(circle at 88% 14%, rgb(255 201 40 / 7%), transparent 26%),
+    linear-gradient(
+      180deg,
+      var(--dv-navy-950),
+      var(--dv-navy-900) 30%,
+      var(--dv-navy-950) 62%,
+      #04224f 100%
+    );
 }
 
 .page ::selection {
@@ -38,6 +34,10 @@
   outline-offset: 4px;
 }
 
+.page main:focus {
+  outline: none;
+}
+
 .wrap {
   width: min(1180px, 92%);
   margin-inline: auto;
@@ -47,9 +47,9 @@
   position: absolute;
   top: 12px;
   left: 4%;
-  z-index: 10;
+  z-index: 60;
   padding: 12px;
-  transform: translateY(-160%);
+  transform: translateY(-200%);
   border-radius: 8px;
   background: white;
   color: var(--dv-navy-950);
@@ -59,87 +59,281 @@
   transform: none;
 }
 
+/* ---------- Hero ---------- */
+
 .hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: min(100svh, 940px);
+  flex-direction: column;
+  justify-content: center;
+  padding-block: 112px 88px;
+}
+
+.field {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  mask-image: radial-gradient(ellipse 85% 75% at 55% 45%, black 35%, transparent 80%);
+}
+
+.heroGlow {
+  position: absolute;
+  z-index: -1;
+  top: 8%;
+  right: -12%;
+  width: 760px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(7 89 215 / 34%), transparent 62%);
+  pointer-events: none;
+}
+
+.heroGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
   align-items: center;
-  gap: 30px;
-  padding-block: 52px 32px;
+  gap: 40px;
 }
 
-.intro h1 {
-  overflow-wrap: anywhere;
+.intro {
+  min-width: 0;
+}
+
+.headline {
   font-family: var(--font-heading);
-  font-size: clamp(2.625rem, 5vw, 4.125rem);
+  font-size: clamp(2.625rem, 5.6vw, 5rem);
   font-weight: 700;
-  line-height: 1.06;
+  line-height: 1.02;
   letter-spacing: -0.04em;
+  text-wrap: balance;
 }
 
-.intro em {
-  color: var(--verification-gold);
+/* Each word slides up inside its own clip; the clip leaves room for descenders. */
+.mask {
+  display: inline-block;
+  overflow: clip;
+  overflow-clip-margin: 0.02em;
+  padding-block: 0.02em 0.1em;
+  margin-block: -0.02em -0.1em;
+  vertical-align: bottom;
+}
+
+.word {
+  display: inline-block;
   font-style: normal;
 }
 
+.headline em {
+  color: var(--verification-gold);
+}
+
+:global(body[data-dv-motion]) .word {
+  visibility: hidden;
+}
+
 .subtitle {
-  max-width: 440px;
-  margin-block: 20px 0;
-  font-size: 0.9375rem;
+  max-width: 34rem;
+  margin-block: 26px 0;
+  font-size: 1.0625rem;
   line-height: 1.7;
   color: var(--verification-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 22px;
+  border-radius: 999px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition:
+    transform 260ms var(--page-ease),
+    background-color 200ms ease-out,
+    box-shadow 260ms var(--page-ease),
+    border-color 200ms ease-out;
+}
+
+.primaryAction {
+  color: var(--dv-navy-950);
+  background: var(--verification-gold);
+  box-shadow: 0 10px 30px -12px rgb(255 201 40 / 60%);
+}
+
+.primaryAction svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 260ms var(--page-ease);
+}
+
+.primaryAction:hover {
+  transform: translateY(-2px);
+  background: #ffd452;
+  box-shadow: 0 16px 36px -14px rgb(255 201 40 / 75%);
+}
+
+.primaryAction:hover svg {
+  transform: translateX(3px);
+}
+
+.secondaryAction {
+  border: 1px solid rgb(255 255 255 / 28%);
+  color: white;
+  background: rgb(255 255 255 / 4%);
+}
+
+.secondaryAction:hover {
+  transform: translateY(-2px);
+  border-color: rgb(255 255 255 / 55%);
+  background: rgb(255 255 255 / 9%);
+}
+
+.assurances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: 30px;
+  font-size: 0.8125rem;
+  color: var(--verification-muted);
+}
+
+.assurances li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.assurances svg {
+  width: 16px;
+  height: 16px;
+  color: var(--verification-gold);
 }
 
 .logoStage {
   position: relative;
   display: grid;
-  min-height: 430px;
+  min-height: 480px;
   place-items: center;
+  perspective: 1000px;
+}
+
+.crestParallax,
+.crestTilt {
+  position: relative;
+  display: grid;
+  width: 100%;
+  place-items: center;
+  transform-style: preserve-3d;
+}
+
+.halo {
+  position: absolute;
+  width: 74%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgb(255 201 40 / 18%), transparent 58%),
+    radial-gradient(circle, rgb(22 140 255 / 22%), transparent 70%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.orbits {
+  position: absolute;
+  width: min(500px, 100%);
+  aspect-ratio: 1;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.orbitText {
+  fill: rgb(255 201 40 / 62%);
+  font-family: var(--font-heading);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.32em;
+}
+
+.crestFrame {
+  position: relative;
+  display: grid;
+  width: min(360px, 72%);
+  place-items: center;
+  transform: translateZ(40px);
 }
 
 .crest {
-  position: relative;
-  width: min(376px, 75.2%);
+  width: 100%;
   height: auto;
-  filter: drop-shadow(0 24px 28px rgb(0 0 0 / 24%));
+  filter: drop-shadow(0 28px 34px rgb(0 0 0 / 34%));
 }
 
-.rings,
-.rings::after {
+.scrollCue {
   position: absolute;
-  width: 410px;
-  aspect-ratio: 1;
-  border: 1px solid rgb(255 201 40 / 20%);
-  border-radius: 50%;
-  pointer-events: none;
+  bottom: 28px;
+  left: 50%;
+  display: grid;
+  width: 26px;
+  height: 42px;
+  place-items: start center;
+  padding-top: 8px;
+  border: 1.5px solid rgb(255 255 255 / 35%);
+  border-radius: 999px;
+  transform: translateX(-50%);
 }
 
-.rings::after {
-  content: '';
-  width: 320px;
-  inset: 44px;
-  border-color: rgb(22 140 255 / 25%);
+.scrollCue span {
+  width: 3px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--verification-gold);
+  animation: cue 2.2s var(--page-ease) 3;
 }
 
-.corners {
-  position: absolute;
-  inset: 48px 0;
-  pointer-events: none;
-  background:
-    linear-gradient(var(--verification-gold), var(--verification-gold)) top left / 40px 1px,
-    linear-gradient(var(--verification-gold), var(--verification-gold)) top left / 1px 40px,
-    linear-gradient(var(--verification-gold), var(--verification-gold)) top right / 40px 1px,
-    linear-gradient(var(--verification-gold), var(--verification-gold)) top right / 1px 40px,
-    linear-gradient(var(--verification-gold), var(--verification-gold)) bottom left / 40px 1px,
-    linear-gradient(var(--verification-gold), var(--verification-gold)) bottom left / 1px 40px,
-    linear-gradient(var(--verification-gold), var(--verification-gold)) bottom right / 40px 1px,
-    linear-gradient(var(--verification-gold), var(--verification-gold)) bottom right / 1px 40px;
-  background-repeat: no-repeat;
-  opacity: 0.7;
+@keyframes cue {
+  0% {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
 }
+
+/* ---------- Verification services (UI-04 panel, unchanged behaviour) ---------- */
 
 .services {
-  scroll-margin-top: 24px;
-  padding-bottom: 32px;
+  position: relative;
+  scroll-margin-top: 72px;
+  padding-block: 96px 72px;
+}
+
+.services::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: min(1180px, 92%);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 201 40 / 40%), transparent);
+  transform: translateX(-50%);
 }
 
 .serviceTabs {
@@ -147,49 +341,76 @@
   width: 100%;
   height: auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
   padding: 0;
   background: transparent;
 }
 
 .serviceTab {
+  position: relative;
   min-width: 0;
+  overflow: hidden;
   overflow-wrap: anywhere;
   height: 100%;
-  min-height: 170px;
+  min-height: 180px;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
   gap: 8px;
-  padding: 20px;
-  border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 16px;
+  padding: 22px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 18px;
   white-space: normal;
   text-align: left;
   color: white;
-  background: rgb(255 255 255 / 5%);
+  background: linear-gradient(160deg, rgb(255 255 255 / 7%), rgb(255 255 255 / 2%));
   transition:
-    background 160ms ease-out,
-    border-color 160ms ease-out;
+    background 220ms ease-out,
+    border-color 220ms ease-out,
+    transform 320ms var(--page-ease),
+    box-shadow 320ms var(--page-ease);
+}
+
+/* A gold hairline sweeps across the selected card. */
+.serviceTab::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--verification-gold), transparent);
+  transform: scaleX(0);
+  transition: transform 520ms var(--page-ease);
 }
 
 .serviceTab:hover {
-  background: rgb(255 255 255 / 10%);
+  transform: translateY(-3px);
+  background: linear-gradient(160deg, rgb(255 255 255 / 11%), rgb(255 255 255 / 4%));
   color: white;
+  box-shadow: 0 18px 40px -24px rgb(0 0 0 / 70%);
 }
 
 .serviceTab[data-state='active'] {
-  border-color: var(--verification-gold);
-  background: rgb(255 255 255 / 11%);
+  border-color: rgb(255 201 40 / 80%);
+  background: linear-gradient(160deg, rgb(255 201 40 / 12%), rgb(255 255 255 / 4%));
   color: white;
-  box-shadow: none;
+  box-shadow: 0 20px 44px -26px rgb(255 201 40 / 45%);
+}
+
+.serviceTab[data-state='active']::before {
+  transform: scaleX(1);
 }
 
 .serviceTab .serviceIcon {
-  width: 24px;
-  height: 24px;
-  margin-bottom: 4px;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 6px;
   color: var(--verification-gold);
+  transition: transform 320ms var(--page-ease);
+}
+
+.serviceTab:hover .serviceIcon,
+.serviceTab[data-state='active'] .serviceIcon {
+  transform: translateY(-2px) scale(1.06);
 }
 
 .serviceTitle {
@@ -209,12 +430,19 @@
 }
 
 .serviceAvailability {
+  display: inline-flex;
   margin-top: auto;
+  padding: 2px 10px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 999px;
 }
 
 .panel {
-  margin-top: 12px;
-  padding: 14px 0 8px;
+  margin-top: 18px;
+  padding: 26px 28px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 20px;
+  background: rgb(3 20 47 / 55%);
 }
 
 .panel h2 {
@@ -241,117 +469,103 @@
   color: var(--verification-muted);
 }
 
-.footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-block: 22px 28px;
-  border-top: 1px solid rgb(255 255 255 / 14%);
-  font-size: 0.75rem;
-  color: var(--verification-muted);
-}
-
-.footer nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 20px;
-}
-
-.footer a {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  text-underline-offset: 4px;
-}
-
-.footer a:hover {
-  color: white;
-  text-decoration: underline;
-}
+/* ---------- Responsive ---------- */
 
 @media (max-width: 900px) {
   .hero {
+    min-height: 0;
+    padding-block: 104px 72px;
+  }
+  .heroGrid {
     grid-template-columns: 1fr;
-    gap: 24px;
-    padding-block: 44px 30px;
+    gap: 12px;
   }
   .intro {
+    order: 2;
     text-align: center;
   }
   .subtitle {
     margin-inline: auto;
   }
+  .actions,
+  .assurances {
+    justify-content: center;
+  }
   .logoStage {
-    min-height: 290px;
+    order: 1;
+    min-height: 320px;
   }
-  .crest {
-    width: 300px;
+  .orbits {
+    width: 320px;
   }
-  .rings {
-    width: 290px;
+  .crestFrame {
+    width: 220px;
   }
-  .rings::after {
-    width: 230px;
-    inset: 29px;
-  }
-  .corners {
-    inset: 18px 12%;
+  .scrollCue {
+    display: none;
   }
   .serviceTabs {
     grid-template-columns: repeat(
       auto-fit,
-      minmax(min(100%, max(8rem, calc((100% - 12px) / 2))), 1fr)
+      minmax(min(100%, max(8rem, calc((100% - 14px) / 2))), 1fr)
     );
   }
 }
 
 @media (max-width: 560px) {
   .hero {
-    gap: 20px;
-    padding-block: 34px 24px;
+    padding-block: 5.5rem 3.5rem;
   }
-  .intro h1 {
-    overflow-wrap: anywhere;
+  .headline {
     font-size: min(2.625rem, calc(2rem + 2.6vw));
   }
   .subtitle {
-    margin-block: 16px 0;
-    font-size: 0.875rem;
+    margin-block: 18px 0;
+    font-size: 0.9375rem;
+  }
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .primaryAction,
+  .secondaryAction {
+    justify-content: center;
+  }
+  .assurances {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
   }
   .logoStage {
-    min-height: 190px;
+    min-height: 250px;
   }
-  .crest {
-    width: 210px;
+  .orbits {
+    width: 250px;
   }
-  .rings {
-    width: 200px;
+  .orbitText {
+    font-size: 13px;
   }
-  .rings::after {
-    width: 160px;
-    inset: 19px;
+  .crestFrame {
+    width: 170px;
   }
-  .corners {
-    inset: 10px 12%;
+  .services {
+    padding-block: 64px 48px;
   }
   .serviceTab {
     min-width: 0;
     overflow-wrap: anywhere;
-    min-height: 160px;
+    min-height: 168px;
     padding: 16px 12px;
   }
   .serviceTitle {
     max-width: 100%;
     font-size: 0.875rem;
   }
+  .panel {
+    padding: 20px 18px;
+  }
   .panel h2 {
     font-size: 1.25rem;
-  }
-  .footer {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
   }
 }
 
@@ -360,6 +574,7 @@
   .page *::before,
   .page *::after {
     transition: none !important;
+    animation: none !important;
   }
 }
 

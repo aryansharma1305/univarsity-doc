@@ -1,12 +1,30 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { connection } from 'next/server';
-import { Wordmark } from '@/components/brand/wordmark';
+import { ClipboardCheckIcon, ScrollTextIcon, TimerResetIcon } from 'lucide-react';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { LoginForm } from '@/features/auth/login-form';
 import { getSessionState } from '@/lib/server-auth';
 
 export const metadata: Metadata = { title: 'Staff sign in' };
+
+const HIGHLIGHTS = [
+  {
+    icon: ClipboardCheckIcon,
+    title: 'Permissions by role',
+    body: 'You see the records workspaces your role allows.',
+  },
+  {
+    icon: ScrollTextIcon,
+    title: 'Every change recorded',
+    body: 'Changes to academic records are written to the audit log.',
+  },
+  {
+    icon: TimerResetIcon,
+    title: 'Sessions that expire',
+    body: 'Idle sessions end automatically; repeated failed attempts are limited.',
+  },
+] as const;
 
 export default async function AdminLoginPage() {
   await connection();
@@ -14,29 +32,19 @@ export default async function AdminLoginPage() {
   if (state.status === 'authenticated') redirect('/admin');
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-info-soft to-background px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex justify-center">
-          <Link href="/" className="rounded-md" aria-label="Docversity home">
-            <Wordmark />
-          </Link>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-6 shadow-raised">
-          <h1 className="text-section-title text-navy-950">Staff sign in</h1>
-          <p className="mt-1 mb-6 text-sm text-muted-foreground">
-            For authorised university staff only.
-          </p>
-          {state.status === 'unavailable' && (
-            <p
-              role="status"
-              className="mb-4 rounded-md border border-warning/30 bg-warning-soft p-3 text-sm text-warning-text"
-            >
-              Sign-in is temporarily unavailable. Please try again shortly.
-            </p>
-          )}
-          <LoginForm />
-        </div>
-      </div>
-    </main>
+    <AuthShell
+      audience="staff"
+      title="Staff sign in"
+      description="For authorised university staff only."
+      unavailable={state.status === 'unavailable'}
+      statement={
+        <>
+          The records workspace, <em>handled with care.</em>
+        </>
+      }
+      highlights={HIGHLIGHTS}
+    >
+      <LoginForm />
+    </AuthShell>
   );
 }

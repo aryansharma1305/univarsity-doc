@@ -1,0 +1,445 @@
+/*
+ * UI-06 sign-in frame. Brand panel: the homepage navy ground and UI-04 gold. Form side: the light
+ * product surface (theme tokens) so the existing form components keep their exact look and states.
+ */
+.shell {
+  --auth-gold: #ffc928;
+  --auth-muted: #bccce3;
+  --auth-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  display: grid;
+  min-height: 100svh;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  background: var(--dv-bg);
+}
+
+.shell ::selection {
+  background: rgb(7 89 215 / 18%);
+}
+
+/* ---------- Brand panel ---------- */
+
+.brand {
+  position: sticky;
+  top: 0;
+  isolation: isolate;
+  display: flex;
+  height: 100svh;
+  min-height: 560px;
+  overflow: hidden;
+  flex-direction: column;
+  padding: 36px clamp(28px, 4vw, 56px);
+  color: white;
+  background:
+    radial-gradient(circle at 15% 10%, rgb(22 140 255 / 20%), transparent 40%),
+    radial-gradient(circle at 90% 85%, rgb(255 201 40 / 9%), transparent 35%),
+    linear-gradient(160deg, var(--dv-navy-950), var(--dv-navy-900) 55%, #04224f);
+}
+
+.brand ::selection {
+  background: var(--auth-gold);
+  color: var(--dv-navy-950);
+}
+
+.brand :focus-visible {
+  outline: 3px solid var(--auth-gold);
+  outline-offset: 4px;
+}
+
+.ambient {
+  --auth-spin: 0deg;
+  --auth-tilt-x: 0deg;
+  --auth-tilt-y: 0deg;
+  position: absolute;
+  z-index: -1;
+  top: 72px;
+  right: -110px;
+  display: grid;
+  width: 420px;
+  aspect-ratio: 1;
+  place-items: center;
+  transform: perspective(900px) rotateX(var(--auth-tilt-x)) rotateY(var(--auth-tilt-y));
+  pointer-events: none;
+}
+
+.glow {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgb(255 201 40 / 16%), transparent 55%),
+    radial-gradient(circle, rgb(22 140 255 / 24%), transparent 70%);
+}
+
+.orbits {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.orbitOuter,
+.orbitInner {
+  transform-origin: 200px 200px;
+}
+
+.orbitOuter {
+  transform: rotate(var(--auth-spin));
+}
+
+.orbitInner {
+  transform: rotate(calc(var(--auth-spin) * -1.6));
+}
+
+.crest {
+  position: relative;
+  width: 220px;
+  height: auto;
+  opacity: 0.94;
+  filter: drop-shadow(0 26px 30px rgb(0 0 0 / 35%));
+}
+
+.brandTop {
+  display: flex;
+  align-items: center;
+}
+
+.homeLink {
+  border-radius: 8px;
+}
+
+.story {
+  margin-top: auto;
+  max-width: 30rem;
+}
+
+.statement {
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 1.2rem + 2.2vw, 3rem);
+  font-weight: 700;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.statement em {
+  font-style: normal;
+  color: var(--auth-gold);
+}
+
+.highlights {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 32px;
+}
+
+.highlight {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  transition:
+    background-color 300ms ease-out,
+    border-color 300ms ease-out;
+}
+
+.highlightIcon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgb(255 201 40 / 35%);
+  border-radius: 12px;
+  color: var(--auth-gold);
+  background: rgb(255 201 40 / 8%);
+  transition:
+    background-color 300ms ease-out,
+    color 300ms ease-out,
+    transform 400ms var(--auth-ease);
+}
+
+.highlightIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.highlightTitle {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.highlightBody {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--auth-muted);
+}
+
+/* Activation: the step for the field being filled lights up (CSS only, no form changes). */
+.shell:has(input[name='registrationNumber']:focus, input[name='activationCode']:focus)
+  .highlight[data-step='code'],
+.shell:has(input[name='password']:focus, input[name='confirmPassword']:focus)
+  .highlight[data-step='password'] {
+  border-color: rgb(255 201 40 / 35%);
+  background: rgb(255 255 255 / 5%);
+}
+
+.shell:has(input[name='registrationNumber']:focus, input[name='activationCode']:focus)
+  .highlight[data-step='code']
+  .highlightIcon,
+.shell:has(input[name='password']:focus, input[name='confirmPassword']:focus)
+  .highlight[data-step='password']
+  .highlightIcon {
+  color: var(--dv-navy-950);
+  background: var(--auth-gold);
+  transform: scale(1.06);
+}
+
+.brandFoot {
+  margin-top: 36px;
+  font-size: 0.75rem;
+  color: var(--auth-muted);
+}
+
+/* ---------- Form side ---------- */
+
+.formSide {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  padding: 48px 24px;
+  background: radial-gradient(circle at 100% 0%, rgb(7 89 215 / 7%), transparent 40%), var(--dv-bg);
+}
+
+.formColumn {
+  width: 100%;
+  max-width: 26.5rem;
+  animation: rise 640ms var(--auth-ease) both;
+}
+
+.switch {
+  position: relative;
+  display: grid;
+  width: fit-content;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 36px;
+  padding: 4px;
+  border: 1px solid var(--dv-border);
+  border-radius: 999px;
+  background: var(--dv-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.switch a {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-height: 38px;
+  min-width: 96px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--dv-text-muted);
+  transition: color 250ms ease-out;
+}
+
+.switch a:hover {
+  color: var(--dv-navy-950);
+}
+
+.switch a[data-active='true'] {
+  color: white;
+}
+
+.switchThumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: var(--dv-navy-950);
+  transition: transform 450ms var(--auth-ease);
+}
+
+.shell[data-audience='staff'] .switchThumb {
+  transform: translateX(100%);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: var(--dv-navy-950);
+}
+
+.description {
+  margin-top: 10px;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--dv-text-muted);
+  text-wrap: pretty;
+}
+
+.unavailable {
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid rgb(217 119 6 / 30%);
+  border-radius: 12px;
+  font-size: 0.875rem;
+  color: var(--dv-warning-text);
+  background: var(--dv-warning-soft);
+}
+
+.card {
+  position: relative;
+  margin-top: 28px;
+  padding: 28px;
+  border: 1px solid var(--dv-border);
+  border-radius: 22px;
+  background: var(--dv-surface);
+  box-shadow:
+    0 1px 2px rgb(3 20 47 / 4%),
+    0 24px 48px -28px rgb(3 20 47 / 22%);
+}
+
+/* A gold-to-blue hairline crowns the form card. */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 32px;
+  right: 32px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--dv-blue-600), var(--auth-gold));
+}
+
+.back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--dv-text-muted);
+  transition: color 200ms ease-out;
+}
+
+.back svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 260ms var(--auth-ease);
+}
+
+.back:hover {
+  color: var(--dv-navy-950);
+}
+
+.back:hover svg {
+  transform: translateX(-3px);
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(12px);
+  }
+}
+
+/* ---------- Responsive: compact brand band above the form ---------- */
+
+@media (max-width: 1023px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .brand {
+    position: relative;
+    height: auto;
+    min-height: 0;
+    padding: 20px 20px 64px;
+  }
+  .ambient {
+    top: -40px;
+    right: -70px;
+    width: 230px;
+    transform: perspective(900px) rotateX(var(--auth-tilt-x)) rotateY(var(--auth-tilt-y));
+  }
+  .crest {
+    width: 84px;
+  }
+  .story {
+    margin-top: 28px;
+    max-width: 34rem;
+  }
+  .statement {
+    max-width: 30rem;
+    padding-right: 88px;
+    font-size: clamp(1.625rem, 1.2rem + 2vw, 2.25rem);
+  }
+  .highlights {
+    display: none;
+  }
+  .brandFoot {
+    display: none;
+  }
+  .formSide {
+    place-items: start center;
+    margin-top: -40px;
+    padding: 0 16px 40px;
+    border-radius: 28px 28px 0 0;
+    background: var(--dv-bg);
+  }
+  .formColumn {
+    padding-top: 28px;
+  }
+  .switch {
+    margin-bottom: 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .card {
+    padding: 22px 18px;
+    border-radius: 18px;
+  }
+  .card::before {
+    left: 26px;
+    right: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .formColumn {
+    animation: none;
+  }
+  .highlight,
+  .highlightIcon,
+  .switchThumb,
+  .switch a,
+  .back svg {
+    transition: none;
+  }
+}
