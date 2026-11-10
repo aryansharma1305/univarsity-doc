@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@docversity/database';
+import { componentConfigurationFromCurriculum } from '@docversity/imports';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   DRAFT_MARK_FIELDS,
   ERROR_CODES,
+  evaluateSyntheticGrades,
   type ReviewAction,
   type ReviewQuery,
   type ReviewedResult,
@@ -14,6 +16,7 @@ import { PrismaService } from '../database/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { ResultImportsService } from '../result-imports/result-imports.service.js';
 import { DraftResultsService } from './draft-results.service.js';
+import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 const include = {
   examination: { include: { curriculum: true } },
   studentRegistration: { include: { student: true } },
@@ -26,6 +29,7 @@ const include = {
 type Record = Prisma.ResultGetPayload<{ include: typeof include }>;
 type Action = 'SUBMIT' | 'RETURN' | 'REJECT' | 'APPROVE';
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
+export const resultReviewSnapshotDigest = hash;
 const conflict = (message: string) =>
   new AppError(HttpStatus.CONFLICT, ERROR_CODES.conflict, message);
 export const RESULT_REVIEW_POLICY = {
@@ -46,7 +50,58 @@ export class ResultReviewService {
     private readonly drafts: DraftResultsService,
     private readonly audit: AuditService,
     private readonly imports: ResultImportsService,
+    @Inject(API_CONFIG) private readonly config: ApiConfig,
   ) {}
+  // No live policy or runtime activation flag. Tests inject a complete synthetic policy explicitly.
+  gradingPolicyDefinition(): unknown {
+    return null;
+  }
+  private calculationFor(r: Record, snapshot: Prisma.JsonValue, version: number) {
+    const definition = this.gradingPolicyDefinition();
+    if (definition === null) return undefined;
+    if (this.config.NODE_ENV !== 'test') throw conflict('Official grading is not configured.');
+    const fields = {
+      internalMarks: 'internalMax',
+      externalMarks: 'externalMax',
+      practicalMarks: 'practicalMax',
+      otherMarks: 'otherMax',
+    } as const;
+    const subjects = r.items.map((item) => {
+      const subject = item.programSubject;
+      const { configuration, unrecognized } = componentConfigurationFromCurriculum(
+        subject.componentConfiguration,
+      );
+      if (!configuration || unrecognized.length || subject.credits === null)
+        throw conflict('Explicit curriculum components and credits are required for calculation.');
+      const components = (Object.keys(fields) as (keyof typeof fields)[]).flatMap((field) => {
+        const maximum = configuration[fields[field]];
+        return maximum === null || maximum === undefined
+          ? []
+          : [{ field, marks: item[field]?.toString() ?? null, maximum: String(maximum) }];
+      });
+      return {
+        programSubjectId: item.programSubjectId,
+        attemptNumber: r.attemptNumber,
+        attendance: 'PRESENT',
+        credits: subject.credits.toString(),
+        components,
+      };
+    });
+    try {
+      return {
+        ...evaluateSyntheticGrades(definition, {
+          registrationId: r.studentRegistrationId,
+          periodNumber: r.examination.semesterNumber,
+          subjects,
+        }),
+        resultId: r.id,
+        resultVersion: version,
+        inputSnapshotDigest: hash(snapshot),
+      };
+    } catch {
+      throw conflict('The synthetic grading configuration or assigned marks are incomplete.');
+    }
+  }
   policy() {
     return RESULT_REVIEW_POLICY;
   }
@@ -371,6 +426,14 @@ export class ResultReviewService {
             const status =
               action === 'SUBMIT' ? 'UNDER_REVIEW' : action === 'APPROVE' ? 'APPROVED' : 'DRAFT';
             const version = r.version + 1;
+            if (action === 'SUBMIT') {
+              const calculation = this.calculationFor(r, snapshot, version);
+              if (calculation !== undefined)
+                await tx.result.update({
+                  where: { id },
+                  data: { calculationSnapshot: calculation },
+                });
+            }
             await tx.resultReviewEvent.create({
               data: {
                 id: body.requestId,

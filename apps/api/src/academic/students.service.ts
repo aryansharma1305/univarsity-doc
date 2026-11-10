@@ -166,6 +166,7 @@ export class StudentsService {
 
   async update(id: string, input: UpdateStudent, actorUserId: string): Promise<StudentDetail> {
     await this.prisma.client.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM students WHERE id = ${id}::uuid FOR UPDATE`;
       const before = await tx.student.findUnique({ where: { id } });
       if (!before) throw Errors.notFound();
       const after = await tx.student.update({

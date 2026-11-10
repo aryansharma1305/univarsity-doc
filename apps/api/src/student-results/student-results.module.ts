@@ -1,8 +1,9 @@
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import { StudentResultsController } from './student-results.controller.js';
+import { ReleaseWorkflowsModule } from '../release-workflows/release-workflows.module.js';
 
-@Module({ controllers: [StudentResultsController] })
+@Module({ imports: [ReleaseWorkflowsModule], controllers: [StudentResultsController] })
 export class StudentResultsModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer

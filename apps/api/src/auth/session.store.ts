@@ -3,7 +3,8 @@ import { withTimeout } from '../common/with-timeout.js';
 import { Errors } from '../common/app-error.js';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 import { RedisService } from '../redis/redis.service.js';
-import { randomToken, sha256 } from './identifier-hasher.js';
+import { createHmac } from 'node:crypto';
+import { randomToken, safeEqual, sha256 } from './identifier-hasher.js';
 
 /**
  * What Redis stores per session. No password material, no raw session ID, no raw IP or
@@ -13,6 +14,8 @@ export interface SessionRecord {
   /** Public handle used by the session list / revoke API. Not usable to authenticate. */
   publicId: string;
   userId: string;
+  /** Keyed binding to the verified credential; never the password or its stored hash. */
+  credentialVersion: string;
   createdAt: number;
   lastSeenAt: number;
   absoluteExpiresAt: number;
@@ -51,7 +54,12 @@ export class SessionStore {
     private readonly redis: RedisService,
   ) {}
 
-  async create(input: { userId: string; device: string | null; ipHash: string | null }): Promise<{
+  async create(input: {
+    userId: string;
+    passwordHash: string;
+    device: string | null;
+    ipHash: string | null;
+  }): Promise<{
     sessionId: string;
     record: SessionRecord;
   }> {
@@ -61,6 +69,7 @@ export class SessionStore {
     const record: SessionRecord = {
       publicId: randomToken(12),
       userId: input.userId,
+      credentialVersion: this.credentialVersion(input.passwordHash),
       createdAt: now,
       lastSeenAt: now,
       absoluteExpiresAt: now + this.config.SESSION_ABSOLUTE_TIMEOUT_SECONDS * 1000,
@@ -99,17 +108,57 @@ export class SessionStore {
   /** Records activity: extends the idle window (never beyond the absolute expiry). */
   async touch(sessionId: string, record: SessionRecord): Promise<SessionRecord> {
     const now = Date.now();
-    const updated = { ...record, lastSeenAt: now };
-    await this.op((redis) =>
-      redis.set(
+    const raw = await this.op((redis) =>
+      redis.eval(
+        `
+      local raw = redis.call('GET', KEYS[1])
+      if not raw then return false end
+      local value = cjson.decode(raw)
+      if value.userId ~= ARGV[1] then return false end
+      local now = tonumber(ARGV[2])
+      local ttl = math.min(tonumber(ARGV[3]), value.absoluteExpiresAt - now)
+      if ttl <= 0 then return false end
+      value.lastSeenAt = now
+      local updated = cjson.encode(value)
+      redis.call('SET', KEYS[1], updated, 'PX', ttl)
+      return updated
+    `,
+        1,
         this.sessionKey(sha256(sessionId)),
-        JSON.stringify(updated),
-        'PX',
-        this.ttlMs(updated, now),
-        'XX',
+        record.userId,
+        now,
+        this.config.SESSION_IDLE_TIMEOUT_SECONDS * 1000,
       ),
     );
+    const updated = typeof raw === 'string' ? parseRecord(raw) : null;
+    if (!updated) throw Errors.sessionExpired();
     return updated;
+  }
+
+  /** Rebind only the still-live current session; ordinary activity cannot overwrite this value. */
+  async replaceCredential(
+    sessionId: string,
+    record: SessionRecord,
+    passwordHash: string,
+  ): Promise<void> {
+    const changed = await this.op((redis) =>
+      redis.eval(
+        `
+      local raw = redis.call('GET', KEYS[1])
+      if not raw then return false end
+      local value = cjson.decode(raw)
+      if value.userId ~= ARGV[1] or value.credentialVersion ~= ARGV[2] then return false end
+      value.credentialVersion = ARGV[3]
+      return redis.call('SET', KEYS[1], cjson.encode(value), 'XX', 'KEEPTTL')
+    `,
+        1,
+        this.sessionKey(sha256(sessionId)),
+        record.userId,
+        record.credentialVersion,
+        this.credentialVersion(passwordHash),
+      ),
+    );
+    if (changed !== 'OK') throw Errors.sessionExpired();
   }
 
   async revoke(sessionId: string): Promise<SessionRecord | null> {
@@ -163,6 +212,19 @@ export class SessionStore {
     return doomed.length;
   }
 
+  credentialVersion(passwordHash: string): string {
+    return createHmac('sha256', this.config.SESSION_SECRET)
+      .update(`credential:${this.keys.session}\0${passwordHash}`)
+      .digest('hex');
+  }
+
+  matchesCredential(record: SessionRecord, passwordHash: string | null): boolean {
+    return (
+      passwordHash !== null &&
+      safeEqual(record.credentialVersion, this.credentialVersion(passwordHash))
+    );
+  }
+
   hashOf(sessionId: string): string {
     return sha256(sessionId);
   }
@@ -203,7 +265,10 @@ export class SessionStore {
 function parseRecord(raw: string): SessionRecord | null {
   try {
     const value = JSON.parse(raw) as Partial<SessionRecord>;
-    return typeof value.userId === 'string' && typeof value.publicId === 'string'
+    return typeof value.userId === 'string' &&
+      typeof value.publicId === 'string' &&
+      typeof value.credentialVersion === 'string' &&
+      /^[0-9a-f]{64}$/.test(value.credentialVersion)
       ? (value as SessionRecord)
       : null;
   } catch {

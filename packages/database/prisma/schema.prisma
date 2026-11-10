@@ -445,25 +445,27 @@ model Student {
 /// A student's enrolment in a program. Registration Number is the primary human academic
 /// identifier and the anchor for results, certificates and public verification.
 model StudentRegistration {
-  id                           String        @id @default(uuid(7)) @db.Uuid
-  studentId                    String        @map("student_id") @db.Uuid
+  syntheticReleases            SyntheticRelease[]
+  retotalingRequests           RetotalingRequest[]
+  id                           String              @id @default(uuid(7)) @db.Uuid
+  studentId                    String              @map("student_id") @db.Uuid
   /// Official registration number exactly as issued (trimmed).
-  registrationNumber           String        @map("registration_number") @db.VarChar(64)
+  registrationNumber           String              @map("registration_number") @db.VarChar(64)
   /// upper(btrim(registration_number)); uniqueness and case-insensitive lookups use this.
   /// Kept in sync by a CHECK constraint, so it can never disagree with registration_number.
-  registrationNumberNormalized String        @unique @map("registration_number_normalized") @db.VarChar(64)
-  rollReferenceNumber          String?       @map("roll_reference_number") @db.VarChar(64)
-  programId                    String        @map("program_id") @db.Uuid
-  departmentId                 String?       @map("department_id") @db.Uuid
-  academicSessionId            String        @map("academic_session_id") @db.Uuid
-  admissionDate                DateTime?     @map("admission_date") @db.Date
-  completionDate               DateTime?     @map("completion_date") @db.Date
-  status                       StudentStatus @default(ACTIVE)
+  registrationNumberNormalized String              @unique @map("registration_number_normalized") @db.VarChar(64)
+  rollReferenceNumber          String?             @map("roll_reference_number") @db.VarChar(64)
+  programId                    String              @map("program_id") @db.Uuid
+  departmentId                 String?             @map("department_id") @db.Uuid
+  academicSessionId            String              @map("academic_session_id") @db.Uuid
+  admissionDate                DateTime?           @map("admission_date") @db.Date
+  completionDate               DateTime?           @map("completion_date") @db.Date
+  status                       StudentStatus       @default(ACTIVE)
   /// Curriculum version this registration follows (Phase 7B). Set only by an explicit staff action;
   /// a trigger keeps it within the registration's program and limits new assignments to ACTIVE versions.
-  curriculumId                 String?       @map("curriculum_id") @db.Uuid
-  createdAt                    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  curriculumId                 String?             @map("curriculum_id") @db.Uuid
+  createdAt                    DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   student             Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
   curriculum          ProgramCurriculum?      @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
@@ -674,6 +676,7 @@ model Examination {
 /// - PUBLISHED rows are frozen: only PUBLISHED → SUPERSEDED/WITHHELD transitions are allowed; nothing
 ///   else changes and the row cannot be deleted. SUPERSEDED rows are fully frozen.
 model Result {
+  syntheticReleases     SyntheticRelease[]
   id                    String                  @id @default(uuid(7)) @db.Uuid
   studentRegistrationId String                  @map("student_registration_id") @db.Uuid
   examinationId         String                  @map("examination_id") @db.Uuid
@@ -982,6 +985,7 @@ model ImportRow {
 /// A student's portal account: exactly one per student (person), covering all of their
 /// registrations. Never linked to staff users, roles or permissions. Created only by activation.
 model StudentAccount {
+  retotalingEvents  RetotalingEvent[]
   id                String               @id @default(uuid(7)) @db.Uuid
   studentId         String               @unique @map("student_id") @db.Uuid
   /// Argon2id hash (CHECK). Students always choose their own password.
@@ -1333,6 +1337,7 @@ model ReExamPaymentDestinationRate {
 /// student's submitted transaction reference / evidence and the staff review. Never deleted; at most
 /// one live obligation per application; a transaction reference satisfies at most one live payment.
 model ReExamPayment {
+  gatewayOrders                  SandboxGatewayOrder[]
   id                             String                    @id @default(uuid(7)) @db.Uuid
   applicationId                  String                    @map("application_id") @db.Uuid
   studentId                      String                    @map("student_id") @db.Uuid
@@ -1409,17 +1414,22 @@ model ExternalExamApplication {
 }
 
 model User {
-  resultReviewEvents ResultReviewEvent[]
-  draftBatches       ResultDraftBatch[]
-  id                 String              @id @default(uuid(7)) @db.Uuid
+  retotalingEvents           RetotalingEvent[]
+  preparedSyntheticReleases  SyntheticRelease[]     @relation("SyntheticReleasePreparer")
+  approvedSyntheticReleases  SyntheticRelease[]     @relation("SyntheticReleaseApprover")
+  publishedSyntheticReleases SyntheticRelease[]     @relation("SyntheticReleasePublisher")
+  migrationDryRuns           LegacyMigrationBatch[]
+  resultReviewEvents         ResultReviewEvent[]
+  draftBatches               ResultDraftBatch[]
+  id                         String                 @id @default(uuid(7)) @db.Uuid
   /// Stored lower-case (CHECK) so uniqueness is case-insensitive.
-  email              String              @unique @db.VarChar(254)
-  displayName        String              @map("display_name") @db.VarChar(120)
+  email                      String                 @unique @db.VarChar(254)
+  displayName                String                 @map("display_name") @db.VarChar(120)
   /// Argon2id hash (Phase 3). Null = cannot sign in with a password.
-  passwordHash       String?             @map("password_hash")
-  status             UserStatus          @default(ACTIVE)
-  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  passwordHash               String?                @map("password_hash")
+  status                     UserStatus             @default(ACTIVE)
+  createdAt                  DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                  DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   roles                          UserRole[]
   importJobs                     ImportJob[]                     @relation("ImportJobCreatedBy")
@@ -1573,19 +1583,20 @@ model ResultDraftBatch {
 
 /// Append-only state transition receipt and immutable marks version; contains no student names.
 model ResultReviewEvent {
-  id            String                  @id @db.Uuid
-  resultId      String                  @map("result_id") @db.Uuid
-  actorUserId   String                  @map("actor_user_id") @db.Uuid
-  action        String                  @db.VarChar(16)
-  fromStatus    ResultPublicationStatus @map("from_status")
-  toStatus      ResultPublicationStatus @map("to_status")
-  resultVersion Int                     @map("result_version")
-  requestDigest String                  @map("request_digest") @db.Char(64)
-  snapshot      Json
-  reason        String?                 @db.VarChar(1000)
-  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
-  result        Result                  @relation(fields: [resultId], references: [id], onDelete: Restrict)
-  actor         User                    @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  syntheticReleases SyntheticRelease[]
+  id                String                  @id @db.Uuid
+  resultId          String                  @map("result_id") @db.Uuid
+  actorUserId       String                  @map("actor_user_id") @db.Uuid
+  action            String                  @db.VarChar(16)
+  fromStatus        ResultPublicationStatus @map("from_status")
+  toStatus          ResultPublicationStatus @map("to_status")
+  resultVersion     Int                     @map("result_version")
+  requestDigest     String                  @map("request_digest") @db.Char(64)
+  snapshot          Json
+  reason            String?                 @db.VarChar(1000)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  result            Result                  @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  actor             User                    @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@unique([resultId, resultVersion])
   @@index([actorUserId])
@@ -1676,4 +1687,125 @@ model ProgramCertificateEligibility {
   @@index([proposedByUserId])
   @@index([decidedByUserId])
   @@map("program_certificate_eligibility")
+}
+
+/// Synthetic release provenance. Never authorizes official publication or public disclosure.
+model SyntheticRelease {
+  id                 String              @id @db.Uuid
+  kind               String              @db.VarChar(24)
+  registrationId     String              @map("registration_id") @db.Uuid
+  resultId           String?             @map("result_id") @db.Uuid
+  approvalEventId    String?             @map("approval_event_id") @db.Uuid
+  status             String              @default("DRAFT") @db.VarChar(16)
+  version            Int                 @default(1)
+  usage              String              @default("SYNTHETIC_ONLY") @db.VarChar(24)
+  snapshot           Json
+  sourceDigest       String              @map("source_digest") @db.Char(64)
+  requestDigest      String              @map("request_digest") @db.Char(64)
+  preparedById       String              @map("prepared_by_id") @db.Uuid
+  approvedById       String?             @map("approved_by_id") @db.Uuid
+  publishedById      String?             @map("published_by_id") @db.Uuid
+  approvedAt         DateTime?           @map("approved_at") @db.Timestamptz(3)
+  publishedAt        DateTime?           @map("published_at") @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  registration       StudentRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  result             Result?             @relation(fields: [resultId], references: [id], onDelete: Restrict)
+  approvalEvent      ResultReviewEvent?  @relation(fields: [approvalEventId], references: [id], onDelete: Restrict)
+  preparedBy         User                @relation("SyntheticReleasePreparer", fields: [preparedById], references: [id], onDelete: Restrict)
+  approvedBy         User?               @relation("SyntheticReleaseApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  publishedBy        User?               @relation("SyntheticReleasePublisher", fields: [publishedById], references: [id], onDelete: Restrict)
+  retotalingRequests RetotalingRequest[]
+
+  @@index([registrationId, kind, status])
+  @@index([resultId, status])
+  @@map("synthetic_releases")
+}
+
+/// Clerical request lifecycle only; never changes marks, grants a fee exemption or decides an appeal.
+model RetotalingRequest {
+  events         RetotalingEvent[]
+  id             String              @id @default(uuid(7)) @db.Uuid
+  registrationId String              @map("registration_id") @db.Uuid
+  releaseId      String              @map("release_id") @db.Uuid
+  submissionKey  String              @map("submission_key") @db.Uuid
+  requestDigest  String              @map("request_digest") @db.Char(64)
+  reason         String              @db.VarChar(1000)
+  status         String              @default("SUBMITTED") @db.VarChar(32)
+  version        Int                 @default(1)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  registration   StudentRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  release        SyntheticRelease    @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+
+  @@unique([registrationId, submissionKey])
+  @@index([releaseId, status])
+  @@map("retotaling_requests")
+}
+
+/// Durable sandbox order, bound to an existing server-owned payment obligation.
+model SandboxGatewayOrder {
+  id            String                  @id @db.Uuid
+  paymentId     String                  @map("payment_id") @db.Uuid
+  requestDigest String                  @map("request_digest") @db.Char(64)
+  amountMinor   Int                     @map("amount_minor")
+  currency      String                  @db.Char(3)
+  status        String                  @default("CREATED") @db.VarChar(24)
+  refundedMinor Int                     @default(0) @map("refunded_minor")
+  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  payment       ReExamPayment           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  receipts      SandboxGatewayReceipt[]
+
+  @@index([paymentId])
+  @@map("sandbox_gateway_orders")
+}
+
+/// Append-only callback/refund receipt; raw callback bodies and credentials are never stored.
+model SandboxGatewayReceipt {
+  id            String              @id @db.Uuid
+  orderId       String              @map("order_id") @db.Uuid
+  kind          String              @db.VarChar(16)
+  requestDigest String              @map("request_digest") @db.Char(64)
+  amountMinor   Int                 @map("amount_minor")
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  order         SandboxGatewayOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@map("sandbox_gateway_receipts")
+}
+
+/// Dry-run/reconciliation checkpoints only. This table cannot activate accounts or import records.
+model LegacyMigrationBatch {
+  id           String   @id @db.Uuid
+  sourceDigest String   @map("source_digest") @db.Char(64)
+  planDigest   String   @map("plan_digest") @db.Char(64)
+  state        String   @default("DRY_RUN") @db.VarChar(24)
+  checkpoint   Int      @default(0)
+  report       Json
+  actorUserId  String   @map("actor_user_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  actor        User     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@map("legacy_migration_batches")
+}
+
+model RetotalingEvent {
+  id             String            @id @db.Uuid
+  requestId      String            @map("request_id") @db.Uuid
+  version        Int
+  action         String            @db.VarChar(24)
+  status         String            @db.VarChar(32)
+  message        String?           @db.VarChar(1000)
+  actorUserId    String?           @map("actor_user_id") @db.Uuid
+  actorAccountId String?           @map("actor_account_id") @db.Uuid
+  requestDigest  String            @map("request_digest") @db.Char(64)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  request        RetotalingRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  actorUser      User?             @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  actorAccount   StudentAccount?   @relation(fields: [actorAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([requestId, version])
+  @@map("retotaling_events")
 }

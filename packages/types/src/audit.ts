@@ -1,5 +1,7 @@
 /** Audit action names written to `audit_logs.action`. Add new actions here, never inline strings. */
 export const AUDIT_ACTIONS = {
+  syntheticWorkflowChanged: 'SYNTHETIC_WORKFLOW_CHANGED',
+  syntheticCertificateTransitioned: 'SYNTHETIC_CERTIFICATE_TRANSITIONED',
   publicVerificationUnavailable: 'PUBLIC_VERIFICATION_UNAVAILABLE',
   certificateRequestSubmitted: 'CERTIFICATE_REQUEST_SUBMITTED',
   certificateRequestTransitioned: 'CERTIFICATE_REQUEST_TRANSITIONED',

@@ -12,6 +12,8 @@
  * (see docs/architecture/authorization.md).
  */
 export const PERMISSIONS = {
+  /** Isolated synthetic workflow tooling only; never official authority. Granted only via SUPER_ADMIN. */
+  syntheticWorkflowsManage: 'syntheticWorkflows.manage',
   departmentsRead: 'departments.read',
   departmentsWrite: 'departments.write',
   programsRead: 'programs.read',

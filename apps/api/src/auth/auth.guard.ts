@@ -46,10 +46,13 @@ export class AuthGuard implements CanActivate {
     const record = await this.sessions.read(sessionId);
     const user = record ? await this.users.findForAuthById(record.userId) : null;
     if (!record || user?.status !== 'ACTIVE') {
-      if (record && user?.status !== 'ACTIVE') {
-        await this.sessions.revokeAllForUser(record.userId);
-      }
+      if (record && user?.status !== 'ACTIVE') await this.sessions.revokeAllForUser(record.userId);
       response.clearCookie(names.session, sessionCookieOptions(this.config));
+      if (mode === 'required') throw Errors.sessionExpired();
+      return true;
+    }
+    // A credential update spans SQL and Redis. Deny this request without deleting its live session.
+    if (!this.sessions.matchesCredential(record, user.passwordHash)) {
       if (mode === 'required') throw Errors.sessionExpired();
       return true;
     }

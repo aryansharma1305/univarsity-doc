@@ -1,4 +1,5 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { prismaErrorCode } from '@docversity/database';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   ERROR_CODES,
@@ -154,51 +155,82 @@ export class StudentAuthService {
     }
     const passwordHash = await this.passwords.hashPassword(input.password);
 
-    const accountId = await this.prisma.client.$transaction(async (tx) => {
-      // Consume the code exactly once (compare-and-set).
-      const consumed = await tx.studentActivationCode.updateMany({
-        where: { id: open.id, usedAt: null, revokedAt: null },
-        data: { usedAt: new Date() },
-      });
-      if (consumed.count !== 1) throw activationFailed();
-      const now = new Date();
-      const saved = account
-        ? await tx.studentAccount.update({
-            where: { id: account.id },
-            data: { passwordHash, passwordChangedAt: now, status: 'ACTIVE', statusReason: null },
-          })
-        : await tx.studentAccount.create({
-            data: {
-              studentId: registration.studentId,
-              passwordHash,
-              activatedAt: now,
-              passwordChangedAt: now,
+    const accountId = await this.prisma.client
+      .$transaction(
+        async (tx) => {
+          // Hashing yields: recheck current authority inside the credential-write transaction.
+          const current = await tx.studentRegistration.findUnique({
+            where: { id: registration.id },
+            select: {
+              status: true,
+              student: { select: { account: { select: { id: true, status: true } } } },
             },
           });
-      await this.audit.writeAuditEvent(
-        {
-          actorUserId: null,
-          action: AUDIT_ACTIONS.studentAccountActivated,
-          entityType: 'StudentAccount',
-          entityId: saved.id,
-          metadata: {
-            studentId: registration.studentId,
-            registrationId: registration.id,
-            recovery: account !== null,
-            ipHash,
-          },
+          const currentAccount = current?.student.account;
+          if (!current || current.status === 'REVOKED' || currentAccount?.status === 'DISABLED') {
+            throw activationFailed();
+          }
+          // Consume the code exactly once (compare-and-set).
+          const consumed = await tx.studentActivationCode.updateMany({
+            where: { id: open.id, usedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+            data: { usedAt: new Date() },
+          });
+          if (consumed.count !== 1) throw activationFailed();
+          const now = new Date();
+          const saved = currentAccount
+            ? await tx.studentAccount.update({
+                where: { id: currentAccount.id, status: { not: 'DISABLED' } },
+                data: {
+                  passwordHash,
+                  passwordChangedAt: now,
+                  status: 'ACTIVE',
+                  statusReason: null,
+                },
+              })
+            : await tx.studentAccount.create({
+                data: {
+                  studentId: registration.studentId,
+                  passwordHash,
+                  activatedAt: now,
+                  passwordChangedAt: now,
+                },
+              });
+          await this.audit.writeAuditEvent(
+            {
+              actorUserId: null,
+              action: AUDIT_ACTIONS.studentAccountActivated,
+              entityType: 'StudentAccount',
+              entityId: saved.id,
+              metadata: {
+                studentId: registration.studentId,
+                registrationId: registration.id,
+                recovery: account !== null,
+                ipHash,
+              },
+            },
+            tx,
+          );
+          return saved.id;
         },
-        tx,
-      );
-      return saved.id;
-    });
+        { isolationLevel: 'Serializable' },
+      )
+      .catch((error: unknown) => {
+        if (['P2002', 'P2025', 'P2034'].includes(prismaErrorCode(error) ?? ''))
+          throw activationFailed();
+        throw error;
+      });
 
     // A recovered account starts fresh: every other session ends.
     if (account) await this.sessions.revokeAllForUser(account.id);
     if (client.existingSessionId) await this.sessions.revoke(client.existingSessionId);
     await this.rateLimiter.clear('student-activation', [`registration:${registrationHash}`]);
     const device = summariseUserAgent(client.userAgent);
-    const { sessionId } = await this.sessions.create({ userId: accountId, device, ipHash });
+    const { sessionId } = await this.sessions.create({
+      userId: accountId,
+      passwordHash,
+      device,
+      ipHash,
+    });
     return { sessionId, me: await this.me(registration.studentId, accountId) };
   }
 
@@ -256,6 +288,7 @@ export class StudentAuthService {
     const device = summariseUserAgent(client.userAgent);
     const { sessionId, record } = await this.sessions.create({
       userId: account.id,
+      passwordHash: account.passwordHash,
       device,
       ipHash,
     });

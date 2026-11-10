@@ -37,7 +37,14 @@ test('staff synthetic template previews fit every viewport, generate PDFs and su
     expect(pdf.headers()['content-type']).toContain('application/pdf');
     expect(pdf.headers()['cache-control']).toBe('no-store');
     await expect(page.getByTitle('Synthetic training certificate PDF preview')).toBeVisible();
-    const downloading = page.waitForEvent('download');
+    await expect(page.getByRole('link', { name: 'Download sample' })).toHaveAttribute(
+      'download',
+      `sample-training-certificate-${fixture}-v1.pdf`,
+    );
+    // Headless Chromium can auto-download the iframe PDF with a blob UUID as its filename.
+    const downloading = page.waitForEvent('download', (download) =>
+      download.suggestedFilename().startsWith('sample-'),
+    );
     await page.getByRole('link', { name: 'Download sample' }).click();
     const download = await downloading;
     expect(download.suggestedFilename()).toBe(`sample-training-certificate-${fixture}-v1.pdf`);

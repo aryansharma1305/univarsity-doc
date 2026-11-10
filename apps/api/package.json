@@ -19,6 +19,7 @@
     "@docversity/database": "workspace:*",
     "@docversity/documents": "workspace:*",
     "@docversity/imports": "workspace:*",
+    "@docversity/payments": "workspace:*",
     "@docversity/storage": "workspace:*",
     "@docversity/types": "workspace:*",
     "@docversity/validation": "workspace:*",

@@ -49,7 +49,7 @@ export class StudentAuthGuard implements CanActivate {
     const account = record
       ? await this.prisma.client.studentAccount.findUnique({
           where: { id: record.userId },
-          select: { id: true, studentId: true, status: true },
+          select: { id: true, studentId: true, status: true, passwordHash: true },
         })
       : null;
     if (!record || account?.status !== 'ACTIVE') {
@@ -58,6 +58,11 @@ export class StudentAuthGuard implements CanActivate {
       if (mode === 'required') throw Errors.sessionExpired();
       return true;
     }
+    if (!this.sessions.matchesCredential(record, account.passwordHash)) {
+      if (mode === 'required') throw Errors.sessionExpired();
+      return true;
+    }
+
     const session = await this.sessions.touch(sessionId, record);
     request.student = { sessionId, session, accountId: account.id, studentId: account.studentId };
     return true;

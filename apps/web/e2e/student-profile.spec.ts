@@ -157,7 +157,12 @@ test('a registrar rejects with a reason; the student sees it and can cancel a ne
   await dialog
     .getByLabel('Reason (shown to the student)')
     .fill('The name must match your admission documents.');
+  const rejectedResponse = staff.waitForResponse(
+    (response) => response.url().endsWith('/reject') && response.request().method() === 'POST',
+  );
   await dialog.getByRole('button', { name: 'Reject request' }).click();
+  expect((await rejectedResponse).status()).toBe(200);
+  await expect(dialog).toBeHidden();
   await expect(staff.getByText('The name must match your admission documents.')).toBeVisible();
   await staff.context().close();
 

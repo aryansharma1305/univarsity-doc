@@ -80,7 +80,7 @@ export class AuthService {
       ? await this.passwords.verifyPassword(user.passwordHash, input.password)
       : await this.passwords.verifyAgainstDummy(input.password);
 
-    if (!user || !passwordValid || user.status !== 'ACTIVE') {
+    if (!user?.passwordHash || !passwordValid || user.status !== 'ACTIVE') {
       const reason = !user
         ? 'unknown_account'
         : !passwordValid
@@ -94,7 +94,12 @@ export class AuthService {
     if (client.existingSessionId) await this.sessions.revoke(client.existingSessionId);
 
     const device = summariseUserAgent(client.userAgent);
-    const { sessionId, record } = await this.sessions.create({ userId: user.id, device, ipHash });
+    const { sessionId, record } = await this.sessions.create({
+      userId: user.id,
+      passwordHash: user.passwordHash,
+      device,
+      ipHash,
+    });
     await this.audit.writeAuditEvent({
       actorUserId: user.id,
       action: AUDIT_ACTIONS.authLoginSuccess,
@@ -189,7 +194,9 @@ export class AuthService {
       throw Errors.invalidCredentials();
     }
     assertPasswordPolicy(input.newPassword, user);
-    await this.users.setPasswordHash(user.id, await this.passwords.hashPassword(input.newPassword));
+    const passwordHash = await this.passwords.hashPassword(input.newPassword);
+    await this.users.setPasswordHash(user.id, passwordHash, user.passwordHash);
+    await this.sessions.replaceCredential(auth.sessionId, auth.session, passwordHash);
     const revoked = await this.sessions.revokeAllForUser(user.id, {
       exceptSessionId: auth.sessionId,
     });
@@ -261,7 +268,14 @@ export class AuthService {
     assertPasswordPolicy(input.newPassword, user);
     if ((await this.resets.consume(input.token)) !== user.id) throw invalid();
 
-    await this.users.setPasswordHash(user.id, await this.passwords.hashPassword(input.newPassword));
+    const passwordHash = await this.passwords.hashPassword(input.newPassword);
+    try {
+      await this.users.setPasswordHash(user.id, passwordHash, user.passwordHash);
+    } catch (error) {
+      if (error instanceof AppError && error.code === ERROR_CODES.authInvalidCredentials)
+        throw invalid();
+      throw error;
+    }
     const revoked = await this.sessions.revokeAllForUser(user.id);
     await this.audit.writeAuditEvent({
       actorUserId: user.id,

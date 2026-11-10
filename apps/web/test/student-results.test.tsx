@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { randomUUID } from 'node:crypto';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 const refresh = vi.hoisted(() => vi.fn());
@@ -28,6 +29,47 @@ describe('student results', () => {
     expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(STUDENT_NAV.find((x) => x.href === '/student/results')?.available).toBe(true);
+  });
+  it('renders only server-supplied synthetic result cards with an explicit non-official disclaimer', () => {
+    render(
+      <StudentResults
+        results={{
+          ...empty,
+          data: [
+            {
+              id: randomUUID(),
+              resultId: randomUUID(),
+              registrationId: randomUUID(),
+              usage: 'SYNTHETIC_ONLY',
+              label: 'SAMPLE — not an official result',
+              examination: 'Synthetic examination',
+              attemptNumber: 1,
+              periodNumber: 1,
+              sgpa: '9.000',
+              outcome: 'PASS',
+              publishedAt: new Date().toISOString(),
+              subjects: [
+                {
+                  programSubjectId: randomUUID(),
+                  code: 'SYN-101',
+                  name: 'Synthetic subject',
+                  totalMarks: '80',
+                  maxMarks: '100',
+                  grade: 'A',
+                },
+              ],
+            },
+          ],
+          meta: { page: 1, pageSize: 25, total: 1, totalPages: 1 },
+        }}
+      />,
+    );
+    expect(screen.getByRole('article', { name: 'Synthetic examination' })).toHaveTextContent(
+      'Sample GPA 9.000',
+    );
+    expect(screen.getByText('SAMPLE — not an official result')).toBeVisible();
+    expect(screen.getByText(/Synthetic preview only/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
   });
   it('distinguishes error from empty data and refreshes through the retry action', () => {
     render(<StudentResults results={null} />);

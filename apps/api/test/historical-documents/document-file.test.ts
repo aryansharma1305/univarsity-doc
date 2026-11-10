@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '../../src/common/app-error.js';
 import { inspectDocument, sniffContentType } from '../../src/historical-documents/document-file.js';
-import { pdfWithCompressedScript, scans, staticPdf } from './support.js';
+import { pdfWithCompressedScript, pdfWithEncodedAction, scans, staticPdf } from './support.js';
 
 async function rejection(promise: Promise<unknown>): Promise<string> {
   try {
@@ -29,6 +29,10 @@ describe('historical document file inspection', () => {
   });
 
   it.each([
+    [
+      'a NUL-terminated script name',
+      staticPdf('5 0 obj << /S /JavaScript\0 /JS (/* synthetic */) >> endobj'),
+    ],
     ['inline JavaScript', staticPdf('5 0 obj << /S /JavaScript /JS (app.alert(1)) >> endobj')],
     ['a hex-escaped /J#61vaScript name', staticPdf('5 0 obj << /S /J#61vaScript >> endobj')],
     ['a launch action', staticPdf('5 0 obj << /S /Launch /F (cmd.exe) >> endobj')],
@@ -38,6 +42,15 @@ describe('historical document file inspection', () => {
   ])('rejects a PDF with %s', async (_name, bytes) => {
     expect(await rejection(inspectDocument(bytes, 'application/pdf'))).toMatch(/active content/);
   });
+
+  it.each([' ', '\0'])(
+    'rejects encoded object streams with PDF whitespace %j',
+    async (terminator) => {
+      expect(
+        await rejection(inspectDocument(pdfWithEncodedAction(terminator), 'application/pdf')),
+      ).toMatch(/compressed object/);
+    },
+  );
 
   it('rejects encrypted and truncated PDFs', async () => {
     expect(

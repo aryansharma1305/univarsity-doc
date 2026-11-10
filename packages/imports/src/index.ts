@@ -77,3 +77,4 @@ export {
   type SourceRow,
 } from './workbook.js';
 export * from './result-rows.js';
+export * from './legacy-dry-run.js';

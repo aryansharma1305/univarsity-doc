@@ -30,7 +30,8 @@
     "@docversity/storage": "workspace:*",
     "@docversity/types": "workspace:*",
     "@docversity/validation": "workspace:*",
-    "exceljs": "4.4.0"
+    "exceljs": "4.4.0",
+    "saxes": "6.0.0"
   },
   "devDependencies": {
     "@docversity/config": "workspace:*",

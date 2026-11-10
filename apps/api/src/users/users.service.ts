@@ -3,6 +3,7 @@ import { AUDIT_ACTIONS } from '@docversity/types';
 import { AuditService } from '../audit/audit.service.js';
 import { SessionStore } from '../auth/session.store.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { Errors } from '../common/app-error.js';
 
 export interface UserForAuth {
   id: string;
@@ -29,7 +30,19 @@ export class UsersService {
     return this.load({ id });
   }
 
-  async setPasswordHash(userId: string, passwordHash: string): Promise<void> {
+  async setPasswordHash(
+    userId: string,
+    passwordHash: string,
+    expectedPasswordHash?: string | null,
+  ): Promise<void> {
+    if (expectedPasswordHash !== undefined) {
+      const updated = await this.prisma.client.user.updateMany({
+        where: { id: userId, passwordHash: expectedPasswordHash, status: 'ACTIVE' },
+        data: { passwordHash },
+      });
+      if (updated.count !== 1) throw Errors.invalidCredentials();
+      return;
+    }
     await this.prisma.client.user.update({ where: { id: userId }, data: { passwordHash } });
   }
 
