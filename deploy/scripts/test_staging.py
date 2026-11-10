@@ -10,6 +10,48 @@ import staging
 
 
 class RecoverySafetyTests(unittest.TestCase):
+    def test_backup_requires_a_clean_worker_exit(self):
+        for state in ['running 0 false', 'exited 137 false', 'exited 0 true']:
+            with self.subTest(state=state), patch.object(staging, 'compose', return_value=subprocess.CompletedProcess([], 0, stdout='a' * 64)), patch.object(staging.subprocess, 'check_output', return_value=state):
+                with self.assertRaisesRegex(SystemExit, 'did not shut down cleanly'):
+                    staging.require_stopped_worker()
+        with patch.object(staging, 'compose', return_value=subprocess.CompletedProcess([], 0, stdout='a' * 64)), patch.object(staging.subprocess, 'check_output', return_value='exited 0 false'):
+            staging.require_stopped_worker()
+
+    def test_backup_refuses_before_dump_and_restarts_after_readiness_failure(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(staging, 'BACKUPS', Path(folder)), patch.object(staging, 'require_gate'), patch.object(staging, 'require_stopped_worker'), patch.object(staging, 'up') as restart:
+            calls = []
+            def compose(*args, **kwargs):
+                calls.append(args)
+                if args[:2] == ('run', '--rm'):
+                    raise subprocess.CalledProcessError(1, 'synthetic readiness refusal')
+            with patch.object(staging, 'compose', side_effect=compose):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    staging.backup()
+            restart.assert_called_once()
+            self.assertIn(('run', '--rm', '--no-deps', 'backup-readiness'), calls)
+            self.assertFalse(any(call[0] == 'exec' for call in calls))
+            self.assertFalse(list(Path(folder).rglob('database.dump')))
+            self.assertFalse(list(Path(folder).rglob('manifest.json')))
+
+    def test_vps_preflight_refuses_uninitialized_metadata_without_commands(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(staging, '_instance_file', Path(folder) / 'missing.json'), patch.object(staging, 'INSTANCE', {'public': True}), patch.object(staging.subprocess, 'run') as command:
+            with self.assertRaisesRegex(SystemExit, 'initialized public review instance'):
+                staging.preflight()
+            command.assert_not_called()
+
+    def test_public_start_requires_preflight_before_lifecycle(self):
+        with patch.object(staging, 'INSTANCE', {'public': True}), patch.object(staging, 'require_gate'), patch.object(staging, 'preflight', side_effect=SystemExit('synthetic preflight failure')), patch.object(staging, 'compose') as compose:
+            with self.assertRaisesRegex(SystemExit, 'synthetic preflight failure'):
+                staging.up()
+            compose.assert_not_called()
+
+    def test_local_start_keeps_the_existing_path(self):
+        with patch.object(staging, 'INSTANCE', {'public': False}), patch.object(staging, 'require_gate'), patch.object(staging, 'OVERLAYS', []), patch.object(staging, 'preflight') as preflight, patch.object(staging, 'compose') as compose:
+            staging.up()
+            preflight.assert_not_called()
+            compose.assert_called_once_with('up', '--no-build', '-d', '--wait')
+
     def test_manifest_detects_changed_backup_bytes(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

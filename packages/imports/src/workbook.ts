@@ -131,10 +131,11 @@ function collectDistinctValues(worksheet: ExcelJS.Worksheet, columns: ImportColu
 }
 
 function rowHasValue(row: ExcelJS.Row): boolean {
-  for (let column = 1; column <= row.cellCount; column++) {
-    if (toSourceCell(row.getCell(column).value).type !== 'blank') return true;
-  }
-  return false;
+  let found = false;
+  row.eachCell({ includeEmpty: false }, (cell) => {
+    if (toSourceCell(cell.value).type !== 'blank') found = true;
+  });
+  return found;
 }
 
 function countDataRows(worksheet: ExcelJS.Worksheet): number {

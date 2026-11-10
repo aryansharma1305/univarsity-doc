@@ -162,3 +162,53 @@ export function containsEmbeddedValue(bytes: Uint8Array): string | undefined {
   const text = Buffer.from(bytes).toString('latin1');
   return Object.values(EMBEDDED).find((value) => text.includes(value));
 }
+
+/** Valid synthetic one-page PDF with a comment-only action in an encoded object stream. */
+export function pdfWithEncodedAction(terminator = ' ') {
+  const comment = '/* synthetic inspection fixture; no operation */';
+  const compressed = deflateSync(Buffer.from(`5 0 << /S /JavaScript /JS (${comment}) >>`));
+  const encoded = Buffer.from(compressed.toString('hex') + '>');
+  const chunks = [Buffer.from('%PDF-1.7\n')];
+  const offsets = new Map<number, number>();
+  function object(id: number, bytes: Buffer | string) {
+    offsets.set(
+      id,
+      chunks.reduce((sum, item) => sum + item.length, 0),
+    );
+    chunks.push(Buffer.from(`${id} 0 obj\n`), Buffer.from(bytes), Buffer.from('\nendobj\n'));
+  }
+  object(1, '<< /Type /Catalog /Pages 2 0 R /OpenAction 5 0 R >>');
+  object(2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  object(3, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 4 0 R >>');
+  object(4, '<< /Length 4 >>\nstream\nq Q\nendstream');
+  object(
+    6,
+    Buffer.concat([
+      Buffer.from(
+        `<< /Type /ObjStm${terminator}/N 1 /First 4 /Filter [/ASCIIHexDecode /FlateDecode] /Length ${encoded.length} >>\nstream\n`,
+      ),
+      encoded,
+      Buffer.from('\nendstream'),
+    ]),
+  );
+  const xrefOffset = chunks.reduce((sum, item) => sum + item.length, 0);
+  const xref = Buffer.alloc(8 * 7);
+  for (let id = 0; id < 8; id++) {
+    const type = id === 0 ? 0 : id === 5 ? 2 : 1;
+    xref[id * 7] = type;
+    xref.writeUInt32BE(id === 5 ? 6 : id === 7 ? xrefOffset : (offsets.get(id) ?? 0), id * 7 + 1);
+    xref.writeUInt16BE(id === 0 ? 65535 : 0, id * 7 + 5);
+  }
+  object(
+    7,
+    Buffer.concat([
+      Buffer.from(
+        `<< /Type /XRef /Size 8 /W [1 4 2] /Root 1 0 R /Length ${xref.length} >>\nstream\n`,
+      ),
+      xref,
+      Buffer.from('\nendstream'),
+    ]),
+  );
+  chunks.push(Buffer.from(`startxref\n${xrefOffset}\n%%EOF\n`));
+  return Buffer.concat(chunks);
+}

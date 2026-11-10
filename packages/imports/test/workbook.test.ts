@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  verifyXlsxContainer,
   describeWorksheets,
   defaultWorksheet,
   loadWorkbook,
@@ -210,4 +211,32 @@ describe('dates', () => {
     });
     expect(parseDateCell({ type: 'blank' }, 'ISO')).toEqual({ ok: true, value: null });
   });
+});
+
+it('rejects sparse extreme columns before materializing the full workbook', async () => {
+  const row: string[] = [];
+  row[16383] = 'SYNTHETIC';
+  const bytes = await buildWorkbook([{ name: 'Synthetic', rows: [row, row] }]);
+  expect(() => {
+    verifyXlsxContainer(bytes, { maxUncompressedBytes: 100_000_000 });
+  }).toThrow(/500-column/);
+});
+
+it('checks worksheet content despite mismatched ZIP central and local filenames', async () => {
+  const row: string[] = [];
+  row[16383] = 'SYNTHETIC';
+  const raw = await buildWorkbook([{ name: 'Synthetic', rows: [row, row] }]);
+  const bytes = Buffer.from(raw);
+  let patched = false;
+  for (let i = 0; i < bytes.length - 46; i++) {
+    if (bytes.readUInt32LE(i) !== 0x02014b50) continue;
+    const length = bytes.readUInt16LE(i + 28);
+    if (bytes.subarray(i + 46, i + 46 + length).toString() !== 'xl/worksheets/sheet1.xml') continue;
+    bytes.write('xl/worksheets/sheet1.bin', i + 46);
+    patched = true;
+  }
+  expect(patched).toBe(true);
+  expect(() => {
+    verifyXlsxContainer(bytes, { maxUncompressedBytes: 100_000_000 });
+  }).toThrow(/500-column/);
 });

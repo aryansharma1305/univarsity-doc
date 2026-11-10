@@ -41,6 +41,8 @@ import {
   resolveAmount,
 } from './payment-destinations.service.js';
 import { type PreparedFile, prepareEvidence, sha256Of } from './payment-files.js';
+import type { MockPaymentProvider, MockWebhookHeaders } from '@docversity/payments';
+import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 import type { UploadedPaymentFile } from './payment-upload.interceptor.js';
 
 const ENTITY = 'ReExamPayment';
@@ -174,7 +176,87 @@ export class ReExamPaymentsService {
     private readonly destinations: PaymentDestinationsService,
     private readonly rateLimiter: RateLimiter,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
+    @Inject(API_CONFIG) private readonly config: ApiConfig,
   ) {}
+
+  // Internal integration seam only: no public webhook/checkout route or runtime enable flag.
+  sandboxProvider(): MockPaymentProvider | null {
+    return null;
+  }
+  private sandbox() {
+    const provider = this.sandboxProvider();
+    if (this.config.NODE_ENV !== 'test' || !provider) throw Errors.notFound();
+    return provider;
+  }
+  async createSandboxOrder(studentId: string, paymentId: string, requestId: string) {
+    const provider = this.sandbox();
+    const payment = await this.ownPayment(studentId, paymentId);
+    if (
+      payment.status !== 'AWAITING_PAYMENT' ||
+      applicationBlock(payment.application) ||
+      !isUsable(payment.destination)
+    )
+      throw conflict('This obligation is unavailable for synthetic checkout.');
+    return provider.createOrder({
+      requestId,
+      reference: payment.id,
+      amountMinor: payment.amountMinor,
+      currency: payment.currency,
+    });
+  }
+  async acceptSandboxWebhook(rawBody: Buffer, headers: MockWebhookHeaders, now: Date) {
+    const provider = this.sandbox();
+    let event;
+    try {
+      event = provider.verifyWebhook(rawBody, headers, now);
+    } catch {
+      throw Errors.validation([{ path: 'callback', message: 'Synthetic callback refused.' }]);
+    }
+    const payment = await this.prisma.client.reExamPayment.findUnique({
+      where: { id: event.reference },
+      include: { application: true },
+    });
+    if (!payment) throw Errors.notFound();
+    if (event.amountMinor !== payment.amountMinor || event.currency !== payment.currency)
+      throw Errors.notFound();
+    const account = await this.prisma.client.studentAccount.findUnique({
+      where: { studentId: payment.studentId },
+    });
+    if (account?.status !== 'ACTIVE') throw Errors.notFound();
+    let receipt;
+    try {
+      receipt = await provider.handleWebhook(rawBody, headers, now);
+    } catch {
+      throw Errors.validation([{ path: 'callback', message: 'Synthetic callback refused.' }]);
+    }
+    if (!receipt) return this.view(payment.studentId, payment.applicationId);
+    const reference = `MOCK-${event.eventId}`;
+    const replay = async () => {
+      const current = await this.prisma.client.reExamPayment.findUnique({
+        where: { id: payment.id },
+      });
+      return (
+        current &&
+        ['SUBMITTED', 'VERIFIED'].includes(current.status) &&
+        current.transactionReferenceNormalized === normalizeTransactionReference(reference)
+      );
+    };
+    if (await replay()) return this.view(payment.studentId, payment.applicationId);
+    try {
+      return await this.submit(
+        payment.studentId,
+        account.id,
+        payment.id,
+        { transactionReference: reference },
+        undefined,
+        { providerEventId: event.eventId, providerOrderId: event.orderId },
+      );
+    } catch (error) {
+      if (error instanceof AppError && error.status === HttpStatus.CONFLICT && (await replay()))
+        return this.view(payment.studentId, payment.applicationId);
+      throw error;
+    }
+  }
 
   private async throttle(scope: string, accountId: string, limit: number) {
     const result = await this.rateLimiter.hit(
@@ -423,6 +505,7 @@ export class ReExamPaymentsService {
     paymentId: string,
     input: SubmitReExamPayment,
     file: UploadedPaymentFile | undefined,
+    sandboxSource?: { providerEventId: string; providerOrderId: string },
   ): Promise<StudentReExamPaymentView> {
     await this.throttle('reexam-payment-submit', accountId, 10);
     const payment = await this.ownPayment(studentId, paymentId);
@@ -441,62 +524,19 @@ export class ReExamPaymentsService {
       ]);
     }
     const key = evidence ? await this.storeEvidence(paymentId, evidence) : null;
-    const normalized = normalizeTransactionReference(input.transactionReference);
     try {
-      await this.prisma.client.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM re_exam_payments WHERE id = ${paymentId}::uuid FOR UPDATE`;
-        const locked = await tx.reExamPayment.findUnique({
-          where: { id: paymentId },
-          include: { application: true },
-        });
-        if (locked?.studentId !== studentId) throw Errors.notFound();
-        if (locked.status !== 'AWAITING_PAYMENT') {
-          throw conflict('This payment has already been submitted or replaced.');
-        }
-        const lockedBlock = applicationBlock(locked.application);
-        if (lockedBlock) throw conflict(lockedBlock);
-        await tx.reExamPayment.update({
-          where: { id: paymentId },
-          data: {
-            status: 'SUBMITTED',
-            transactionReference: input.transactionReference,
-            transactionReferenceNormalized: normalized,
-            submittedAt: new Date(),
-            submittedByAccountId: accountId,
-            ...(evidence && key
-              ? {
-                  evidenceStorageKey: key,
-                  evidenceContentType: evidence.contentType,
-                  evidenceSizeBytes: evidence.sizeBytes,
-                  evidenceSha256: evidence.sha256,
-                }
-              : {}),
-          },
-        });
-        await this.audit.writeAuditEvent(
-          {
-            actorUserId: null,
-            action: AUDIT_ACTIONS.reExamPaymentSubmitted,
-            entityType: ENTITY,
-            entityId: paymentId,
-            // The reference itself is not copied into the log.
-            metadata: {
-              principal: 'student',
-              accountId,
-              applicationId: locked.applicationId,
-              hasEvidence: evidence !== null,
-              ...(evidence
-                ? {
-                    evidenceContentType: evidence.contentType,
-                    evidenceSizeBytes: evidence.sizeBytes,
-                    evidenceSha256: evidence.sha256,
-                  }
-                : {}),
-            },
-          },
+      await this.prisma.client.$transaction((tx) =>
+        this.persistSubmission(
           tx,
-        );
-      });
+          studentId,
+          accountId,
+          paymentId,
+          input,
+          evidence,
+          key,
+          sandboxSource,
+        ),
+      );
     } catch (error) {
       if (key) await this.storage.deleteObject(key).catch(() => undefined);
       if (uniqueConstraintName(error) === ONE_REFERENCE_INDEX) {
@@ -508,6 +548,81 @@ export class ReExamPaymentsService {
       throw error;
     }
     return this.view(studentId, payment.applicationId);
+  }
+
+  /** Shared transaction boundary for manual submissions and signed synthetic callbacks. */
+  async persistSubmission(
+    tx: Prisma.TransactionClient,
+    studentId: string,
+    accountId: string,
+    paymentId: string,
+    input: SubmitReExamPayment,
+    evidence: PreparedFile | null,
+    key: string | null,
+    sandboxSource?: { providerEventId: string; providerOrderId: string },
+  ): Promise<void> {
+    if (sandboxSource && this.config.NODE_ENV !== 'test') throw Errors.notFound();
+    await tx.$queryRaw`SELECT id FROM student_accounts WHERE id=${accountId}::uuid FOR SHARE`;
+    const account = await tx.studentAccount.findFirst({
+      where: { id: accountId, studentId, status: 'ACTIVE' },
+    });
+    if (!account) throw Errors.notFound();
+    const normalized = normalizeTransactionReference(input.transactionReference);
+    await tx.$queryRaw`SELECT id FROM re_exam_payments WHERE id = ${paymentId}::uuid FOR UPDATE`;
+    const locked = await tx.reExamPayment.findUnique({
+      where: { id: paymentId },
+      include: { application: true, destination: true },
+    });
+    if (locked?.studentId !== studentId) throw Errors.notFound();
+    if (locked.destination.evidenceRequirement === 'REQUIRED' && !evidence)
+      throw Errors.validation([{ path: 'evidence', message: 'Payment evidence is required.' }]);
+    if (locked.status !== 'AWAITING_PAYMENT') {
+      throw conflict('This payment has already been submitted or replaced.');
+    }
+    const lockedBlock = applicationBlock(locked.application);
+    if (lockedBlock) throw conflict(lockedBlock);
+    await tx.reExamPayment.update({
+      where: { id: paymentId },
+      data: {
+        status: 'SUBMITTED',
+        transactionReference: input.transactionReference,
+        transactionReferenceNormalized: normalized,
+        submittedAt: new Date(),
+        submittedByAccountId: accountId,
+        ...(evidence && key
+          ? {
+              evidenceStorageKey: key,
+              evidenceContentType: evidence.contentType,
+              evidenceSizeBytes: evidence.sizeBytes,
+              evidenceSha256: evidence.sha256,
+            }
+          : {}),
+      },
+    });
+    await this.audit.writeAuditEvent(
+      {
+        actorUserId: null,
+        action: AUDIT_ACTIONS.reExamPaymentSubmitted,
+        entityType: ENTITY,
+        entityId: paymentId,
+        // The reference itself is not copied into the log.
+        metadata: {
+          principal: 'student',
+          accountId,
+          applicationId: locked.applicationId,
+          hasEvidence: evidence !== null,
+          ...(sandboxSource ? { source: 'SYNTHETIC_SANDBOX', ...sandboxSource } : {}),
+          ...(evidence
+            ? {
+                evidenceContentType: evidence.contentType,
+                evidenceSizeBytes: evidence.sizeBytes,
+                evidenceSha256: evidence.sha256,
+              }
+            : {}),
+        },
+      },
+      tx,
+    );
   }
 
   private async storeEvidence(paymentId: string, evidence: PreparedFile): Promise<string> {

@@ -41,12 +41,14 @@ afterAll(() => app.close());
 async function fixture(
   structure: 'SEMESTER_WISE' | 'YEAR_WISE' = 'SEMESTER_WISE',
   multiple = false,
+  graded = false,
 ) {
   const f = await resultsFixture(registrar, maker, {
     structure,
     subjects: Array.from({ length: multiple ? 2 : 1 }, () => ({
       period: 1,
       maxMarks: 100,
+      ...(graded ? { credits: 3 } : {}),
       components: [
         { name: 'Internal', maxMarks: 30 },
         { name: 'External', maxMarks: 70 },
@@ -81,7 +83,97 @@ const action = (version: number, reason?: string) => ({
   confirmed: true,
   ...(reason ? { reason } : {}),
 });
+const syntheticGrading = () => ({
+  contractVersion: 1,
+  usage: 'SYNTHETIC_ONLY',
+  policyId: 'SAMPLE_GRADING',
+  version: 1,
+  aggregation: 'SUM_COMPONENTS',
+  attemptSelection: 'EXPLICIT',
+  absentHandling: 'WITHHOLD',
+  earnedCreditRule: 'PASS_ONLY',
+  failureOutcome: 'BACKLOG',
+  gpaDenominator: 'ATTEMPTED_CREDITS',
+  gpaRounding: 'HALF_UP',
+  componentFailureGrade: 'F',
+  componentMinimumPercentBps: {},
+  bands: [
+    { minimumPercentBps: 8000, grade: 'A', gradePoint: '9', passing: true },
+    { minimumPercentBps: 4000, grade: 'B', gradePoint: '6', passing: true },
+    { minimumPercentBps: 0, grade: 'F', gradePoint: '0', passing: false },
+  ],
+});
 describe('internal result review versions', () => {
+  it('integrates server-owned synthetic computation with review/replay while publication stays denied', async () => {
+    const service = app.get(ResultReviewService);
+    vi.spyOn(service, 'gradingPolicyDefinition').mockReturnValue(syntheticGrading());
+    vi.spyOn(service, 'policy').mockReturnValue({
+      ...RESULT_REVIEW_POLICY,
+      approvalEnabled: true,
+      approvalBlockers: [],
+    });
+    const f = await fixture('SEMESTER_WISE', false, true);
+    const submit = action(1);
+    await maker.post(`result-review/${f.draft.resultId}/submit`, submit).expect(200);
+    await maker.post(`result-review/${f.draft.resultId}/submit`, submit).expect(200);
+    const submitted = await testDb().result.findUniqueOrThrow({ where: { id: f.draft.resultId } });
+    expect(submitted.calculationSnapshot).toMatchObject({
+      officialPublicationAllowed: false,
+      usage: 'SYNTHETIC_ONLY',
+      resultVersion: 2,
+      sgpa: '6.000',
+      outcome: 'PASS',
+      subjects: [{ attemptNumber: 1, totalMarks: '70.00', creditsAttempted: '3.00' }],
+    });
+    expect(submitted.outcome).toBeNull();
+    expect(submitted.sgpa).toBeNull();
+    await checker.post(`result-review/${f.draft.resultId}/approve`, action(2)).expect(200);
+    const approved = await testDb().result.findUniqueOrThrow({ where: { id: f.draft.resultId } });
+    expect(approved.calculationSnapshot).toEqual(submitted.calculationSnapshot);
+    expect(approved.publicationStatus).toBe('APPROVED');
+    await checker.post(`result-review/${f.draft.resultId}/publish`, action(3)).expect(409);
+    await expect(
+      testDb().result.update({
+        where: { id: f.draft.resultId },
+        data: { publicationStatus: 'PUBLISHED', publishedAt: new Date() },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('rolls back computation and transition together on audit failure, then allows safe retry', async () => {
+    vi.spyOn(app.get(ResultReviewService), 'gradingPolicyDefinition').mockReturnValue(
+      syntheticGrading(),
+    );
+    const f = await fixture('SEMESTER_WISE', false, true);
+    const request = action(1);
+    const audit = vi
+      .spyOn(app.get(AuditService), 'writeAuditEvent')
+      .mockRejectedValueOnce(new Error('Synthetic audit failure'));
+    await maker.post(`result-review/${f.draft.resultId}/submit`, request).expect(500);
+    expect(
+      await testDb().result.findUniqueOrThrow({ where: { id: f.draft.resultId } }),
+    ).toMatchObject({ version: 1, publicationStatus: 'DRAFT', calculationSnapshot: null });
+    expect(await testDb().resultReviewEvent.count({ where: { id: request.requestId } })).toBe(0);
+    audit.mockRestore();
+    await maker.post(`result-review/${f.draft.resultId}/submit`, request).expect(200);
+    expect(
+      (await testDb().result.findUniqueOrThrow({ where: { id: f.draft.resultId } }))
+        .calculationSnapshot,
+    ).not.toBeNull();
+  });
+
+  it('does not allow unauthorized or malformed grading to change academic state', async () => {
+    const definition = vi
+      .spyOn(app.get(ResultReviewService), 'gradingPolicyDefinition')
+      .mockReturnValue(syntheticGrading());
+    const f = await fixture('SEMESTER_WISE', false, true);
+    await viewer.post(`result-review/${f.draft.resultId}/submit`, action(1)).expect(403);
+    definition.mockReturnValue({ ...syntheticGrading(), usage: 'OFFICIAL' });
+    await maker.post(`result-review/${f.draft.resultId}/submit`, action(1)).expect(409);
+    expect(
+      await testDb().result.findUniqueOrThrow({ where: { id: f.draft.resultId } }),
+    ).toMatchObject({ version: 1, publicationStatus: 'DRAFT', calculationSnapshot: null });
+  });
   it('blocks review and approval without an explicitly established policy', async () => {
     const f = await fixture();
     await maker.post(`result-review/${f.draft.resultId}/submit`, action(1)).expect(200);

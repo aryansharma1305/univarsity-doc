@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { syntheticPublishedResultSchema } from '../release-workflows.js';
 
 export const studentResultsQuerySchema = z
   .object({
@@ -11,13 +12,13 @@ export const studentResultsQuerySchema = z
 export const studentResultsPageSchema = z
   .object({
     publicationAvailable: z.literal(false),
-    data: z.tuple([]),
+    data: z.array(syntheticPublishedResultSchema).max(100),
     meta: z
       .object({
         page: z.number().int().min(1).max(100_000),
         pageSize: z.number().int().min(1).max(100),
-        total: z.literal(0),
-        totalPages: z.literal(0),
+        total: z.number().int().nonnegative(),
+        totalPages: z.number().int().nonnegative(),
       })
       .strict(),
   })

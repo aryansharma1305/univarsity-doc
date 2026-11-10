@@ -16,6 +16,17 @@ x-app: &app
     driver: json-file
     options: { max-size: 10m, max-file: '3' }
 services:
+  backup-readiness:
+    <<: *app
+    image: ${STAGING_PROJECT:-docversity14a}-worker:${IMAGE_TAG:-local}
+    profiles: [operator]
+    restart: 'no'
+    secrets:
+      - source: worker_runtime
+        target: runtime
+    # The verifier must never enqueue its own health-test job after the worker has stopped.
+    healthcheck: { disable: true }
+    command: ['node', 'dist/scripts/backup-readiness.js']
   tools:
     <<: *app
     image: ${STAGING_PROJECT:-docversity14a}-tools:${IMAGE_TAG:-local}

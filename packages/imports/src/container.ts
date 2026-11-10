@@ -1,3 +1,4 @@
+import { SaxesParser } from 'saxes';
 import { inflateRawSync } from 'node:zlib';
 import { ImportFileError } from './errors.js';
 
@@ -131,6 +132,63 @@ export function inspectXlsxContainer(bytes: Uint8Array, limits: ContainerLimits)
   return entries;
 }
 
+/** Bounded SAX inspection; no document tree, entity expansion or temporary files. */
+function checkWorksheetStructure(data: Uint8Array): void {
+  const parser = new SaxesParser({ xmlns: false });
+  let worksheet = false;
+  let rowPosition = 0;
+  let columnPosition = 0;
+  parser.on('doctype', () => {
+    throw new ImportFileError('NOT_XLSX', NOT_XLSX);
+  });
+  parser.on('error', () => {
+    throw new ImportFileError('NOT_XLSX', NOT_XLSX);
+  });
+  parser.on('opentag', (tag) => {
+    const name = tag.name.split(':').at(-1);
+    if (name === 'worksheet') worksheet = true;
+    if (!worksheet) return;
+    if (name === 'row') {
+      const position = tag.attributes.r;
+      rowPosition = typeof position === 'string' ? Number(position) : rowPosition + 1;
+      columnPosition = 0;
+      if (!Number.isSafeInteger(rowPosition) || rowPosition < 1 || rowPosition > 200_001)
+        throw new ImportFileError(
+          'TOO_MANY_ROWS',
+          'The worksheet exceeds the supported row-position safety limit.',
+        );
+    }
+    if (name !== 'c') return;
+    const reference = tag.attributes.r;
+    if (typeof reference === 'string') {
+      const match = /^([A-Za-z]+)([0-9]+)$/.exec(reference);
+      if (!match) throw new ImportFileError('NOT_XLSX', NOT_XLSX);
+      columnPosition = 0;
+      for (const letter of (match[1] ?? '').toUpperCase()) {
+        columnPosition = columnPosition * 26 + letter.charCodeAt(0) - 64;
+        if (columnPosition > 500) break;
+      }
+      const row = Number(match[2]);
+      if (!Number.isSafeInteger(row) || row < 1 || row > 200_001)
+        throw new ImportFileError(
+          'TOO_MANY_ROWS',
+          'The worksheet exceeds the supported row-position safety limit.',
+        );
+    } else columnPosition++;
+    if (columnPosition > 500)
+      throw new ImportFileError(
+        'TOO_MANY_COLUMNS',
+        'The worksheet exceeds the supported 500-column structural safety limit.',
+      );
+  });
+  try {
+    parser.write(Buffer.from(data).toString('utf8')).close();
+  } catch (error) {
+    if (error instanceof ImportFileError) throw error;
+    throw new ImportFileError('NOT_XLSX', NOT_XLSX);
+  }
+}
+
 /**
  * `inspectXlsxContainer` plus an actual decompression of every entry with a hard output cap, proving
  * the declared sizes are true before a spreadsheet library inflates the archive. Used by the worker.
@@ -148,18 +206,23 @@ export function verifyXlsxContainer(bytes: Uint8Array, limits: ContainerLimits):
     const end = start + entry.compressedSize;
     if (end > bytes.byteLength) throw new ImportFileError('NOT_XLSX', NOT_XLSX);
     const data = bytes.subarray(start, end);
-    let size: number;
+    let decoded: Uint8Array;
     if (entry.method === 0) {
-      size = data.byteLength;
+      decoded = data;
     } else {
       try {
-        size = inflateRawSync(data, {
+        decoded = inflateRawSync(data, {
           maxOutputLength: Math.max(1, entry.uncompressedSize),
-        }).byteLength;
+        });
       } catch {
         throw new ImportFileError('NOT_XLSX', NOT_XLSX);
       }
     }
-    if (size !== entry.uncompressedSize) throw new ImportFileError('NOT_XLSX', NOT_XLSX);
+    if (decoded.byteLength !== entry.uncompressedSize)
+      throw new ImportFileError('NOT_XLSX', NOT_XLSX);
+    // Classify by bytes: ZIP central/local names and Unicode overrides can disagree.
+    let first = decoded[0] === 0xef && decoded[1] === 0xbb && decoded[2] === 0xbf ? 3 : 0;
+    while ([0x20, 0x09, 0x0a, 0x0d].includes(decoded[first] ?? -1)) first++;
+    if (decoded[first] === 0x3c) checkWorksheetStructure(decoded);
   }
 }

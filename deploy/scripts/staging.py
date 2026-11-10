@@ -84,9 +84,19 @@ def review_init():
 def up():
     """Start (or reconcile) the stack, then prove the gate from inside the backend network."""
     require_gate()
+    if INSTANCE.get('public'):
+        preflight()
     compose('up', '--no-build', '-d', '--wait')
     if 'compose.review.yml' in OVERLAYS:
         verify_gate()
+
+
+def preflight():
+    """Public VPS checks only; never initializes, migrates, starts or removes anything."""
+    if _instance_file.is_symlink() or not _instance_file.is_file() or not INSTANCE.get('public'):
+        raise SystemExit('VPS preflight requires an initialized public review instance')
+    require_gate()
+    subprocess.run(['sh', str(ROOT / 'deploy/scripts/vps-preflight.sh')], cwd=ROOT, check=True)
 
 
 def export_ca():
@@ -122,15 +132,27 @@ def manifest(directory):
     return {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(directory.rglob('*')) if p.is_file() and p.name != 'manifest.json'}
 
 
+def require_stopped_worker():
+    """A SIGKILL/OOM stop must not be mistaken for a successful graceful close."""
+    worker = compose('ps', '--all', '--quiet', 'worker', capture_output=True, text=True).stdout.strip()
+    if not re.fullmatch(r'[a-f0-9]{12,64}', worker):
+        raise SystemExit('Backup refused: expected one stopped worker')
+    state = subprocess.check_output(['docker', 'inspect', '--format', '{{.State.Status}} {{.State.ExitCode}} {{.State.OOMKilled}}', worker], text=True).strip()
+    if state != 'exited 0 false':
+        raise SystemExit('Backup refused: worker did not shut down cleanly')
+
+
 def backup():
     require_gate()  # Never stop and restart a stack whose reviewer gate is not valid.
     BACKUPS.mkdir(exist_ok=True, mode=0o700)
     directory = BACKUPS / datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     directory.mkdir(mode=0o700)
-    # Stop all app writers for a coherent database + object snapshot. Redis queues drain first.
-    compose('stop', 'proxy', 'web', 'api')
-    compose('stop', 'worker')
+    # A stopped worker is not proof that Redis has no pending work. Refuse incomplete recovery sets.
     try:
+        compose('stop', 'proxy', 'web', 'api')
+        compose('stop', 'worker')
+        require_stopped_worker()
+        compose('run', '--rm', '--no-deps', 'backup-readiness')
         with (directory / 'database.dump').open('wb') as output:
             compose('exec', '-T', 'postgres', 'pg_dump', '-U', 'docversity_owner', '-d', 'docversity_staging', '--format=custom', '--no-owner', '--no-acl', stdout=output)
         compose('run', '--rm', '--no-deps', 'storage-tools', 'mirror', 'local/docversity-staging', f'/backups/{directory.name}/objects')
@@ -182,13 +204,14 @@ def restore_test(name):
 if __name__ == '__main__':
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['up','stop','status','build','fixture','smoke','backup','restore-test','ca','review-init','review-fixture'])
+    parser.add_argument('action', choices=['up','stop','status','build','fixture','smoke','backup','restore-test','ca','review-init','review-fixture','preflight'])
     parser.add_argument('backup_name', nargs='?')
     args = parser.parse_args()
     require_local_engine()
     if args.action not in ('review-init', 'stop', 'status', 'build'):
         require_gate()
     if args.action == 'review-init': review_init()
+    elif args.action == 'preflight': preflight()
     elif args.action == 'ca': export_ca()
     elif args.action == 'review-fixture':
         if 'compose.review.yml' not in OVERLAYS:

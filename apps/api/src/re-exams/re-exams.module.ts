@@ -28,6 +28,6 @@ import { ReExamsService } from './re-exams.service.js';
     StudentReExamPaymentsController,
   ],
   providers: [FeeRulesService, ReExamsService, PaymentDestinationsService, ReExamPaymentsService],
-  exports: [FeeRulesService, ReExamsService],
+  exports: [FeeRulesService, ReExamsService, ReExamPaymentsService],
 })
 export class ReExamsModule {}

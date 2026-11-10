@@ -11,6 +11,11 @@ function assertUuid(value: string): void {
  * so user input (e.g. an uploaded file's name) can never influence where an object is stored.
  */
 export const objectKeys = {
+  /** A fresh private object for an unsigned SAMPLE credential; never an official certificate. */
+  syntheticCertificate(certificateId: string): string {
+    assertUuid(certificateId);
+    return `synthetic-certificates/${certificateId}/${randomUUID()}.pdf`;
+  },
   /** The uploaded source workbook of an import. */
   importSource(importJobId: string): string {
     assertUuid(importJobId);

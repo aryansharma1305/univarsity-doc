@@ -115,3 +115,40 @@ describe('xlsx container checks', () => {
     );
   });
 });
+
+it.each([
+  [
+    'entity-decoded columns',
+    '<worksheet><sheetData><row r="1"><c r="XF&#68;1"/></row></sheetData></worksheet>',
+    'TOO_MANY_COLUMNS',
+  ],
+  [
+    'extreme row positions',
+    '<worksheet><sheetData><row r="200002"><c r="A200002"/></row></sheetData></worksheet>',
+    'TOO_MANY_ROWS',
+  ],
+  ['DTD declarations', '<!DOCTYPE worksheet [<!ENTITY sample "XFD1">]><worksheet/>', 'NOT_XLSX'],
+  ['malformed XML', '<worksheet><sheetData>', 'NOT_XLSX'],
+])('rejects %s before spreadsheet loading', (_name, xml, code) => {
+  const bytes = zip([
+    ...WORKBOOK_PARTS,
+    { name: 'xl/worksheets/alternate.bin', data: Buffer.from(xml) },
+  ]);
+  expect(
+    codeOf(() => {
+      verifyXlsxContainer(bytes, LIMITS);
+    }),
+  ).toBe(code);
+});
+
+it('accepts BOM/whitespace and ordinary empty/formatted worksheet cells', () => {
+  const xml =
+    '\ufeff \n<worksheet><sheetData><row r="1"><c r="A1" s="1"/><c r="B1"><v>1</v></c></row></sheetData></worksheet>';
+  const bytes = zip([
+    ...WORKBOOK_PARTS,
+    { name: 'xl/worksheets/sheet1.xml', data: Buffer.from(xml) },
+  ]);
+  expect(() => {
+    verifyXlsxContainer(bytes, LIMITS);
+  }).not.toThrow();
+});

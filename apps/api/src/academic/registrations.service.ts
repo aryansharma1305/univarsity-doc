@@ -169,6 +169,7 @@ export class RegistrationsService {
   async update(id: string, input: UpdateRegistration, actorUserId: string): Promise<Registration> {
     try {
       return await this.prisma.client.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM student_registrations WHERE id = ${id}::uuid FOR UPDATE`;
         const before = await tx.studentRegistration.findUnique({ where: { id } });
         if (!before) throw Errors.notFound();
 

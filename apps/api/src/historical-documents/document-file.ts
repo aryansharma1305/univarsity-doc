@@ -77,7 +77,7 @@ const MAX_INFLATED_BYTES = 64 * 1024 * 1024;
 /** Names in PDF syntax (`/Name`, with `#xx` escapes decoded so `/J#61vaScript` is still found). */
 function pdfNames(text: string): string[] {
   const names: string[] = [];
-  for (const match of text.matchAll(/\/([^\s/<>[\]()%{}]+)/g)) {
+  for (const match of text.replaceAll('\0', ' ').matchAll(/\/([^\s/<>[\]()%{}]+)/g)) {
     const raw = match[1] ?? '';
     names.push(
       raw.replace(/#([0-9A-Fa-f]{2})/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16))),
@@ -131,6 +131,13 @@ export function assertStaticPdf(bytes: Uint8Array): void {
         );
       }
     }
+  }
+  // Object-stream filter chains can hide dictionaries from this bounded scanner.
+  // Fail closed rather than treating a failed Flate decode as evidence of static content.
+  if (pdfNames(text).includes('ObjStm')) {
+    throw invalid(
+      'This PDF uses compressed object structures that cannot be fully checked. Upload a plain scan or print.',
+    );
   }
 }
 

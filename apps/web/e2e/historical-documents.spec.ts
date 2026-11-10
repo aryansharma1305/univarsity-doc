@@ -167,7 +167,13 @@ test('staff upload, publish, replace and withdraw; the student sees only their p
   await reviewer.getByRole('button', { name: 'Review authenticity' }).click();
   const review = reviewer.getByRole('dialog', { name: 'Record authenticity review' });
   await review.getByLabel('What was checked').fill('Matched the synthetic 2019 register, page 14.');
+  const recorded = reviewer.waitForResponse(
+    (response) =>
+      response.url().endsWith('/authenticity') && response.request().method() === 'POST',
+  );
   await review.getByRole('button', { name: 'Record review' }).click();
+  expect((await recorded).status()).toBe(200);
+  await expect(review).toBeHidden();
   await expect(reviewer.getByText('Confirmed against university records').first()).toBeVisible();
   await reviewer.context().close();
   await portal.reload();

@@ -1,6 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { studentMeSchema } from '@docversity/validation';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   browser,
   createTestApp,
@@ -11,6 +11,7 @@ import {
   testDb,
   type Staff,
 } from '../helpers.js';
+import { PasswordService } from '../../src/auth/password.service.js';
 import {
   activate,
   activatedStudent,
@@ -248,6 +249,73 @@ describe('student account activation', () => {
       200,
     );
   });
+
+  it.each(['expiry', 'disabled account', 'revoked registration'] as const)(
+    'rejects recovery when %s changes during password hashing without consuming the code',
+    async (change) => {
+      const student = await activatedStudent(app, registrar);
+      const code = await issueCode(registrar, student.registrationId);
+      const before = await testDb().studentAccount.findUniqueOrThrow({
+        where: { id: student.me.account.id },
+      });
+      const passwords = app.get(PasswordService);
+      const hashPassword = passwords.hashPassword.bind(passwords);
+      const hashing = vi
+        .spyOn(passwords, 'hashPassword')
+        .mockImplementationOnce(async (password) => {
+          const hash = await hashPassword(password);
+          if (change === 'expiry') {
+            await testDb().studentActivationCode.updateMany({
+              where: { studentRegistrationId: student.registrationId, usedAt: null },
+              data: {
+                issuedAt: new Date(Date.now() - 2_000),
+                expiresAt: new Date(Date.now() - 1_000),
+              },
+            });
+          } else if (change === 'disabled account') {
+            await registrar
+              .post(`student-accounts/${before.id}/status`, {
+                status: 'DISABLED',
+                reason: 'Synthetic concurrent account restriction',
+              })
+              .expect(200);
+          } else {
+            await testDb().studentRegistration.update({
+              where: { id: student.registrationId },
+              data: { status: 'REVOKED' },
+            });
+          }
+          return hash;
+        });
+      try {
+        const response = await activate(browser(app), {
+          registrationNumber: student.registrationNumber,
+          activationCode: code,
+          password: 'replacement synthetic student passphrase 82',
+        });
+        expect(response.status).toBe(400);
+        expect(errorOf(response).code).toBe(GENERIC);
+        expect(cookieNamesOf(response)).not.toContain('dv_student');
+        const after = await testDb().studentAccount.findUniqueOrThrow({
+          where: { id: before.id },
+        });
+        expect(after.passwordHash).toBe(before.passwordHash);
+        expect(after.status).toBe(change === 'disabled account' ? 'DISABLED' : before.status);
+        const open = await testDb().studentActivationCode.findFirstOrThrow({
+          where: { studentRegistrationId: student.registrationId, revokedAt: null },
+          orderBy: { createdAt: 'desc' },
+        });
+        expect(open.usedAt).toBeNull();
+        expect(
+          await testDb().auditLog.count({
+            where: { action: 'STUDENT_ACCOUNT_ACTIVATED', entityId: before.id },
+          }),
+        ).toBe(1);
+      } finally {
+        hashing.mockRestore();
+      }
+    },
+  );
 
   it('requires the pre-authentication CSRF token', async () => {
     const response = await browser(app).post('/api/v1/student-auth/activate').send({

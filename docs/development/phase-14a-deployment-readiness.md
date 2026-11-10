@@ -3,6 +3,10 @@
 Scope: local-only preparation for a future Ubuntu Hostinger VPS. No VPS was provisioned or accessed, no DNS was changed and no public ACME certificate was requested.
 Phase 12C academic modules and certificate eligibility/templates are outside this change.
 
+For the consolidated operator procedure using the existing gated review/public overlays, see the
+[Hostinger operator runbook](hostinger-operator-runbook.md). Its preparation does not claim a VPS
+deployment or final-release recovery verification.
+
 ## Architecture
 
 ```text
@@ -65,8 +69,10 @@ public CA trusted, without disabling TLS validation globally. No host trust sett
 
 ## Backup and recovery
 
-The fixed staging command pauses proxy/web/API, then drains/stops the worker before taking a
-custom-format PostgreSQL dump and object mirror. It restarts the stack even if backup fails.
+The staging command stops proxy/web/API, then gracefully stops the worker before taking a
+custom-format PostgreSQL dump and object mirror. The release candidate additionally requires a
+clean worker exit and refuses unfinished queues/imports before capture. This does not drain queues
+or certify production BullMQ/Redis recovery. It restarts the stack even if backup fails.
 Backups have SHA-256 manifests and private local permissions; no credential files are included.
 Operator storage containers alone have filesystem access to the backup directory. They do not
 publish ports. Treat even synthetic backups as private; encrypt real off-host backups later.

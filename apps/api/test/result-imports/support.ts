@@ -31,6 +31,7 @@ export function zeroPaddedNumber(): string {
 
 interface SubjectSpec {
   period: number;
+  credits?: number;
   maxMarks?: number;
   components?: { name: string; maxMarks: number }[];
 }
@@ -116,6 +117,7 @@ export async function resultsFixture(
           periodNumber: subject.spec.period,
           classification: 'THEORY',
           maxMarks: subject.spec.maxMarks ?? null,
+          ...(subject.spec.credits === undefined ? {} : { credits: subject.spec.credits }),
           ...(subject.spec.components ? { components: subject.spec.components } : {}),
         })
         .expect(201);

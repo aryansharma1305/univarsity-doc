@@ -1,7 +1,12 @@
 import type { INestApplication } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { MockPaymentProvider } from '@docversity/payments';
+import { SandboxGatewayService } from '../../src/release-workflows/sandbox-gateway.service.js';
+import { WorkflowPolicyService } from '../../src/release-workflows/workflow-policy.service.js';
+import { ReExamPaymentsService } from '../../src/re-exams/re-exam-payments.service.js';
+import { AuditService } from '../../src/audit/audit.service.js';
 import {
   type PaymentRegion,
   paymentDestinationDetailSchema,
@@ -13,7 +18,11 @@ import {
   studentReExamPaymentViewSchema,
 } from '@docversity/validation';
 import { browser, createTestApp, errorOf, realConfig, staff, type Staff } from '../helpers.js';
-import { pdfWithCompressedScript, staticPdf } from '../historical-documents/support.js';
+import {
+  pdfWithCompressedScript,
+  pdfWithEncodedAction,
+  staticPdf,
+} from '../historical-documents/support.js';
 import {
   type AcademicFixture,
   academicFixture,
@@ -759,6 +768,14 @@ describe('submission, review and separation from the academic decision', () => {
       }),
       400,
     );
+    await expectStatus(
+      submit(student.agent, paymentId, 'UTR-SYNTH-0001', {
+        bytes: pdfWithEncodedAction(),
+        type: 'application/pdf',
+        name: 'receipt.pdf',
+      }),
+      400,
+    );
     const receipt = await receiptPng();
     const submitted = studentReExamPaymentViewSchema.parse(
       (
@@ -986,5 +1003,244 @@ describe('submission, review and separation from the academic decision', () => {
       200,
     );
     expect((await view(student.agent, applicationId)).current?.status).toBe('VERIFIED');
+  });
+});
+
+describe('application payment sandbox integration', () => {
+  afterEach(() => vi.restoreAllMocks());
+  async function sandboxCase() {
+    await publish('INDIA', { evidenceRequirement: 'OPTIONAL' });
+    const student = await newStudent();
+    const applicationId = await assessedApplication(student);
+    await expectStatus(start(student.agent, applicationId, 'INDIA'), 200);
+    const payment = await testDb().reExamPayment.findFirstOrThrow({
+      where: { applicationId, status: 'AWAITING_PAYMENT' },
+    });
+    const provider = new MockPaymentProvider({
+      environment: 'SYNTHETIC_SANDBOX',
+      secret: 'synthetic-only-payment-signature-secret-0001',
+      maximumSkewSeconds: 300,
+    });
+    const service = app.get(ReExamPaymentsService);
+    vi.spyOn(service, 'sandboxProvider').mockReturnValue(provider);
+    const order = await service.createSandboxOrder(student.studentId, payment.id, randomUUID());
+    const raw = Buffer.from(
+      JSON.stringify({
+        contractVersion: 1,
+        environment: 'SYNTHETIC_SANDBOX',
+        eventId: randomUUID(),
+        orderId: order.orderId,
+        reference: payment.id,
+        type: 'ORDER_PAID',
+        amountMinor: payment.amountMinor,
+        currency: payment.currency,
+      }),
+    );
+    const now = new Date();
+    const headers = provider.signWebhook(raw, String(Math.floor(now.getTime() / 1000)));
+    return { student, applicationId, payment, provider, service, order, raw, now, headers };
+  }
+  it('uses owned server-side obligations and submits signed mock receipts once without Finance or academic approval', async () => {
+    const c = await sandboxCase();
+    const other = await newStudent();
+    await expect(
+      c.service.createSandboxOrder(other.studentId, c.payment.id, randomUUID()),
+    ).rejects.toMatchObject({ status: 404 });
+    await Promise.all([
+      c.service.acceptSandboxWebhook(c.raw, c.headers, c.now),
+      c.service.acceptSandboxWebhook(c.raw, c.headers, c.now),
+    ]);
+    const saved = await testDb().reExamPayment.findUniqueOrThrow({ where: { id: c.payment.id } });
+    expect(saved.status).toBe('SUBMITTED');
+    expect(saved.reviewedAt).toBeNull();
+    const application = await testDb().reExamApplication.findUniqueOrThrow({
+      where: { id: c.applicationId },
+    });
+    expect(application.status).toBe('SUBMITTED');
+    expect(application.feeStatus).toBe('ASSESSED');
+    const events = await testDb().auditLog.findMany({
+      where: {
+        entityType: 'ReExamPayment',
+        entityId: c.payment.id,
+        action: 'RE_EXAM_PAYMENT_SUBMITTED',
+      },
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.metadata).toMatchObject({
+      source: 'SYNTHETIC_SANDBOX',
+      providerOrderId: c.order.orderId,
+    });
+  });
+  it('refuses invalid signatures and recovers a signed callback after transactional audit failure', async () => {
+    const c = await sandboxCase();
+    await expect(
+      c.service.acceptSandboxWebhook(c.raw, { ...c.headers, signature: '0'.repeat(64) }, c.now),
+    ).rejects.toMatchObject({ status: 400 });
+    const audit = vi
+      .spyOn(app.get(AuditService), 'writeAuditEvent')
+      .mockRejectedValueOnce(new Error('Synthetic callback audit failure'));
+    await expect(c.service.acceptSandboxWebhook(c.raw, c.headers, c.now)).rejects.toThrow(
+      'Synthetic callback audit failure',
+    );
+    expect(
+      (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: c.payment.id } })).status,
+    ).toBe('AWAITING_PAYMENT');
+    audit.mockRestore();
+    await c.service.acceptSandboxWebhook(c.raw, c.headers, c.now);
+    expect(
+      (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: c.payment.id } })).status,
+    ).toBe('SUBMITTED');
+  });
+  it('has no enabled sandbox provider by default', async () => {
+    const service = app.get(ReExamPaymentsService);
+    await expect(
+      service.createSandboxOrder(randomUUID(), randomUUID(), randomUUID()),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+  async function durableCase() {
+    const c = await sandboxCase();
+    const application = await testDb().reExamApplication.findUniqueOrThrow({
+      where: { id: c.applicationId },
+    });
+    const policy = {
+      contractVersion: 1,
+      usage: 'SYNTHETIC_ONLY',
+      fixtureReference: 'SYN-DURABLE-GATEWAY',
+      registrationIds: [application.studentRegistrationId],
+      gatewaySecret: 'synthetic-only-payment-signature-secret-0001',
+    };
+    vi.spyOn(app.get(WorkflowPolicyService), 'definition').mockReturnValue(policy);
+    const gateway = app.get(SandboxGatewayService);
+    const request = { requestId: randomUUID(), paymentId: c.payment.id };
+    const order = await gateway.create(c.student.studentId, request);
+    const envelope = (eventId = randomUUID(), amountMinor = order.amountMinor) => {
+      const raw = Buffer.from(
+        JSON.stringify({
+          contractVersion: 1,
+          environment: 'SYNTHETIC_SANDBOX',
+          eventId,
+          orderId: order.orderId,
+          reference: c.payment.id,
+          type: 'ORDER_PAID',
+          amountMinor,
+          currency: order.currency,
+        }),
+      );
+      return {
+        payloadBase64: raw.toString('base64'),
+        ...c.provider.signWebhook(raw, String(Math.floor(Date.now() / 1000))),
+      };
+    };
+    return { ...c, policy, gateway, request, order, envelope };
+  }
+  it('persists signed gateway callbacks atomically and refuses foreign checkout', async () => {
+    const c = await durableCase(),
+      foreign = await newStudent();
+    expect(
+      (
+        await studentPost(foreign.agent, 'student/sandbox-gateway/orders', {
+          requestId: randomUUID(),
+          paymentId: c.payment.id,
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await studentPost(c.student.agent, 'student/sandbox-gateway/orders', c.request)).status,
+    ).toBe(200);
+    const body = c.envelope();
+    const responses = await Promise.all([
+      browser(app).post('/api/v1/sandbox-gateway/callback').send(body),
+      browser(app).post('/api/v1/sandbox-gateway/callback').send(body),
+    ]);
+    expect(responses.map((r) => r.status)).toEqual([200, 200]);
+    expect(
+      await testDb().sandboxGatewayReceipt.count({ where: { orderId: c.order.orderId } }),
+    ).toBe(1);
+    expect(
+      (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: c.payment.id } })).status,
+    ).toBe('SUBMITTED');
+    const application = await testDb().reExamApplication.findUniqueOrThrow({
+      where: { id: c.applicationId },
+    });
+    expect(application.status).toBe('SUBMITTED');
+    expect(application.feeStatus).toBe('ASSESSED');
+    await viewer.get(`synthetic-workflows/gateway/${c.order.orderId}/reconcile`).expect(403);
+  });
+  it('refuses forged or mismatched callbacks and rolls back payment/order/receipt on audit failure', async () => {
+    const c = await durableCase(),
+      body = c.envelope();
+    await browser(app)
+      .post('/api/v1/sandbox-gateway/callback')
+      .send({ ...body, signature: '0'.repeat(64) })
+      .expect(400);
+    await browser(app)
+      .post('/api/v1/sandbox-gateway/callback')
+      .send(c.envelope(randomUUID(), c.order.amountMinor + 1))
+      .expect(404);
+    const audit = vi
+      .spyOn(app.get(AuditService), 'writeAuditEvent')
+      .mockRejectedValueOnce(new Error('Synthetic durable audit failure'));
+    await browser(app).post('/api/v1/sandbox-gateway/callback').send(body).expect(500);
+    audit.mockRestore();
+    expect(
+      (await testDb().sandboxGatewayOrder.findUniqueOrThrow({ where: { id: c.order.orderId } }))
+        .status,
+    ).toBe('CREATED');
+    expect(
+      await testDb().sandboxGatewayReceipt.count({ where: { orderId: c.order.orderId } }),
+    ).toBe(0);
+    expect(
+      (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: c.payment.id } })).status,
+    ).toBe('AWAITING_PAYMENT');
+    await browser(app).post('/api/v1/sandbox-gateway/callback').send(body).expect(200);
+  });
+  it('recovers durable receipts after service restart and serializes refunds/reconciliation', async () => {
+    const c = await durableCase(),
+      body = c.envelope();
+    await browser(app).post('/api/v1/sandbox-gateway/callback').send(body).expect(200);
+    const restarted = await createTestApp(realConfig());
+    try {
+      vi.spyOn(restarted.get(WorkflowPolicyService), 'definition').mockReturnValue(c.policy);
+      await restarted.get(SandboxGatewayService).callback(body, '127.0.0.1');
+      expect(
+        (await restarted.get(SandboxGatewayService).reconcile(c.order.orderId)).receipts,
+      ).toHaveLength(1);
+    } finally {
+      await restarted.close();
+    }
+    const amount = Math.ceil(c.order.amountMinor * 0.8);
+    const refunds = await Promise.all([
+      maker.post(`synthetic-workflows/gateway/${c.order.orderId}/refund`, {
+        requestId: randomUUID(),
+        amountMinor: amount,
+        confirmed: true,
+      }),
+      maker.post(`synthetic-workflows/gateway/${c.order.orderId}/refund`, {
+        requestId: randomUUID(),
+        amountMinor: amount,
+        confirmed: true,
+      }),
+    ]);
+    expect(refunds.map((r) => r.status).sort()).toEqual([200, 409]);
+    const rest = c.order.amountMinor - amount,
+      request = { requestId: randomUUID(), amountMinor: rest, confirmed: true };
+    await maker.post(`synthetic-workflows/gateway/${c.order.orderId}/refund`, request).expect(200);
+    await maker.post(`synthetic-workflows/gateway/${c.order.orderId}/refund`, request).expect(200);
+    const result = await c.gateway.reconcile(c.order.orderId);
+    expect(result.order.status).toBe('REFUNDED');
+    expect(result.order.refundedMinor).toBe(c.order.amountMinor);
+    expect(result.receipts).toHaveLength(3);
+    const receipt = await testDb().sandboxGatewayReceipt.findFirstOrThrow({
+      where: { orderId: c.order.orderId },
+    });
+    await expect(
+      testDb().sandboxGatewayReceipt.update({
+        where: { id: receipt.id },
+        data: { amountMinor: 1 },
+      }),
+    ).rejects.toThrow();
+    expect(
+      (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: c.payment.id } })).status,
+    ).toBe('SUBMITTED');
   });
 });

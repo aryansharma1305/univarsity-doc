@@ -24,6 +24,7 @@ import {
   containsEmbeddedValue,
   jpegWithEmbeddedMetadata,
   pdfWithCompressedScript,
+  pdfWithEncodedAction,
   scans,
   staticPdf,
 } from './support.js';
@@ -156,6 +157,7 @@ describe('upload and validation', () => {
       'a compressed hidden script',
       { bytes: pdfWithCompressedScript(), contentType: 'application/pdf' },
     ],
+    ['an encoded object stream', { bytes: pdfWithEncodedAction(), contentType: 'application/pdf' }],
     [
       'HTML posing as a PDF',
       { bytes: Buffer.from('<html><script>x</script></html>'), contentType: 'application/pdf' },

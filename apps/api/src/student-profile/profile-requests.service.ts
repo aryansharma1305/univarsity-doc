@@ -186,12 +186,13 @@ export class ProfileRequestsService {
     try {
       const created = await this.prisma.client.$transaction(async (tx) => {
         // Snapshot inside the transaction: approval compares against exactly these values.
+        await tx.$queryRaw`SELECT id FROM students WHERE id = ${studentId}::uuid FOR UPDATE`;
         const fresh = await tx.student.findUniqueOrThrow({ where: { id: studentId } });
         const request = await tx.studentProfileChangeRequest.create({
           data: {
             studentId,
             submittedByAccountId: accountId,
-            proposedChanges: changes,
+            proposedChanges: this.checkChanges(changes, snapshotOf(fresh)),
             currentSnapshot: snapshotOf(fresh),
             studentNote: body.note ?? null,
             basePhotoStorageKey: fresh.photoStorageKey,

@@ -23,15 +23,24 @@ export class PasswordResetStore {
     const token = randomToken(32);
     const tokenHash = sha256(token);
     const ttl = this.config.PASSWORD_RESET_TOKEN_TTL_SECONDS;
-    await this.op(async (redis) => {
-      const previous = await redis.get(this.userKey(userId));
-      const pipeline = redis.multi();
-      if (previous) pipeline.del(this.tokenKey(previous));
-      await pipeline
-        .set(this.tokenKey(tokenHash), userId, 'EX', ttl)
-        .set(this.userKey(userId), tokenHash, 'EX', ttl)
-        .exec();
-    });
+    await this.op((redis) =>
+      redis.eval(
+        `
+      local previous = redis.call('GET', KEYS[1])
+      if previous then redis.call('DEL', ARGV[1] .. previous) end
+      redis.call('SET', KEYS[2], ARGV[3], 'EX', ARGV[4])
+      redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[4])
+      return 1
+    `,
+        2,
+        this.userKey(userId),
+        this.tokenKey(tokenHash),
+        this.tokenKey(''),
+        tokenHash,
+        userId,
+        ttl,
+      ),
+    );
     return { token, expiresAt: new Date(Date.now() + ttl * 1000) };
   }
 
@@ -43,9 +52,23 @@ export class PasswordResetStore {
   /** Atomically consumes the token. Returns the user ID, or null if it was already used/expired. */
   async consume(token: string): Promise<string | null> {
     const tokenHash = sha256(token);
-    const userId = await this.op((redis) => redis.getdel(this.tokenKey(tokenHash)));
-    if (userId) await this.op((redis) => redis.del(this.userKey(userId)));
-    return userId;
+    const userId = await this.op((redis) =>
+      redis.eval(
+        `
+      local user = redis.call('GETDEL', KEYS[1])
+      if not user then return false end
+      local userKey = ARGV[1] .. user
+      if redis.call('GET', userKey) ~= ARGV[2] then return false end
+      redis.call('DEL', userKey)
+      return user
+    `,
+        1,
+        this.tokenKey(tokenHash),
+        this.userKey(''),
+        tokenHash,
+      ),
+    );
+    return typeof userId === 'string' ? userId : null;
   }
 
   private tokenKey(tokenHash: string): string {

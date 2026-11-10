@@ -19,6 +19,7 @@ export * from './results/drafts.js';
 export * from './results/review.js';
 
 export * from './results/student-results.js';
+export * from './results/grading.js';
 
 export * from './documents/marksheet-preview.js';
 export * from './documents/training-certificate.js';
@@ -31,3 +32,7 @@ export * from './certificate-eligibility/policy.js';
 export * from './certificate-eligibility/contract.js';
 
 export * from './public-verification/schemas.js';
+
+export * from './certificate-requests/synthetic-lifecycle.js';
+export * from './release-workflows.js';
+export * from './canonical-json.js';

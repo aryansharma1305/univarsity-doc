@@ -19,6 +19,10 @@ describe('objectKeys', () => {
   });
 
   it('refuses anything that is not a UUID (no path traversal through ids)', () => {
+    expect(() => objectKeys.syntheticCertificate('../certificate')).toThrow();
+    expect(objectKeys.syntheticCertificate(JOB)).toMatch(
+      /^synthetic-certificates\/[a-f0-9-]{36}\/[a-f0-9-]{36}\.pdf$/,
+    );
     expect(() => objectKeys.importSource('../../etc/passwd')).toThrow();
     expect(() => objectKeys.importErrorReport('a/b')).toThrow();
     expect(() => objectKeys.paymentDestinationQr('../x', 'png')).toThrow();
