@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up pnpm (version from package.json "packageManager")
         uses: pnpm/action-setup@v6
@@ -90,11 +92,15 @@ jobs:
         run: docker compose down -v
 
   staging:
+    env:
+      IMAGE_TAG: ${{ github.event.pull_request.head.sha || github.sha }}
     name: Local Docker staging and recovery rehearsal
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Generate isolated synthetic staging credentials
         run: python3 deploy/scripts/init-local.py
       - name: Assert private configuration
@@ -107,28 +113,46 @@ jobs:
         run: |
           python3 deploy/render/check_render.py
           python3 deploy/render/test_render.py
+      - name: Free runner SDK disk for the production image archive
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Build production containers
         run: python3 deploy/scripts/staging.py build
       - name: Render edge and managed-database rehearsals (Phase 14C)
         env:
-          RENDER_TOOLS_IMAGE: docversity14a-tools:local
-          RENDER_ECHO_IMAGE: docversity14a-web:local
+          RENDER_TOOLS_IMAGE: docversity14a-tools:${{ env.IMAGE_TAG }}
+          RENDER_ECHO_IMAGE: docversity14a-web:${{ env.IMAGE_TAG }}
         run: |
           python3 deploy/render/edge_regression.py
           python3 deploy/render/roles_rehearsal.py
-      - name: Start isolated production-mode staging
-        run: python3 deploy/scripts/staging.py up
+      - name: Start isolated gated production-mode staging
+        run: |
+          python3 deploy/scripts/staging.py review-init
+          python3 deploy/scripts/staging.py up
       - name: Create synthetic accounts and verify trusted local HTTPS
         run: |
           python3 deploy/scripts/staging.py fixture
           docker compose -f deploy/compose.yml cp proxy:/data/caddy/pki/authorities/local/root.crt .local/staging/local-ca.crt
           chmod 644 .local/staging/local-ca.crt
           python3 deploy/scripts/staging.py smoke
+      - name: Rehearse immutable image rollback and package the tested images
+        run: python3 deploy/scripts/rehearse-release.py
       - name: Back up and restore only fresh synthetic volumes
         run: |
           python3 deploy/scripts/staging.py backup
           backup_name=$(find .local/backups -mindepth 1 -maxdepth 1 -type d -name '20*' -printf '%f\n' | sort | tail -1)
           python3 deploy/scripts/staging.py restore-test "$backup_name"
+      - name: Retain verified release images and non-secret evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: docversity-linux-amd64-${{ env.IMAGE_TAG }}
+          path: |
+            test-results/release/images.json
+            test-results/release/rehearsal.json
+            test-results/release/images.tar.gz
+            test-results/release/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
       - name: Local service health and resource consumption
         if: always()
         run: |

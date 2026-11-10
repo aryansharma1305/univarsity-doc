@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import https from 'node:https';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -121,6 +122,62 @@ for (const student of [false, true]) {
     assert.equal(pdf.headers['cache-control'], 'no-store');
     assert.ok(pdf.body.startsWith('%PDF-'));
   }
+  // Production mode never inherits test-only workflow policies or sample publication authority.
+  const sessionCsrf = await request(`/api/v1/${prefix}/csrf`, { cookies: sessionCookies });
+  assert.equal(sessionCsrf.status, 200);
+  const write = {
+    method: 'POST',
+    cookies: sessionCookies,
+    token: JSON.parse(sessionCsrf.body).csrfToken,
+  };
+  if (student) {
+    const results = await request('/api/v1/student/results', { cookies: sessionCookies });
+    assert.equal(results.status, 200);
+    assert.equal(JSON.parse(results.body).publicationAvailable, false);
+    assert.deepEqual(JSON.parse(results.body).data, []);
+    const catalogue = await request('/api/v1/student/certificate-services', {
+      cookies: sessionCookies,
+    });
+    assert.equal(catalogue.status, 200);
+    assert.ok(JSON.parse(catalogue.body).data.every((service) => service.available === false));
+    assert.equal(
+      (await request('/api/v1/student/retotaling', { cookies: sessionCookies })).status,
+      404,
+    );
+    assert.equal(
+      (
+        await request('/api/v1/student/sandbox-gateway/orders', {
+          ...write,
+          data: { requestId: randomUUID(), paymentId: randomUUID() },
+        })
+      ).status,
+      404,
+    );
+  } else {
+    assert.equal(
+      (
+        await request('/api/v1/synthetic-workflows/releases', {
+          ...write,
+          data: {
+            requestId: randomUUID(),
+            registrationId: randomUUID(),
+            kind: 'REGISTRATION',
+            confirmed: true,
+          },
+        })
+      ).status,
+      404,
+    );
+    assert.equal(
+      (
+        await request(`/api/v1/certificate-requests/${randomUUID()}/synthetic-credential`, {
+          ...write,
+          data: { requestId: randomUUID(), registrationId: randomUUID(), confirmed: true },
+        })
+      ).status,
+      404,
+    );
+  }
   assert.equal(
     (await request(`/api/v1/${student ? 'student' : 'auth'}/me`, { cookies: sessionCookies }))
       .status,
@@ -134,6 +191,28 @@ for (const student of [false, true]) {
   const foreign = await request('/api/v1/auth/csrf', { origin: 'https://evil.invalid' });
   assert.notEqual(foreign.headers['access-control-allow-origin'], 'https://evil.invalid');
 }
+for (const service of ['result', 'registration', 'certificate', 'admission-letter']) {
+  const response = await request(`/api/v1/public/verify/${service}`, {
+    method: 'POST',
+    data: { contractVersion: 1, reference: 'SYN-UNAVAILABLE-REFERENCE' },
+  });
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(response.body).status, 'UNAVAILABLE');
+  assert.equal(response.headers['cache-control'], 'no-store');
+}
+assert.equal(
+  (
+    await request('/api/v1/sandbox-gateway/callback', {
+      method: 'POST',
+      data: {
+        payloadBase64: 'e30=',
+        timestamp: String(Math.floor(Date.now() / 1000)),
+        signature: '0'.repeat(64),
+      },
+    })
+  ).status,
+  404,
+);
 const apiRequire = createRequire('/app/apps/api/package.json');
 const Redis = apiRequire('ioredis').default;
 const redis = new Redis(process.env.REDIS_URL);

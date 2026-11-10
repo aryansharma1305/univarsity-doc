@@ -186,7 +186,8 @@ and retry; do not prune queues to obtain a passing backup.
 The worker Redis tests cover refusal, graceful close and preserving work for restart. An isolated
 native rehearsal restored all 46 application tables, identical functions/triggers and private object
 bytes, with constraint metadata/positive/negative controls and restricted-role reads. The Python
-launcher changes and complete final-candidate staging/rollback rehearsal still require runtime validation.
+launcher and full-stack backup/restore also passed the initial approved GitHub staging job. Final
+exact-SHA gated startup, image rollback and archive verification are recorded in the release PR.
 Redis is not included in this backup. Real-data operation still requires coordinated producer
 quiescence, scheduler handling, bounded drain/recovery, crash/retry/import-checkpoint evidence and an
 approved Redis recovery decision. Stopping writers alone never certifies that every job completed.
@@ -222,11 +223,46 @@ integrity or gate failure, keep the proxy stopped and preserve evidence.
 
 ## Evidence and remaining activation requirements
 
-Runbook preparation and the isolated native recovery checkpoint are complete; final-image builds,
-launcher startup, full-stack backup/restore/rollback and host acceptance remain unexecuted. See the
+Runbook preparation and the native recovery checkpoint are complete. Fresh image builds, launcher
+startup and synthetic backup/restore passed initial CI; the final delivery artifact records exact-SHA
+gated startup, image rollback and verified image identities. Host acceptance remains separate. See the
 [combined verification report](../final-handover/02-integration-verification.md) for exact test evidence.
 Record host resources/architecture, release/CI/image identities, gate/ports/HTTPS acceptance, synthetic
 UAT, queue recovery, backup/restore, monitoring and restart results before operational acceptance.
 Outstanding external inputs: VPS allocation/access, domain/DNS/ACME approval, off-host destination/key
 custody, RPO/RTO, monitoring owner, university policies and MinIO hosted-use licensing approval.
 No remote deployment, credentials, real data or volumes changed during this preparation.
+
+## Approved release delivery evidence
+
+The release PR's CI checks out the exact candidate head SHA. Its staging job builds the four existing
+production targets, enables the existing reviewer gate and exercises the launcher on localhost with
+synthetic accounts. The delivery rehearsal deliberately assigns the worker image to the web role
+under separate fault tags; known-good SHA tags never move. It requires the failed proxy to stay
+stopped, restores the retained image IDs, compares all persisted table fingerprints, and repeats the
+trusted-HTTPS/auth/storage smoke checks. This is a same-schema rollback rehearsal, not permission to
+downgrade migrations or use pre-security releases. The existing backup/restore step must also pass.
+
+Only then does CI retain `docversity-linux-amd64-<SHA>` for seven days. Its explicit allowlist contains
+`images.tar.gz`, `images.json`, `rehearsal.json` and `SHA256SUMS`; no runtime files, credentials, database
+dumps or objects are uploaded. Image config IDs are immutable `sha256:` content identities, verified
+against exported archive configs. They are **not registry manifest digests**: no registry publish is
+performed. Select one successful CI run and keep its archive/manifest together; separate builds of
+the same source can have different content IDs. Retain that approved artifact privately before expiry.
+
+On the separately authorized Ubuntu VPS, after download into a private release directory:
+
+```bash
+sha256sum --check SHA256SUMS
+docker load --input images.tar.gz
+export IMAGE_TAG=THE_REVIEWED_40_CHARACTER_SHA
+```
+
+Inspect each loaded `docversity14a-{api,worker,web,tools}:<SHA>` and compare its `.Id` exactly with the
+corresponding value in `images.json`, and compare manifest `commit` with the reviewed Git SHA. The
+archive retains CI's 14A tag names; for the dedicated Hostinger instance, tag those **exact verified
+IDs** as `docversity14h-{api,worker,web,tools}:<SHA>`. Do not rebuild or pull a moved tag as a substitute.
+Keep the verified image IDs and run ID in the private operator record. Recheck IDs before startup and
+rollback. Then follow the existing initializer/gate/preflight/up/smoke commands above. Do not run the
+CI-only fault rehearsal on a real host. No VPS, DNS, public ACME or official university operation is
+activated by producing this artifact.

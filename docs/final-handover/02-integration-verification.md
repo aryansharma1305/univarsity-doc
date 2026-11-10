@@ -40,7 +40,7 @@ received it.
 | Native synthetic DB/object recovery      | 46 application-table fingerprints equal; functions/triggers and constraint identities/flags retained; valid/invalid CHECK controls; restricted-role reads; private MinIO byte round-trip |    0 |
 | Existing CI upgrade script               | Synthetic populated Phase 7 data upgraded through all 21 migrations; original identity/registration/result rows preserved and historical guards enforced                                 |    0 |
 | Compose/Caddy checkpoint                 | Six base/review/public configuration parses including operator profiles; two isolated Caddy adaptations                                                                                  |    0 |
-| Graphify                                 | 8,021 nodes, 19,061 edges, 980 communities; three required generated artifacts refreshed                                                                                                 |    0 |
+| Graphify                                 | 8,032 nodes, 19,091 edges, 967 communities; three required generated artifacts refreshed                                                                                                 |    0 |
 
 Earlier totals overlap and must not be summed. The old 1,020/78 checkpoint predates the later
 certificate and workflow additions. `release-full-2` passed as the final combined run. Target checks use
@@ -73,8 +73,7 @@ be partially extracted; no dependency was installed to change that.
 
 Latest fetched main remains unchanged. Both jobs in
 [main CI run 39873876235](https://github.com/aryansharma1305/univarsity-doc/actions/runs/39873876235)
-are successful. They cover main, **not this uncommitted candidate**. There is no candidate commit SHA,
-image digest set or candidate CI result yet.
+are successful. They cover main, not this release candidate. Delivery is tracked in [draft PR #30](https://github.com/aryansharma1305/univarsity-doc/pull/30). Its current head SHA and checks, plus the exact-SHA release artifact, are authoritative for final delivery; the local checkpoint is retained below as historical evidence.
 
 ## Full-run resources and recovery diagnostics
 
@@ -99,20 +98,18 @@ off-host backup or production disaster recovery.
 
 ## Completion and blocker matrix
 
-| Milestone                      | Verified completion                                                                             | Remaining acceptance blockers                                                                                                                                                        |
-| ------------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| University demo ready          | Existing student/staff interfaces plus targeted synthetic workflow/API success and denial tests | Review and delivery of focused security/integration changes; production-mode image/startup/gate acceptance on the candidate                                                          |
-| Pre-VPS engineering complete   | Implemented workflow foundations, additive migration, existing Hostinger configuration/runbook  | Candidate-SHA CI; fresh image builds and immutable identities; launcher/config runtime, synthetic staging backup/restore/rollback and monitoring acceptance; reviewed changes merged |
-| Hostinger deployment           | Configuration and operator command references prepared locally                                  | VPS/access, reviewed immutable release, domain/DNS/ACME authorization and host acceptance; off-host backup/key custody, RPO/RTO and monitoring ownership                             |
-| Official university operations | Safe refusal paths remain intact                                                                | University grading/publication/fees/payment merchant/signing/numbering/revocation/privacy authority and real migration exports/authorization                                         |
+| Milestone                      | Verified completion                                                                             | Remaining acceptance blockers                                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| University demo ready          | Existing student/staff interfaces plus targeted synthetic workflow/API success and denial tests | Final-head CI/rehearsal evidence and final merge approval; private deployment/operator acceptance remains separate                                                |
+| Pre-VPS engineering complete   | Implemented workflow foundations, additive migration, existing Hostinger configuration/runbook  | Green final-head CI and retained exact-SHA image/rehearsal artifacts; final merge approval and reviewed merge; actual VPS/operational acceptance remains separate |
+| Hostinger deployment           | Configuration and operator command references prepared locally                                  | VPS/access, reviewed immutable release, domain/DNS/ACME authorization and host acceptance; off-host backup/key custody, RPO/RTO and monitoring ownership          |
+| Official university operations | Safe refusal paths remain intact                                                                | University grading/publication/fees/payment merchant/signing/numbering/revocation/privacy authority and real migration exports/authorization                      |
 
 The conservative queue backup gate refuses pending/active/delayed/repeating/failed/paused jobs and
 unfinished imports after a clean worker shutdown. It does not constitute production BullMQ drain,
 Redis recovery or disaster-recovery certification. No job is deleted to obtain a passing backup.
 The [Hostinger runbook](../development/hostinger-operator-runbook.md) retains this limitation.
-The native recovery rehearsal validates the dump/restore and private mirror primitives, not the staging launcher, full-stack rollback or production disaster recovery. The local cached Linux images do not provide Python; launcher runtime tests therefore remain
-unexecuted locally. Their AST validation is not a test pass. No dependency download/image rebuild or
-hosting experiment was substituted. Fresh production builds/recovery must be evidenced separately.
+The local native rehearsal validates dump/restore and private mirror primitives, not production disaster recovery. The initial approved GitHub CI staging job on commit `f07f26c5b22ef373b5fba98bf47da3dda2409de8` also passed fresh production image builds, Python launcher/tests, production-mode startup, secure-session smoke checks and synthetic backup/restore. The delivery follow-up adds exact-head checkouts, the existing reviewer gate, explicit production-policy refusal checks and a same-schema broken-image rollback rehearsal. Final identities and results are recorded in the release artifact and current PR checks; no VPS acceptance is implied.
 
 Real payment collection/refunds, official result publication, issuance/signing, admission decisions,
 public verification and historical imports remain unauthorized. These external policy requirements
@@ -126,7 +123,7 @@ read-only; disposable writes are confined to bounded tmpfs. The full run is supe
 thermal warnings, free disk and container resources, with an idle-sleep inhibitor. It cannot prevent
 lid-close sleep. Original containers, volumes, worktrees, credentials and backups are not test inputs.
 
-Final preservation comparison matches 21 original containers, 41 original volumes and 21 original dirty files. Historical migrations are unchanged. Docker mount arrays vary in order; comparisons sort complete mount dictionaries by destination without ignoring any mount field. Initial raw-order mismatches were comparison artifacts, not resource changes. The 13 focused security production paths are byte-identical to the reviewed security branch. The final inventory contains 103 changed paths, including required generated graphs and this report.
+The local final preservation comparison matches 21 original containers, 41 original volumes and 21 original dirty files. Historical migrations are unchanged. Docker mount arrays vary in order; comparisons sort complete mount dictionaries by destination without ignoring any mount field. Initial raw-order mismatches were comparison artifacts, not resource changes. The 13 focused security production paths are byte-identical to the reviewed security branch. The local approved checkpoint had 103 changed paths; delivery adds the CI/image-rehearsal paths listed below. No application feature or design was added during delivery.
 Preservation evidence checks containment, original container metadata/volume presence and original
 dirty-file SHA-256 values; it does not claim unperformed checksums of real university database rows or
 MinIO objects. No original data-content query is required or performed.
@@ -136,115 +133,140 @@ performed. Delivery is now approved for the existing candidate branch and isolat
 The release must stop at final merge approval; no automatic merge or external deployment is authorized.
 Base CI and cached image IDs cannot substitute for candidate-SHA CI and fresh image evidence.
 
+## Approved delivery and release artifacts
+
+Draft PR: [#30](https://github.com/aryansharma1305/univarsity-doc/pull/30), against main. Both CI workflows
+must pass on its final head SHA. No registry publish workflow is dispatched. The existing `CI` staging
+job now retains `docversity-linux-amd64-<SHA>` only after gated production startup, policy-refusal
+checks, deliberate wrong-web-image failure, rollback to retained image IDs, unchanged database
+fingerprints, private-object checks and synthetic backup/restore all succeed.
+
+The archive's four application image **config IDs**, exported config hashes and archive SHA-256 are
+verified; these are not registry manifest digests. `images.json` binds roles, source commit, run ID
+and architecture. `rehearsal.json` describes the exercised same-schema rollback. `SHA256SUMS` binds
+the manifests and archive. Only these explicit non-secret files are uploaded, never `.local` runtime
+secrets, credentials, database dumps or objects. The artifact expires after seven days; retain the
+selected successful run privately for handover. Images from different runs must not be mixed.
+
+[Operator commands](../development/hostinger-operator-runbook.md#approved-release-delivery-evidence)
+cover checksum verification, image load/identity comparison, instance-specific retagging and the
+existing Hostinger launcher. No public deployment or official operation is performed. Cross-version
+schema rollback, real BullMQ/Redis disaster recovery, off-host retention and VPS capacity are not
+certified by this same-schema rehearsal. Stop at FINAL MERGE APPROVAL after the checks are green.
+
 ## Changed-file inventory
 
-103 paths against the base, including untracked additions. Scope totals: API 43, web 6, worker 3,
-packages 30, deployment 7, documentation 10, required Graphify artifacts 3, and root lockfile 1.
-This combined inventory includes the security subset; it does not replace its focused review.
-The external `release-candidate-final-inventory.json` records each path's SHA-256 and byte size.
+The original approved local checkpoint contained 103 paths. The delivery-only follow-up adds
+exact-SHA CI evidence, the existing-gate/rollback rehearsal and explicit production refusal checks.
+No generated test outputs or image archives are committed. The focused security subset retains its
+separate review evidence.
 
-| Repository-relative path                                                                       | Scope                                                |
-| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `apps/api/package.json`                                                                        | Application/package integration                      |
-| `apps/api/src/academic/registrations.service.ts`                                               | Application/package integration                      |
-| `apps/api/src/academic/students.service.ts`                                                    | Application/package integration                      |
-| `apps/api/src/app.module.ts`                                                                   | Application/package integration                      |
-| `apps/api/src/auth/auth.guard.ts`                                                              | Application/package integration                      |
-| `apps/api/src/auth/auth.service.ts`                                                            | Application/package integration                      |
-| `apps/api/src/auth/password-reset.store.ts`                                                    | Application/package integration                      |
-| `apps/api/src/auth/session.store.ts`                                                           | Application/package integration                      |
-| `apps/api/src/certificate-requests/synthetic-certificates.controller.ts`                       | Application/package integration                      |
-| `apps/api/src/certificate-requests/synthetic-certificates.module.ts`                           | Application/package integration                      |
-| `apps/api/src/certificate-requests/synthetic-certificates.service.ts`                          | Application/package integration                      |
-| `apps/api/src/historical-documents/document-file.ts`                                           | Application/package integration                      |
-| `apps/api/src/re-exams/re-exam-payments.service.ts`                                            | Application/package integration                      |
-| `apps/api/src/re-exams/re-exams.module.ts`                                                     | Application/package integration                      |
-| `apps/api/src/release-workflows/legacy-migration.service.ts`                                   | Application/package integration                      |
-| `apps/api/src/release-workflows/release-workflows.module.ts`                                   | Application/package integration                      |
-| `apps/api/src/release-workflows/releases.service.ts`                                           | Application/package integration                      |
-| `apps/api/src/release-workflows/retotaling.service.ts`                                         | Application/package integration                      |
-| `apps/api/src/release-workflows/sandbox-gateway.service.ts`                                    | Application/package integration                      |
-| `apps/api/src/release-workflows/verification-adapters.service.ts`                              | Application/package integration                      |
-| `apps/api/src/release-workflows/workflow-policy.service.ts`                                    | Application/package integration                      |
-| `apps/api/src/release-workflows/workflows.controller.ts`                                       | Application/package integration                      |
-| `apps/api/src/results/result-review.service.ts`                                                | Application/package integration                      |
-| `apps/api/src/student-auth/student-auth.guard.ts`                                              | Application/package integration                      |
-| `apps/api/src/student-auth/student-auth.service.ts`                                            | Application/package integration                      |
-| `apps/api/src/student-profile/profile-requests.service.ts`                                     | Application/package integration                      |
-| `apps/api/src/student-results/student-results.controller.ts`                                   | Application/package integration                      |
-| `apps/api/src/student-results/student-results.module.ts`                                       | Application/package integration                      |
-| `apps/api/src/users/users.service.ts`                                                          | Application/package integration                      |
-| `apps/api/test/academic/concurrent-records.test.ts`                                            | Synthetic regression or browser coverage             |
-| `apps/api/test/auth/credential-races.test.ts`                                                  | Synthetic regression or browser coverage             |
-| `apps/api/test/auth/reset-token-races.test.ts`                                                 | Synthetic regression or browser coverage             |
-| `apps/api/test/certificate-requests/synthetic-lifecycle.test.ts`                               | Synthetic regression or browser coverage             |
-| `apps/api/test/deploy-preflight.test.ts`                                                       | Synthetic regression or browser coverage             |
-| `apps/api/test/examinations/re-exam-payments.test.ts`                                          | Synthetic regression or browser coverage             |
-| `apps/api/test/historical-documents/document-file.test.ts`                                     | Synthetic regression or browser coverage             |
-| `apps/api/test/historical-documents/historical-documents.test.ts`                              | Synthetic regression or browser coverage             |
-| `apps/api/test/historical-documents/support.ts`                                                | Synthetic regression or browser coverage             |
-| `apps/api/test/release-workflows/workflows.test.ts`                                            | Synthetic regression or browser coverage             |
-| `apps/api/test/result-imports/support.ts`                                                      | Synthetic regression or browser coverage             |
-| `apps/api/test/results/result-review.test.ts`                                                  | Synthetic regression or browser coverage             |
-| `apps/api/test/runtime-templates.test.ts`                                                      | Synthetic regression or browser coverage             |
-| `apps/api/test/student-auth/activation.test.ts`                                                | Synthetic regression or browser coverage             |
-| `apps/web/e2e/certificate-templates.spec.ts`                                                   | Synthetic regression or browser coverage             |
-| `apps/web/e2e/historical-documents.spec.ts`                                                    | Synthetic regression or browser coverage             |
-| `apps/web/e2e/marksheet-templates.spec.ts`                                                     | Synthetic regression or browser coverage             |
-| `apps/web/e2e/student-profile.spec.ts`                                                         | Synthetic regression or browser coverage             |
-| `apps/web/src/features/student-portal/student-results.tsx`                                     | Application/package integration                      |
-| `apps/web/test/student-results.test.tsx`                                                       | Synthetic regression or browser coverage             |
-| `apps/worker/src/backup-readiness.ts`                                                          | Application/package integration                      |
-| `apps/worker/src/scripts/backup-readiness.ts`                                                  | Application/package integration                      |
-| `apps/worker/test/backup-readiness.test.ts`                                                    | Synthetic regression or browser coverage             |
-| `deploy/compose.yml`                                                                           | Existing deployment architecture and safety controls |
-| `deploy/env/api.env.example`                                                                   | Existing deployment architecture and safety controls |
-| `deploy/env/web.env.example`                                                                   | Existing deployment architecture and safety controls |
-| `deploy/env/worker.env.example`                                                                | Existing deployment architecture and safety controls |
-| `deploy/scripts/staging.py`                                                                    | Existing deployment architecture and safety controls |
-| `deploy/scripts/test_staging.py`                                                               | Existing deployment architecture and safety controls |
-| `deploy/scripts/vps-preflight.sh`                                                              | Existing deployment architecture and safety controls |
-| `docs/api/grading-foundation.md`                                                               | Evidence or operator/API documentation               |
-| `docs/api/release-workflows.md`                                                                | Evidence or operator/API documentation               |
-| `docs/api/synthetic-certificate-lifecycle.md`                                                  | Evidence or operator/API documentation               |
-| `docs/development/hostinger-operator-runbook.md`                                               | Evidence or operator/API documentation               |
-| `docs/development/phase-14a-deployment-readiness.md`                                           | Evidence or operator/API documentation               |
-| `docs/development/phase-15a-quality-hardening.md`                                              | Evidence or operator/API documentation               |
-| `docs/final-handover/01-changed-files.md`                                                      | Evidence or operator/API documentation               |
-| `docs/final-handover/01-independent-review.md`                                                 | Evidence or operator/API documentation               |
-| `docs/final-handover/01-security-and-reliability-audit.md`                                     | Evidence or operator/API documentation               |
-| `docs/final-handover/02-integration-verification.md`                                           | Evidence or operator/API documentation               |
-| `graphify-out/GRAPH_REPORT.md`                                                                 | Required generated navigation artifact               |
-| `graphify-out/graph.html`                                                                      | Required generated navigation artifact               |
-| `graphify-out/graph.json`                                                                      | Required generated navigation artifact               |
-| `packages/database/prisma/migrations/20261110090000_synthetic_release_workflows/migration.sql` | New additive migration; no historical rewrite        |
-| `packages/database/prisma/schema.prisma`                                                       | Application/package integration                      |
-| `packages/imports/package.json`                                                                | Application/package integration                      |
-| `packages/imports/src/container.ts`                                                            | Application/package integration                      |
-| `packages/imports/src/index.ts`                                                                | Application/package integration                      |
-| `packages/imports/src/legacy-dry-run.ts`                                                       | Application/package integration                      |
-| `packages/imports/src/workbook.ts`                                                             | Application/package integration                      |
-| `packages/imports/test/container.test.ts`                                                      | Synthetic regression or browser coverage             |
-| `packages/imports/test/legacy-dry-run.test.ts`                                                 | Synthetic regression or browser coverage             |
-| `packages/imports/test/workbook.test.ts`                                                       | Synthetic regression or browser coverage             |
-| `packages/payments/README.md`                                                                  | Application/package integration                      |
-| `packages/payments/eslint.config.js`                                                           | Application/package integration                      |
-| `packages/payments/package.json`                                                               | Application/package integration                      |
-| `packages/payments/src/index.ts`                                                               | Application/package integration                      |
-| `packages/payments/test/mock-provider.test.ts`                                                 | Synthetic regression or browser coverage             |
-| `packages/payments/tsconfig.build.json`                                                        | Application/package integration                      |
-| `packages/payments/tsconfig.json`                                                              | Application/package integration                      |
-| `packages/payments/vitest.config.ts`                                                           | Application/package integration                      |
-| `packages/storage/src/keys.ts`                                                                 | Application/package integration                      |
-| `packages/storage/test/keys.test.ts`                                                           | Synthetic regression or browser coverage             |
-| `packages/types/src/audit.ts`                                                                  | Application/package integration                      |
-| `packages/types/src/permissions.ts`                                                            | Application/package integration                      |
-| `packages/validation/src/canonical-json.ts`                                                    | Application/package integration                      |
-| `packages/validation/src/certificate-requests/synthetic-lifecycle.ts`                          | Application/package integration                      |
-| `packages/validation/src/index.ts`                                                             | Application/package integration                      |
-| `packages/validation/src/release-workflows.ts`                                                 | Application/package integration                      |
-| `packages/validation/src/results/grading.ts`                                                   | Application/package integration                      |
-| `packages/validation/src/results/student-results.ts`                                           | Application/package integration                      |
-| `packages/validation/test/canonical-json.test.ts`                                              | Synthetic regression or browser coverage             |
-| `packages/validation/test/grading.test.ts`                                                     | Synthetic regression or browser coverage             |
-| `pnpm-lock.yaml`                                                                               | Application/package integration                      |
+| Repository-relative path                                                                       | Scope                                                      |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `.github/workflows/ci.yml`                                                                     | Existing deployment architecture and delivery verification |
+| `.github/workflows/staging-images.yml`                                                         | Existing deployment architecture and delivery verification |
+| `apps/api/package.json`                                                                        | Application/package integration                            |
+| `apps/api/src/academic/registrations.service.ts`                                               | Application/package integration                            |
+| `apps/api/src/academic/students.service.ts`                                                    | Application/package integration                            |
+| `apps/api/src/app.module.ts`                                                                   | Application/package integration                            |
+| `apps/api/src/auth/auth.guard.ts`                                                              | Application/package integration                            |
+| `apps/api/src/auth/auth.service.ts`                                                            | Application/package integration                            |
+| `apps/api/src/auth/password-reset.store.ts`                                                    | Application/package integration                            |
+| `apps/api/src/auth/session.store.ts`                                                           | Application/package integration                            |
+| `apps/api/src/certificate-requests/synthetic-certificates.controller.ts`                       | Application/package integration                            |
+| `apps/api/src/certificate-requests/synthetic-certificates.module.ts`                           | Application/package integration                            |
+| `apps/api/src/certificate-requests/synthetic-certificates.service.ts`                          | Application/package integration                            |
+| `apps/api/src/historical-documents/document-file.ts`                                           | Application/package integration                            |
+| `apps/api/src/re-exams/re-exam-payments.service.ts`                                            | Application/package integration                            |
+| `apps/api/src/re-exams/re-exams.module.ts`                                                     | Application/package integration                            |
+| `apps/api/src/release-workflows/legacy-migration.service.ts`                                   | Application/package integration                            |
+| `apps/api/src/release-workflows/release-workflows.module.ts`                                   | Application/package integration                            |
+| `apps/api/src/release-workflows/releases.service.ts`                                           | Application/package integration                            |
+| `apps/api/src/release-workflows/retotaling.service.ts`                                         | Application/package integration                            |
+| `apps/api/src/release-workflows/sandbox-gateway.service.ts`                                    | Application/package integration                            |
+| `apps/api/src/release-workflows/verification-adapters.service.ts`                              | Application/package integration                            |
+| `apps/api/src/release-workflows/workflow-policy.service.ts`                                    | Application/package integration                            |
+| `apps/api/src/release-workflows/workflows.controller.ts`                                       | Application/package integration                            |
+| `apps/api/src/results/result-review.service.ts`                                                | Application/package integration                            |
+| `apps/api/src/student-auth/student-auth.guard.ts`                                              | Application/package integration                            |
+| `apps/api/src/student-auth/student-auth.service.ts`                                            | Application/package integration                            |
+| `apps/api/src/student-profile/profile-requests.service.ts`                                     | Application/package integration                            |
+| `apps/api/src/student-results/student-results.controller.ts`                                   | Application/package integration                            |
+| `apps/api/src/student-results/student-results.module.ts`                                       | Application/package integration                            |
+| `apps/api/src/users/users.service.ts`                                                          | Application/package integration                            |
+| `apps/api/test/academic/concurrent-records.test.ts`                                            | Synthetic regression or browser coverage                   |
+| `apps/api/test/auth/credential-races.test.ts`                                                  | Synthetic regression or browser coverage                   |
+| `apps/api/test/auth/reset-token-races.test.ts`                                                 | Synthetic regression or browser coverage                   |
+| `apps/api/test/certificate-requests/synthetic-lifecycle.test.ts`                               | Synthetic regression or browser coverage                   |
+| `apps/api/test/deploy-preflight.test.ts`                                                       | Synthetic regression or browser coverage                   |
+| `apps/api/test/examinations/re-exam-payments.test.ts`                                          | Synthetic regression or browser coverage                   |
+| `apps/api/test/historical-documents/document-file.test.ts`                                     | Synthetic regression or browser coverage                   |
+| `apps/api/test/historical-documents/historical-documents.test.ts`                              | Synthetic regression or browser coverage                   |
+| `apps/api/test/historical-documents/support.ts`                                                | Synthetic regression or browser coverage                   |
+| `apps/api/test/release-workflows/workflows.test.ts`                                            | Synthetic regression or browser coverage                   |
+| `apps/api/test/result-imports/support.ts`                                                      | Synthetic regression or browser coverage                   |
+| `apps/api/test/results/result-review.test.ts`                                                  | Synthetic regression or browser coverage                   |
+| `apps/api/test/runtime-templates.test.ts`                                                      | Synthetic regression or browser coverage                   |
+| `apps/api/test/student-auth/activation.test.ts`                                                | Synthetic regression or browser coverage                   |
+| `apps/web/e2e/certificate-templates.spec.ts`                                                   | Synthetic regression or browser coverage                   |
+| `apps/web/e2e/historical-documents.spec.ts`                                                    | Synthetic regression or browser coverage                   |
+| `apps/web/e2e/marksheet-templates.spec.ts`                                                     | Synthetic regression or browser coverage                   |
+| `apps/web/e2e/student-profile.spec.ts`                                                         | Synthetic regression or browser coverage                   |
+| `apps/web/src/features/student-portal/student-results.tsx`                                     | Application/package integration                            |
+| `apps/web/test/student-results.test.tsx`                                                       | Synthetic regression or browser coverage                   |
+| `apps/worker/src/backup-readiness.ts`                                                          | Application/package integration                            |
+| `apps/worker/src/scripts/backup-readiness.ts`                                                  | Application/package integration                            |
+| `apps/worker/test/backup-readiness.test.ts`                                                    | Synthetic regression or browser coverage                   |
+| `deploy/compose.yml`                                                                           | Existing deployment architecture and delivery verification |
+| `deploy/env/api.env.example`                                                                   | Existing deployment architecture and delivery verification |
+| `deploy/env/web.env.example`                                                                   | Existing deployment architecture and delivery verification |
+| `deploy/env/worker.env.example`                                                                | Existing deployment architecture and delivery verification |
+| `deploy/scripts/rehearse-release.py`                                                           | Existing deployment architecture and delivery verification |
+| `deploy/scripts/smoke.mjs`                                                                     | Existing deployment architecture and delivery verification |
+| `deploy/scripts/staging.py`                                                                    | Existing deployment architecture and delivery verification |
+| `deploy/scripts/test_staging.py`                                                               | Existing deployment architecture and delivery verification |
+| `deploy/scripts/vps-preflight.sh`                                                              | Existing deployment architecture and delivery verification |
+| `docs/api/grading-foundation.md`                                                               | Evidence or operator/API documentation                     |
+| `docs/api/release-workflows.md`                                                                | Evidence or operator/API documentation                     |
+| `docs/api/synthetic-certificate-lifecycle.md`                                                  | Evidence or operator/API documentation                     |
+| `docs/development/hostinger-operator-runbook.md`                                               | Evidence or operator/API documentation                     |
+| `docs/development/phase-14a-deployment-readiness.md`                                           | Evidence or operator/API documentation                     |
+| `docs/development/phase-15a-quality-hardening.md`                                              | Evidence or operator/API documentation                     |
+| `docs/final-handover/01-changed-files.md`                                                      | Evidence or operator/API documentation                     |
+| `docs/final-handover/01-independent-review.md`                                                 | Evidence or operator/API documentation                     |
+| `docs/final-handover/01-security-and-reliability-audit.md`                                     | Evidence or operator/API documentation                     |
+| `docs/final-handover/02-integration-verification.md`                                           | Evidence or operator/API documentation                     |
+| `graphify-out/GRAPH_REPORT.md`                                                                 | Required generated navigation artifact                     |
+| `graphify-out/graph.html`                                                                      | Required generated navigation artifact                     |
+| `graphify-out/graph.json`                                                                      | Required generated navigation artifact                     |
+| `packages/database/prisma/migrations/20261110090000_synthetic_release_workflows/migration.sql` | New additive migration; historical migrations unchanged    |
+| `packages/database/prisma/schema.prisma`                                                       | Application/package integration                            |
+| `packages/imports/package.json`                                                                | Application/package integration                            |
+| `packages/imports/src/container.ts`                                                            | Application/package integration                            |
+| `packages/imports/src/index.ts`                                                                | Application/package integration                            |
+| `packages/imports/src/legacy-dry-run.ts`                                                       | Application/package integration                            |
+| `packages/imports/src/workbook.ts`                                                             | Application/package integration                            |
+| `packages/imports/test/container.test.ts`                                                      | Synthetic regression or browser coverage                   |
+| `packages/imports/test/legacy-dry-run.test.ts`                                                 | Synthetic regression or browser coverage                   |
+| `packages/imports/test/workbook.test.ts`                                                       | Synthetic regression or browser coverage                   |
+| `packages/payments/README.md`                                                                  | Application/package integration                            |
+| `packages/payments/eslint.config.js`                                                           | Application/package integration                            |
+| `packages/payments/package.json`                                                               | Application/package integration                            |
+| `packages/payments/src/index.ts`                                                               | Application/package integration                            |
+| `packages/payments/test/mock-provider.test.ts`                                                 | Synthetic regression or browser coverage                   |
+| `packages/payments/tsconfig.build.json`                                                        | Application/package integration                            |
+| `packages/payments/tsconfig.json`                                                              | Application/package integration                            |
+| `packages/payments/vitest.config.ts`                                                           | Application/package integration                            |
+| `packages/storage/src/keys.ts`                                                                 | Application/package integration                            |
+| `packages/storage/test/keys.test.ts`                                                           | Synthetic regression or browser coverage                   |
+| `packages/types/src/audit.ts`                                                                  | Application/package integration                            |
+| `packages/types/src/permissions.ts`                                                            | Application/package integration                            |
+| `packages/validation/src/canonical-json.ts`                                                    | Application/package integration                            |
+| `packages/validation/src/certificate-requests/synthetic-lifecycle.ts`                          | Application/package integration                            |
+| `packages/validation/src/index.ts`                                                             | Application/package integration                            |
+| `packages/validation/src/release-workflows.ts`                                                 | Application/package integration                            |
+| `packages/validation/src/results/grading.ts`                                                   | Application/package integration                            |
+| `packages/validation/src/results/student-results.ts`                                           | Application/package integration                            |
+| `packages/validation/test/canonical-json.test.ts`                                              | Synthetic regression or browser coverage                   |
+| `packages/validation/test/grading.test.ts`                                                     | Synthetic regression or browser coverage                   |
+| `pnpm-lock.yaml`                                                                               | Application/package integration                            |
