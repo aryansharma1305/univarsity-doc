@@ -128,7 +128,10 @@ export interface Registration2025Row {
  * numeric registration numbers, real date cells, an always-empty Date of Birth and Photo, trailing
  * spaces in course/status values, and a national-ID column filled with obviously fake values.
  */
-export function registration2025Sheet(rows: readonly Registration2025Row[]): FixtureSheet {
+export function registration2025Sheet(
+  rows: readonly Registration2025Row[],
+  options: { includeIdentityValues?: boolean } = {},
+): FixtureSheet {
   return {
     name: 'Registration List',
     rows: [
@@ -141,7 +144,9 @@ export function registration2025Sheet(rows: readonly Registration2025Row[]): Fix
         new Date(Date.UTC(2025, 6, 5)),
         row.dateOfBirth ?? null,
         'Testland',
-        `TEST-NATIONAL-ID-${String(index + 1).padStart(4, '0')}`,
+        options.includeIdentityValues === false
+          ? null
+          : `TEST-NATIONAL-ID-${String(index + 1).padStart(4, '0')}`,
         'Training',
         `${row.courseName} `,
         '6 Months ',

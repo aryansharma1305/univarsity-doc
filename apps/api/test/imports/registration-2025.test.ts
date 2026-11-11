@@ -1,7 +1,9 @@
 import type { INestApplication } from '@nestjs/common';
+import type { ObjectStorage } from '@docversity/storage';
+import { OBJECT_STORAGE } from '../../src/storage/storage.module.js';
 import { buildWorkbook, registration2025Sheet } from '@docversity/imports/testing';
 import { importRowDetailSchema } from '@docversity/validation';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createTestApp, errorOf, realConfig, staff, testDb } from '../helpers.js';
 import {
   jobOf,
@@ -56,10 +58,21 @@ describe('student import of the "Registration 2025" workbook shape', () => {
     }));
 
     const registrar = await staff(app, ['REGISTRAR']);
+    const source = registration2025Sheet(rows);
+    const put = vi.spyOn(app.get<ObjectStorage>(OBJECT_STORAGE), 'putObject');
+    const beforeJobs = await db.importJob.count();
+    await upload(registrar, await buildWorkbook([source]), 'synthetic-with-identity.xlsx').expect(
+      400,
+    );
+    expect(put).not.toHaveBeenCalled();
+    expect(await db.importJob.count()).toBe(beforeJobs);
+    put.mockRestore();
+    // An upload copy has the same names/registration numbers, with the identity column cleared.
+    const uploadCopy = registration2025Sheet(rows, { includeIdentityValues: false });
     const created = jobOf(
       await upload(
         registrar,
-        await buildWorkbook([registration2025Sheet(rows)]),
+        await buildWorkbook([uploadCopy]),
         'Registration 2025 (synthetic).xlsx',
       ).expect(201),
     );
