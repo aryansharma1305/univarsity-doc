@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PaymentButtonPanel } from '@/features/payments/payment-button';
 import {
   CalendarDaysIcon,
   ClipboardPenLineIcon,
@@ -171,6 +172,12 @@ export function StudentExaminationsPage({ data }: { data: StudentExaminations | 
                             {EXAMINATION_KIND_LABELS[exam.kind]} · {exam.period.label} ·{' '}
                             {exam.examSession}
                           </span>
+                          {exam.kind === 'REGULAR' && (
+                            <PaymentButtonPanel
+                              service="EXAM"
+                              path={`exam/${registration.registrationId}/${exam.id}`}
+                            />
+                          )}
                           {exam.reExamApplicationsOpen && (
                             <span className="text-sm text-navy-950">
                               Re-exam applications are open for this examination.

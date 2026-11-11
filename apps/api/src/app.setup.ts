@@ -4,6 +4,7 @@ import type { Express, Request, Response } from 'express';
 import { ERROR_CODES, type ErrorResponse } from '@docversity/validation';
 import { currentRequestId } from './common/request-context.js';
 import helmet from 'helmet';
+import { raw } from 'express';
 import { cookieNames } from './auth/cookies.js';
 import { CSRF_HEADER } from './auth/csrf.service.js';
 import { requestContextMiddleware } from './common/request-context.js';
@@ -38,6 +39,8 @@ export function configureApp(app: INestApplication, config: ApiConfig): void {
   app.use(accessLogMiddleware);
   app.setGlobalPrefix(API_ROUTE_PREFIX, { exclude: ['health'] });
   app.use(helmet());
+  // Original bytes are required for Razorpay HMAC; no change to other endpoints' JSON parsing.
+  app.use('/api/v1/payment-buttons/webhook', raw({ type: 'application/json', limit: '64kb' }));
   // Explicit allow-list; credentials allowed, so a wildcard origin is never used.
   app.enableCors({
     origin: config.CORS_ORIGINS,

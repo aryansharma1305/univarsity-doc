@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { PaymentButtonPanel } from '@/features/payments/payment-button';
 import { useRouter } from 'next/navigation';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
@@ -383,6 +384,11 @@ export function StudentReExamPaymentPage({ view }: { view: StudentReExamPaymentV
         ) : (
           <>
             <SafetyNote />
+            <PaymentButtonPanel
+              key={`${view.application.id}:${view.current?.id ?? 'NONE'}:${view.current?.status ?? 'NONE'}`}
+              service="RE_EXAM"
+              path={`re-exam/${view.application.id}`}
+            />
             {current && <CurrentPayment payment={current} />}
             {canChoose && (
               <PortalCard
