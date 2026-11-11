@@ -1,13 +1,17 @@
 import type { INestApplication } from '@nestjs/common';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MockPaymentProvider } from '@docversity/payments';
+import { PaymentButtonPolicyService } from '../../src/payment-buttons/payment-button-policy.service.js';
+import { PaymentButtonsService } from '../../src/payment-buttons/payment-buttons.service.js';
 import { SandboxGatewayService } from '../../src/release-workflows/sandbox-gateway.service.js';
 import { WorkflowPolicyService } from '../../src/release-workflows/workflow-policy.service.js';
 import { ReExamPaymentsService } from '../../src/re-exams/re-exam-payments.service.js';
 import { AuditService } from '../../src/audit/audit.service.js';
 import {
+  paymentButtonViewSchema,
+  razorpayReceiptsSchema,
   type PaymentRegion,
   paymentDestinationDetailSchema,
   paymentDestinationListSchema,
@@ -1242,5 +1246,294 @@ describe('application payment sandbox integration', () => {
     expect(
       (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: c.payment.id } })).status,
     ).toBe('SUBMITTED');
+  });
+});
+
+describe('Razorpay disabled collection and manual report reconciliation', () => {
+  afterEach(() => vi.restoreAllMocks());
+  const secret = 'synthetic-razorpay-webhook-secret-000000000';
+  const merchant = 'acc_SyntheticMentor';
+  const buttonId = 'pl_TyWTRF7DImX3Pu';
+  function policy(student: Student) {
+    vi.spyOn(app.get(PaymentButtonPolicyService), 'definition').mockReturnValue({
+      mode: 'TEST',
+      merchantId: merchant,
+      webhookSecret: secret,
+      registrationIds: [student.registrationId],
+      reExamTestButtonId: 'pl_SyntheticTestReExam',
+    });
+  }
+  function notification(paymentId: string, overrides: Record<string, unknown> = {}) {
+    return {
+      entity: 'event',
+      account_id: merchant,
+      event: 'payment.captured',
+      created_at: Math.floor(Date.now() / 1000),
+      payload: {
+        payment: {
+          entity: {
+            id: paymentId,
+            entity: 'payment',
+            amount: 100000,
+            currency: 'INR',
+            captured: true,
+            status: 'captured',
+            amount_refunded: 0,
+            email: 'fictional@example.test',
+            notes: { applicationId: 'UNTRUSTED' },
+            ...overrides,
+          },
+        },
+      },
+    };
+  }
+  async function webhook(payload: unknown, eventId = `evt_${randomUUID()}`, invalid = false) {
+    const raw = JSON.stringify(payload);
+    const signature = invalid
+      ? '0'.repeat(64)
+      : createHmac('sha256', secret).update(raw).digest('hex');
+    return browser(app)
+      .post('/api/v1/payment-buttons/webhook')
+      .set('Content-Type', 'application/json')
+      .set('X-Razorpay-Signature', signature)
+      .set('X-Razorpay-Event-Id', eventId)
+      .send(raw);
+  }
+  async function obligation() {
+    await publish('INDIA');
+    const student = await newStudent();
+    const applicationId = await assessedApplication(student);
+    const v = studentReExamPaymentViewSchema.parse(
+      (await expectStatus(start(student.agent, applicationId, 'INDIA'), 200)).body,
+    );
+    if (!v.current) throw new Error('payment missing');
+    return { student, applicationId, payment: v.current };
+  }
+  it('keeps collection and webhooks disabled by default, with ownership and principal separation', async () => {
+    const { student, applicationId, payment } = await obligation();
+    const own = await student.agent
+      .get(`/api/v1/student/payment-buttons/re-exam/${applicationId}`)
+      .expect(200);
+    expect(own.headers['cache-control']).toBe('no-store');
+    expect(own.body).toMatchObject({
+      status: 'PENDING',
+      paymentId: payment.id,
+      checkout: null,
+      liveTransactionsEnabled: false,
+      qrFallbackEnabled: false,
+    });
+    const other = await newStudent();
+    await other.agent.get(`/api/v1/student/payment-buttons/re-exam/${applicationId}`).expect(404);
+    await maker.get(`student/payment-buttons/re-exam/${applicationId}`).expect(401);
+    await webhook(notification('pay_SyntheticDisabled')).then((r) => {
+      expect(r.status).toBe(404);
+    });
+    await approver
+      .post('payment-buttons/reconcile', {
+        receiptId: randomUUID(),
+        paymentId: payment.id,
+        buttonId,
+        confirmedStudentOwnership: true,
+        confirmedAgainstProviderRecords: true,
+        reportReference: 'SYNTHETIC-REPORT',
+      })
+      .expect(404);
+  });
+  it('does not make exam records or certificate requests payable and checks their ownership', async () => {
+    const { student, applicationId } = await obligation();
+    policy(student);
+    const regular = await examination(examAdmin, fixture, { kind: 'REGULAR', period: 1 });
+    await student.agent
+      .get(`/api/v1/student/payment-buttons/exam/${student.registrationId}/${regular.id}`)
+      .expect(200)
+      .then((r) => {
+        expect(r.body).toMatchObject({ service: 'EXAM', checkout: null, status: 'UNAVAILABLE' });
+      });
+    const other = await newStudent();
+    await other.agent
+      .get(`/api/v1/student/payment-buttons/exam/${student.registrationId}/${regular.id}`)
+      .expect(404);
+    const request = await testDb().certificateRequest.create({
+      data: {
+        reference: `SYNTH-${randomUUID()}`,
+        studentId: student.studentId,
+        certificateType: 'TRANSCRIPT',
+        policyId: 'synthetic',
+        policyVersion: 1,
+        policySnapshot: { synthetic: true },
+        purpose: 'Synthetic hard-copy boundary test',
+        events: {
+          create: {
+            version: 1,
+            status: 'SUBMITTED',
+            action: 'SUBMIT',
+            actorStudentId: student.studentId,
+          },
+        },
+        submissionKey: randomUUID(),
+      },
+    });
+    await student.agent
+      .get(`/api/v1/student/payment-buttons/certificate/${request.id}`)
+      .expect(200)
+      .then((r) => {
+        expect(r.body).toMatchObject({
+          certificateFeeScope: 'HARD_COPY_ONLY',
+          checkout: null,
+          status: 'UNAVAILABLE',
+        });
+      });
+    await other.agent.get(`/api/v1/student/payment-buttons/certificate/${request.id}`).expect(404);
+    await student.agent
+      .get(`/api/v1/student/payment-buttons/re-exam/${applicationId}`)
+      .expect(200)
+      .then((r) => {
+        expect(paymentButtonViewSchema.parse(r.body).checkout).toMatchObject({
+          mode: 'TEST',
+          buttonId: 'pl_SyntheticTestReExam',
+        });
+      });
+  });
+  it('persists verified bytes atomically, strips PII, and deduplicates concurrent events without fulfillment', async () => {
+    const { student, payment } = await obligation();
+    policy(student);
+    const providerId = `pay_${randomUUID().replaceAll('-', '')}`;
+    const payload = notification(providerId);
+    const eventId = `evt_${randomUUID()}`;
+    const replies = await Promise.all([webhook(payload, eventId), webhook(payload, eventId)]);
+    expect(replies.map((r) => r.status)).toEqual([200, 200]);
+    expect(replies[0].body).toEqual({ received: true, attributed: false });
+    expect(await testDb().razorpayWebhookReceipt.count({ where: { eventId } })).toBe(1);
+    const receipt = await testDb().razorpayWebhookReceipt.findUniqueOrThrow({ where: { eventId } });
+    expect(JSON.stringify(receipt)).not.toMatch(/fictional|UNTRUSTED|email|notes/);
+    expect(
+      (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: payment.id } })).status,
+    ).toBe('AWAITING_PAYMENT');
+    await webhook(notification(providerId, { amount: 100001 }), eventId).then((r) => {
+      expect(r.status).toBe(409);
+    });
+    await webhook(notification(providerId), `evt_${randomUUID()}`, true).then((r) => {
+      expect(r.status).toBe(400);
+    });
+    await webhook({ ...notification(providerId), account_id: 'acc_Wrong' }).then((r) => {
+      expect(r.status).toBe(400);
+    });
+    await webhook(notification(providerId, { captured: false })).then((r) => {
+      expect(r.status).toBe(400);
+    });
+    const audit = vi
+      .spyOn(app.get(AuditService), 'writeAuditEvent')
+      .mockRejectedValueOnce(new Error('synthetic failure'));
+    const failedId = `evt_${randomUUID()}`;
+    await webhook(payload, failedId).then((r) => {
+      expect(r.status).toBe(500);
+    });
+    expect(await testDb().razorpayWebhookReceipt.count({ where: { eventId: failedId } })).toBe(0);
+    audit.mockRestore();
+    await webhook(payload, failedId).then((r) => {
+      expect(r.status).toBe(200);
+    });
+  });
+  it('requires staff permission, CSRF, full money match, correct service and manual ownership confirmation', async () => {
+    const { student, payment, applicationId } = await obligation();
+    policy(student);
+    const providerId = `pay_${randomUUID().replaceAll('-', '')}`;
+    await expectStatus(submit(student.agent, payment.id, providerId), 200);
+    const eventId = `evt_${randomUUID()}`;
+    await webhook(notification(providerId), eventId).then((r) => {
+      expect(r.status).toBe(200);
+    });
+    const receipt = await testDb().razorpayWebhookReceipt.findUniqueOrThrow({ where: { eventId } });
+    const body = {
+      receiptId: receipt.id,
+      paymentId: payment.id,
+      buttonId,
+      confirmedStudentOwnership: true,
+      confirmedAgainstProviderRecords: true,
+      reportReference: 'SYNTHETIC-MENTOR-REPORT',
+    };
+    for (const member of [viewer, registrar, examAdmin])
+      await member.post('payment-buttons/reconcile', body).expect(403);
+    await studentPost(student.agent, 'payment-buttons/reconcile', body).then((r) => {
+      expect(r.status).toBe(401);
+    });
+    await approver.agent.post('/api/v1/payment-buttons/reconcile').send(body).expect(403);
+    await approver
+      .post('payment-buttons/reconcile', { ...body, buttonId: 'pl_TyWPTClJKY5RFa' })
+      .expect(400);
+    await approver
+      .post('payment-buttons/reconcile', { ...body, confirmedStudentOwnership: false })
+      .expect(400);
+    const badId = `evt_${randomUUID()}`;
+    await webhook(notification(providerId, { amount: 99999 }), badId);
+    const bad = await testDb().razorpayWebhookReceipt.findUniqueOrThrow({
+      where: { eventId: badId },
+    });
+    await approver.post('payment-buttons/reconcile', { ...body, receiptId: bad.id }).expect(409);
+    const refId = `evt_${randomUUID()}`;
+    await webhook(notification(providerId, { amount_refunded: 1 }), refId);
+    const refunded = await testDb().razorpayWebhookReceipt.findUniqueOrThrow({
+      where: { eventId: refId },
+    });
+    await approver
+      .post('payment-buttons/reconcile', { ...body, receiptId: refunded.id })
+      .expect(409);
+    const before = await testDb().reExamApplication.findUniqueOrThrow({
+      where: { id: applicationId },
+    });
+    const audit = vi
+      .spyOn(app.get(AuditService), 'writeAuditEvent')
+      .mockRejectedValueOnce(new Error('synthetic audit failure'));
+    await approver.post('payment-buttons/reconcile', body).expect(500);
+    expect(await testDb().razorpayReconciliation.count({ where: { paymentId: payment.id } })).toBe(
+      0,
+    );
+    expect(
+      (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: payment.id } })).status,
+    ).toBe('SUBMITTED');
+    audit.mockRestore();
+    const results = await Promise.all([
+      approver.post('payment-buttons/reconcile', body),
+      approver.post('payment-buttons/reconcile', body),
+    ]);
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
+    expect(
+      await testDb().razorpayReconciliation.count({ where: { providerPaymentId: providerId } }),
+    ).toBe(1);
+    expect(
+      (await testDb().reExamApplication.findUniqueOrThrow({ where: { id: applicationId } })).status,
+    ).toBe(before.status);
+    await student.agent
+      .get(`/api/v1/student/payment-buttons/re-exam/${applicationId}`)
+      .expect(200)
+      .then((r) => {
+        expect(r.body).toMatchObject({ status: 'PAID', checkout: null });
+      });
+    await approver
+      .get(`payment-buttons/re-exam/${payment.id}/receipts`)
+      .expect(200)
+      .then((r) => {
+        expect(razorpayReceiptsSchema.parse(r.body).data.length).toBeGreaterThan(0);
+      });
+    await approver
+      .post('payment-buttons/reconcile', { ...body, reportReference: 'CHANGED-REPORT' })
+      .expect(409);
+  });
+  it('fails closed on rate-limit storage failure and cannot enable collection outside isolated tests', async () => {
+    const { student } = await obligation();
+    policy(student);
+    const service = app.get(PaymentButtonsService);
+    const limiter = app.get((await import('../../src/auth/rate-limiter.js')).RateLimiter);
+    vi.spyOn(limiter, 'hit').mockRejectedValueOnce(new Error('synthetic Redis outage'));
+    await expect(
+      service.webhook(Buffer.from('{}'), '0'.repeat(64), 'evt_down', '127.0.0.1'),
+    ).rejects.toThrow();
+    const productionPolicy = new PaymentButtonPolicyService(
+      realConfig({ NODE_ENV: 'production', COOKIE_SECURE: true }),
+    );
+    vi.spyOn(productionPolicy, 'definition').mockReturnValue(
+      app.get(PaymentButtonPolicyService).definition(),
+    );
+    expect(productionPolicy.fixture()).toBeNull();
   });
 });

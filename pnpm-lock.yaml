@@ -220,6 +220,9 @@ importers:
       cookie:
         specifier: 2.0.1
         version: 2.0.1
+      express:
+        specifier: 5.2.1
+        version: 5.2.1(supports-color@7.2.0)
       helmet:
         specifier: 8.3.0
         version: 8.3.0
@@ -594,7 +597,6 @@ importers:
       vitest:
         specifier: 5.0.3
         version: 5.0.3(@types/node@22.20.5)(jsdom@30.1.2(@noble/hashes@1.8.0))(vite@8.3.3(@types/node@22.20.5)(jiti@2.7.0))
-
 
   packages/storage:
     dependencies:

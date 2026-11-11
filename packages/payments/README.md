@@ -42,3 +42,12 @@ capabilities. The new application integration tests are not included in the earl
 Application verification: re-exam payment and result-review integration selections passed within
 the 1,020-test/78-browser checkpoint, exit 0. The payment file has 13 cases, including three mock
 lifecycle cases. These counts overlap the complete suite; they are not additional unique tests.
+
+## Razorpay development integration
+
+`verifyRazorpayWebhook` now verifies Razorpay's original-byte HMAC and emits sanitized evidence.
+It does not use the mock signature scheme or associate students automatically. The additive API
+module stores evidence durably and allows report-backed, staff-authorized synthetic reconciliation.
+Collection and webhooks remain unavailable by default; the mentor IDs have unverified mode and
+merchant ownership. See [the integration report](../../docs/development/razorpay-payment-integration.md)
+for routes, limitations, hard-copy-only certificate scope and activation prerequisites.
