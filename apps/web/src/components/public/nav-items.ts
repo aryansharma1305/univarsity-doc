@@ -1,6 +1,15 @@
+/** The five public header destinations, shared by desktop and mobile navigation. */
+export const PUBLIC_HEADER_NAV = [
+  { href: '/verify/admission-letter', label: 'Verify Admission Letter' },
+  { href: '/verify/certificate', label: 'Verify Certificate' },
+  { href: '/verify/registration', label: 'Verify Registration' },
+  { href: '/results', label: 'Check Result' },
+  { href: '/student/login', label: 'Student Sign in' },
+] as const;
+
 /** Existing public pages link back to the verification homepage. */
 export const PUBLIC_SECTIONS = [
-  { href: '/#services', label: 'Verification services', available: true },
+  { href: '/', label: 'Home', available: true },
   { href: '/contact', label: 'Contact', available: true },
 ] as const;
 

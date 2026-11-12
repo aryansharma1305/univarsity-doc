@@ -271,29 +271,9 @@ export function Portals() {
 export function LandingFooter({ year }: { year: number }) {
   return (
     <footer className={styles.footer}>
-      <div className={`${styles.wrap} ${styles.footerGrid}`}>
-        <div className={styles.footerBrand}>
-          <Wordmark inverted />
-          <p>Academic Verification &amp; Records Portal.</p>
-        </div>
-        <nav aria-label="Portal access and contact" className={styles.footerNav}>
-          <Link href="/student/login" prefetch={false}>
-            Student portal
-          </Link>
-          <Link href="/admin/login" prefetch={false}>
-            Staff access
-          </Link>
-          <Link href="/contact" prefetch={false}>
-            Contact
-          </Link>
-        </nav>
-        <nav aria-label="Information" className={styles.footerNav}>
-          <Link href="/help" prefetch={false}>
-            Help
-          </Link>
-          <Link href="/status" prefetch={false}>
-            System status
-          </Link>
+      <div className={`${styles.wrap} ${styles.footerBase}`}>
+        <span>© {year} Docversity</span>
+        <nav aria-label="Legal" className={styles.legalNav}>
           <Link href="/privacy" prefetch={false}>
             Privacy
           </Link>
@@ -301,10 +281,6 @@ export function LandingFooter({ year }: { year: number }) {
             Terms
           </Link>
         </nav>
-      </div>
-      <div className={`${styles.wrap} ${styles.footerBase}`}>
-        <span>© {year} Docversity</span>
-        <span>Public verification is not available yet.</span>
       </div>
     </footer>
   );

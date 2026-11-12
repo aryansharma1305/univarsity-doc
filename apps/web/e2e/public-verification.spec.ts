@@ -15,7 +15,9 @@ test('/verify redirects to the one homepage and drops unsolicited reference quer
   expect(response.headers().location).toBe('/');
   await page.goto('/verify?reference=SYNTHETIC-UNSOLICITED-REFERENCE');
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('tab')).toHaveCount(4);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Verify. Trust. Confirm.' }),
+  ).toBeVisible();
   await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
   await expect(page.getByText('SYNTHETIC-UNSOLICITED-REFERENCE')).toHaveCount(0);
 });
@@ -66,19 +68,18 @@ test('without JavaScript the homepage discloses unavailability and preserves dir
     await expect(
       page.getByRole('heading', { level: 1, name: 'Verify. Trust. Confirm.' }),
     ).toBeVisible();
-    await expect(page.getByRole('tab')).toHaveCount(4);
-    for (const tab of await page.getByRole('tab').all())
-      await expect(tab).toContainText('Not available yet');
-    await expect(page.getByRole('tabpanel').getByRole('status')).toHaveText('Not available yet');
+    await expect(
+      page.getByText(/public verification of results and certificates on its way/),
+    ).toBeVisible();
+    await expect(page.getByRole('tab')).toHaveCount(0);
+    await expect(page.locator('main section')).toHaveCount(1);
     await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
-    await expect(page.getByRole('link', { name: 'Student portal', exact: true })).toHaveAttribute(
-      'href',
-      '/student/login',
-    );
-    await expect(page.getByRole('link', { name: 'Staff access', exact: true })).toHaveAttribute(
-      'href',
-      '/admin/login',
-    );
+    await expect(
+      page.getByRole('link', { name: 'Sign in to the student portal', exact: true }),
+    ).toHaveAttribute('href', '/student/login');
+    await expect(
+      page.getByRole('link', { name: 'Activate your account', exact: true }),
+    ).toHaveAttribute('href', '/student/register');
     await expectNoHorizontalOverflow(page);
   } finally {
     await context.close();

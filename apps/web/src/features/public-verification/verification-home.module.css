@@ -1,6 +1,6 @@
 /*
- * UI-06 homepage: the UI-04 navy/blue ground with the scoped bright gold, extended into a full
- * student-facing page. Colours are the theme tokens (packages/ui) plus the existing UI-04 gold;
+ * Compact homepage: the existing UI-04 navy/blue ground and scoped bright gold.
+ * Colours are the theme tokens (packages/ui) plus the existing UI-04 gold;
  * everything else is a tint or opacity of those.
  */
 .page {
@@ -9,7 +9,9 @@
   --page-ease: cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   isolation: isolate;
+  display: flex;
   min-height: 100svh;
+  flex-direction: column;
   overflow: clip;
   color: white;
   background:
@@ -32,6 +34,12 @@
 .page :focus-visible {
   outline: 3px solid var(--verification-gold);
   outline-offset: 4px;
+}
+
+.page main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
 }
 
 .page main:focus {
@@ -65,10 +73,11 @@
   position: relative;
   isolation: isolate;
   display: flex;
-  min-height: min(100svh, 940px);
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
   justify-content: center;
-  padding-block: 112px 88px;
+  padding-block: 104px 32px;
 }
 
 .field {
@@ -474,7 +483,7 @@
 @media (max-width: 900px) {
   .hero {
     min-height: 0;
-    padding-block: 104px 72px;
+    padding-block: 88px 32px;
   }
   .heroGrid {
     grid-template-columns: 1fr;
@@ -514,10 +523,10 @@
 
 @media (max-width: 560px) {
   .hero {
-    padding-block: 5.5rem 3.5rem;
+    padding-block: 5.5rem 2rem;
   }
   .headline {
-    font-size: min(2.625rem, calc(2rem + 2.6vw));
+    font-size: min(2.625rem, calc(1.4rem + 5.1vw));
   }
   .subtitle {
     margin-block: 18px 0;

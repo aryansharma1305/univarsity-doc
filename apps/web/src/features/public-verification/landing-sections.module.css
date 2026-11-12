@@ -808,10 +808,29 @@
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px 24px;
-  padding-block: 20px 28px;
-  border-top: 1px solid rgb(255 255 255 / 8%);
+  align-items: center;
+  padding-block: 8px;
   font-size: 0.8125rem;
   color: var(--verification-muted);
+}
+
+.legalNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.legalNav a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  border-radius: 4px;
+  text-underline-offset: 4px;
+}
+
+.legalNav a:hover {
+  color: white;
+  text-decoration: underline;
 }
 
 /* ---------- Responsive ---------- */
