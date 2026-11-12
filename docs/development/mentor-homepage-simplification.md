@@ -76,9 +76,15 @@ Tests use a separate loopback-only synthetic project with PostgreSQL, Redis and 
 Original Docker volumes, the verified release archive and the Hostinger deployment are outside
 this test environment. Screenshots contain only the public homepage.
 
-The latest main CI run `43145175682` passed its application and browser job, then failed the
-release archive check with `Exported image config digest differs`. That deployment-script
-failure predates this branch. The homepage changes leave the archive verifier intact.
+The initial main baseline failed its release archive check. PR #32 subsequently fixed that
+check and merged as `e9a208b44f73f7f38cf0610241fc97bbd7a8ae5c`, whose main CI passed.
+That exact tested main commit was merged into this branch without conflicts. The frontend
+implementation and screenshots are unchanged by the synchronization.
+
+The 32 deployment-script regressions passed using Python 3.11. The Mac's default Python 3.10
+lacks the existing `hashlib.file_digest` API used by the archive verifier; verification used the
+installed Python 3.11 runtime. Format and diff checks passed. Fresh push and PR CI verify the
+combined candidate.
 
 ## PR summary and remaining boundaries
 
