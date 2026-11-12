@@ -1,7 +1,8 @@
 /**
- * Creates the first (or another) SUPER_ADMIN account.
+ * Creates the first SUPER_ADMIN, or an individually authorized launch staff account.
  *
  *   pnpm admin:create                       interactive: prompts, password input is hidden
+ *   node dist/cli/create-staff.js --role REGISTRAR   same prompts, only the selected staff role
  *   ADMIN_EMAIL=… ADMIN_DISPLAY_NAME=… ADMIN_PASSWORD=… pnpm admin:create   non-interactive
  *
  * Never prints the password. Refuses weak passwords and existing emails. Nothing in Docversity
@@ -11,7 +12,7 @@ import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { createPrismaClient } from '@docversity/database';
-import { CreateAdminError, createAdmin } from './create-admin-core.js';
+import { CreateAdminError, createAdmin, parseBootstrapRole } from './create-admin-core.js';
 
 const rootEnv = fileURLToPath(new URL('../../../../.env', import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
@@ -69,6 +70,7 @@ function promptHidden(question: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
+  const role = parseBootstrapRole(process.argv.slice(2));
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new CreateAdminError('DATABASE_URL is not set (see .env.example).');
 
@@ -83,8 +85,8 @@ async function main(): Promise<void> {
 
   const db = createPrismaClient({ connectionString: databaseUrl });
   try {
-    const user = await createAdmin(db, { email, displayName, password });
-    console.log(`Created SUPER_ADMIN ${user.email} (id ${user.id}).`);
+    const user = await createAdmin(db, { email, displayName, password, role });
+    console.log(`Created ${role} ${user.email} (id ${user.id}).`);
     if (process.env.ADMIN_PASSWORD !== undefined) {
       console.log(
         'ADMIN_PASSWORD was read from the environment — clear it from your shell history.',
@@ -97,6 +99,5 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
   console.error(error instanceof CreateAdminError ? error.message : 'Failed to create admin.');
-  if (!(error instanceof CreateAdminError)) console.error((error as Error).message);
   process.exitCode = 1;
 });

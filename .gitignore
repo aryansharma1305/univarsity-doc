@@ -81,3 +81,4 @@ deploy/render/__pycache__/
 
 # Clean university operator tooling
 deploy/university/__pycache__/
+deploy/coexist/__pycache__/

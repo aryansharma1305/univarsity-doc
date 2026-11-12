@@ -39,7 +39,7 @@ async function request(
   return new Promise((resolve, reject) => {
     const req = https.request(
       {
-        hostname: 'proxy',
+        hostname: process.env.GATE_CHECK_HOST ?? 'proxy',
         port: 443,
         servername: origin.hostname,
         ...(ca.length ? { ca } : {}),
