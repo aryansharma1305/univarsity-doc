@@ -87,6 +87,64 @@ def image(reference):
     return {'reference': reference, **value}
 
 
+def blob_path(digest):
+    if not re.fullmatch(r'sha256:[a-f0-9]{64}', digest):
+        raise ValueError('Expected a SHA-256 content identity')
+    return 'blobs/' + digest.replace(':', '/')
+
+
+def read_blob(bundle, descriptor):
+    member = bundle.getmember(blob_path(descriptor['digest']))
+    if not member.isfile():
+        raise ValueError('Image descriptor is not a regular file')
+    with bundle.extractfile(member) as source:
+        content = source.read()
+    if ('sha256:' + hashlib.sha256(content).hexdigest() != descriptor['digest']
+            or ('size' in descriptor and len(content) != descriptor['size'])):
+        raise ValueError('Image descriptor digest or size differs')
+    return json.loads(content)
+
+
+def verify_image_archive(archive, images):
+    with tarfile.open(archive, 'r:gz') as bundle:
+        with bundle.extractfile('manifest.json') as source:
+            manifests = json.load(source)
+        for role, value in images.items():
+            try:
+                entries = [item for item in manifests if value['reference'] in (item.get('RepoTags') or [])]
+                if len(entries) != 1:
+                    raise ValueError('Expected exactly one exported image for the retained tag')
+                entry = entries[0]
+                member = bundle.getmember(entry['Config'])
+                if not member.isfile():
+                    raise ValueError('Image config is not a regular file')
+                with bundle.extractfile(member) as config:
+                    digest = 'sha256:' + hashlib.file_digest(config, 'sha256').hexdigest()
+                kind = 'config'
+                if digest != value['id']:
+                    # containerd IDs name a manifest/index; classic IDs name the config itself.
+                    root = read_blob(bundle, {'digest': value['id']})
+                    kind = 'manifest'
+                    if 'manifests' in root:
+                        kind = 'index'
+                        candidates = [item for item in root['manifests']
+                                      if item.get('platform', {}).get('os') == value['os']
+                                      and item.get('platform', {}).get('architecture') == value['architecture']]
+                        if len(candidates) != 1:
+                            raise ValueError('Expected exactly one retained image platform')
+                        root = read_blob(bundle, candidates[0])
+                    expected = root['config']
+                    if (digest != expected['digest'] or member.size != expected['size']
+                            or entry['Config'] != blob_path(expected['digest'])):
+                        raise ValueError('Exported image config digest, size or path differs')
+                value['archive'] = {'configPath': entry['Config'], 'configDigest': digest,
+                                    'configSize': member.size, 'identityKind': kind}
+                print(json.dumps({'role': role, 'reference': value['reference'],
+                                  'inspectId': value['id'], **value['archive']}, sort_keys=True))
+            except (KeyError, ValueError, TypeError) as error:
+                raise SystemExit(f'Exported image integrity differs for {role} ({value["reference"]}): {error}') from error
+
+
 def main():
     sha = require_isolated_runner()
     expected_migrations = candidate_migrations(sha)
@@ -125,7 +183,6 @@ def main():
     staging.compose('run', '--rm', '--no-deps', 'tools', 'node', '/operations/smoke.mjs')
     OUTPUT.mkdir(parents=True, exist_ok=False)
     metadata = {'commit': sha, 'runId': os.environ['GITHUB_RUN_ID'], 'architecture': 'linux/amd64', 'images': images, 'registryPublished': False}
-    (OUTPUT / 'images.json').write_text(json.dumps(metadata, indent=2) + '\n')
     rehearsal = {
         'commit': sha,
         'brokenImageRefused': fault_failed,
@@ -154,17 +211,11 @@ def main():
             if save.poll() is None:
                 save.kill()
                 save.wait()
-    # Verify exported config digests without extracting the archive to disk.
-    with tarfile.open(archive, 'r:gz') as bundle:
-        manifest_file = bundle.extractfile('manifest.json')
-        if manifest_file is None:
-            raise SystemExit('Docker image manifest missing')
-        manifests = json.loads(manifest_file.read(1024 * 1024))
-        for value in images.values():
-            entry = next(item for item in manifests if value['reference'] in item.get('RepoTags', []))
-            config = bundle.extractfile(entry['Config'])
-            if config is None or 'sha256:' + hashlib.sha256(config.read(1024 * 1024)).hexdigest() != value['id']:
-                raise SystemExit('Exported image config digest differs')
+    metadata['imageStore'] = json.loads(command('docker', 'info', '--format', '{{json .DriverStatus}}'))
+    metadata['dockerVersion'] = command('docker', 'version', '--format', '{{.Server.Version}}')
+    print(json.dumps({'imageStore': metadata['imageStore'], 'dockerVersion': metadata['dockerVersion']}))
+    verify_image_archive(archive, images)
+    (OUTPUT / 'images.json').write_text(json.dumps(metadata, indent=2) + '\n')
     checksums = []
     for path in (OUTPUT / 'images.json', OUTPUT / 'rehearsal.json', archive):
         with path.open('rb') as source:
