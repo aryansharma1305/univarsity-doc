@@ -245,9 +245,13 @@ downgrade migrations or use pre-security releases. The existing backup/restore s
 
 Only then does CI retain `docversity-linux-amd64-<SHA>` for seven days. Its explicit allowlist contains
 `images.tar.gz`, `images.json`, `rehearsal.json` and `SHA256SUMS`; no runtime files, credentials, database
-dumps or objects are uploaded. Image config IDs are immutable `sha256:` content identities, verified
-against exported archive configs. They are **not registry manifest digests**: no registry publish is
-performed. Select one successful CI run and keep its archive/manifest together; separate builds of
+dumps or objects are uploaded. The retained `.Id` is an immutable `sha256:` content identity. In the
+classic image store it identifies the config; in the containerd store it can identify an image manifest
+or index. CI hashes each complete exported config. For manifest/index IDs it also verifies the content
+hashes and descriptor sizes along the retained ID → linux/amd64 manifest → config chain, binding the
+exported tag's config path, digest and size to the tested image. `images.json` records these config
+fields separately from `.Id`, together with Docker version and image-store details. No registry
+publish is performed. Select one successful CI run and keep its archive/manifest together; separate builds of
 the same source can have different content IDs. Retain that approved artifact privately before expiry.
 
 On the separately authorized Ubuntu VPS, after download into a private release directory:

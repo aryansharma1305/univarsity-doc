@@ -1,4 +1,7 @@
+import hashlib
+import io
 import json
+import tarfile
 from pathlib import Path
 import runpy
 import tempfile
@@ -58,6 +61,120 @@ class ReleaseMigrationTests(unittest.TestCase):
                 REHEARSAL['require_complete_migrations'](
                     ['first', 'second'], [['first', True, False, False], applied, row],
                 )
+
+
+class ReleaseArchiveTests(unittest.TestCase):
+    def fixture(self, identity='index', config=None, config_size_delta=0, manifest_size_delta=0, platform='amd64'):
+        config = config or b'{"architecture":"amd64","os":"linux"}'
+        files = {}
+
+        def blob(content):
+            digest = 'sha256:' + hashlib.sha256(content).hexdigest()
+            files['blobs/' + digest.replace(':', '/')] = content
+            return {'digest': digest, 'size': len(content)}
+
+        self.config = blob(config)
+        self.config['size'] += config_size_delta
+        self.manifest = blob(json.dumps({'schemaVersion': 2, 'config': self.config, 'layers': []}).encode())
+        self.manifest['size'] += manifest_size_delta
+        self.index = blob(json.dumps({'schemaVersion': 2, 'manifests': [
+            {**self.manifest, 'platform': {'os': 'linux', 'architecture': platform}},
+        ]}).encode())
+        reference = 'docversity14a-api:' + 'a' * 40
+        images = {'api': {'reference': reference, 'id': getattr(self, identity)['digest'],
+                          'os': 'linux', 'architecture': 'amd64'}}
+        self.entry = {'Config': 'blobs/' + self.config['digest'].replace(':', '/'),
+                      'RepoTags': [reference], 'Layers': []}
+        self.files = files
+        self.images = images
+        return images
+
+    def verify(self, duplicate_tag=False):
+        with tempfile.TemporaryDirectory() as folder:
+            archive = Path(folder) / 'images.tar.gz'
+            files = {**self.files, 'manifest.json': json.dumps([self.entry] * (2 if duplicate_tag else 1)).encode()}
+            with tarfile.open(archive, 'w:gz') as bundle:
+                for name, content in files.items():
+                    member = tarfile.TarInfo(name)
+                    member.size = len(content)
+                    bundle.addfile(member, io.BytesIO(content))
+            return REHEARSAL['verify_image_archive'](archive, self.images)
+
+    def test_accepts_classic_config_and_containerd_manifest_and_index_ids(self):
+        for identity in ('config', 'manifest', 'index'):
+            with self.subTest(identity=identity):
+                self.fixture(identity)
+                self.verify()
+
+    def test_reads_complete_configs_larger_than_one_megabyte(self):
+        self.fixture('config', b'{"padding":"' + b'x' * (1024 * 1024 + 10) + b'"}')
+        self.verify()
+
+    def test_refuses_a_hash_of_only_the_config_prefix(self):
+        config = b'{"padding":"' + b'x' * (1024 * 1024 + 10) + b'"}'
+        self.fixture('config', config)
+        self.images['api']['id'] = 'sha256:' + hashlib.sha256(config[:1024 * 1024]).hexdigest()
+        with self.assertRaises(SystemExit):
+            self.verify()
+
+    def test_refuses_changed_config_bytes_even_with_the_expected_filename(self):
+        self.fixture()
+        self.files[self.entry['Config']] += b' '
+        with self.assertRaises(SystemExit):
+            self.verify()
+
+    def test_refuses_another_images_valid_config_under_the_expected_tag(self):
+        self.fixture()
+        content = b'{"other":"image"}'
+        path = 'blobs/sha256/' + hashlib.sha256(content).hexdigest()
+        self.files[path] = content
+        self.entry['Config'] = path
+        with self.assertRaises(SystemExit):
+            self.verify()
+
+    def test_refuses_modified_or_missing_identity_chain_blobs(self):
+        for identity in ('manifest', 'index'):
+            for replacement in (None, b'{}'):
+                with self.subTest(identity=identity, replacement=replacement):
+                    self.fixture()
+                    path = 'blobs/' + getattr(self, identity)['digest'].replace(':', '/')
+                    if replacement is None:
+                        del self.files[path]
+                    else:
+                        self.files[path] = replacement
+                    with self.assertRaises(SystemExit):
+                        self.verify()
+
+    def test_refuses_wrong_descriptor_sizes_and_platform(self):
+        for options in ({'config_size_delta': 1}, {'manifest_size_delta': 1}, {'platform': 'arm64'}):
+            with self.subTest(options=options):
+                self.fixture(**options)
+                with self.assertRaises(SystemExit):
+                    self.verify()
+
+    def test_accepts_classic_layout_without_oci_blobs(self):
+        self.fixture('config')
+        content = self.files[self.entry['Config']]
+        self.entry['Config'] = self.config['digest'].removeprefix('sha256:') + '.json'
+        self.files = {self.entry['Config']: content}
+        self.verify()
+
+    def test_refuses_duplicate_exported_tags(self):
+        self.fixture()
+        with self.assertRaisesRegex(SystemExit, 'exactly one exported image'):
+            self.verify(duplicate_tag=True)
+
+    def test_refuses_a_missing_config(self):
+        self.fixture()
+        del self.files[self.entry['Config']]
+        with self.assertRaises(SystemExit):
+            self.verify()
+
+    def test_refuses_missing_exported_tags(self):
+        self.fixture()
+        self.entry['RepoTags'] = []
+        with self.assertRaises(SystemExit):
+            self.verify()
 
 
 class RecoverySafetyTests(unittest.TestCase):
