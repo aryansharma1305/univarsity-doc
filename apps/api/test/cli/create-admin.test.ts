@@ -1,6 +1,10 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { CreateAdminError, createAdmin } from '../../src/cli/create-admin-core.js';
+import {
+  CreateAdminError,
+  createAdmin,
+  type BootstrapRole,
+} from '../../src/cli/create-admin-core.js';
 import { testDb } from '../helpers.js';
 
 afterAll(async () => {
@@ -10,6 +14,26 @@ afterAll(async () => {
 const email = () => `admin.${randomUUID().slice(0, 8)}@example.test`;
 
 describe('admin bootstrap (pnpm admin:create)', () => {
+  it.each<BootstrapRole>(['REGISTRAR', 'EXAM_ADMIN'])(
+    'creates exactly the authorized %s role',
+    async (role) => {
+      const created = await createAdmin(testDb(), {
+        email: email(),
+        displayName: 'Synthetic Staff',
+        password: 'independent synthetic passphrase 2026',
+        role,
+      });
+      const user = await testDb().user.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { roles: { include: { role: true } } },
+      });
+      expect(user.roles.map((link) => link.role.name)).toEqual([role]);
+      const audit = await testDb().auditLog.findFirst({
+        where: { action: 'ADMIN_CREATED', entityId: user.id },
+      });
+      expect(audit?.metadata).toEqual({ via: 'cli', role });
+    },
+  );
   it('creates a SUPER_ADMIN with an Argon2id hash and an ADMIN_CREATED audit entry', async () => {
     const address = email();
     const created = await createAdmin(testDb(), {

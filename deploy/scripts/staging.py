@@ -33,6 +33,58 @@ if INSTANCE.get('public'):
     OVERLAYS.append('compose.public.yml')
 
 
+def shared_edge():
+    """Malformed adoption metadata must never fall back to owning the public proxy again."""
+    marker = SECRETS / 'shared-edge.json'
+    if not marker.exists() and not marker.is_symlink():
+        if INSTANCE.get('sharedProxy'):
+            raise SystemExit('Shared-edge adoption record missing; refusing staging lifecycle')
+        return None
+    try:
+        if marker.is_symlink() or not marker.is_file() or marker.stat().st_mode & 0o222:
+            raise ValueError()
+        record = json.loads(marker.read_text())
+        if (not INSTANCE.get('public') or INSTANCE.get('sharedProxy') is not True or record['format'] != 1 or record['stagingProject'] != PROJECT
+                or record['stagingOrigin'] != INSTANCE['origin'] or record['edgeProject'] != 'docversity-edge'):
+            raise ValueError()
+        directory = Path(record['directory'])
+        if not directory.is_absolute() or directory.is_symlink() or any(p.is_symlink() for p in directory.parents):
+            raise ValueError()
+        files = {'compose.json','staging-overlay.json','config/Caddyfile','config/review-site.caddy','config/start.sh'}
+        if set(record['files']) != files or hashlib.sha256(GATE.read_bytes()).hexdigest() != record['gateDigest']:
+            raise ValueError()
+        for name, expected in record['files'].items():
+            path = directory/name
+            if path.is_symlink() or any(p.is_symlink() for p in path.parents) or not path.is_file() or path.stat().st_mode & 0o222 or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+                raise ValueError()
+        return record
+    except (ValueError,OSError,KeyError,TypeError):
+        raise SystemExit('Shared-edge record invalid; refusing staging lifecycle (never remove it to bypass this guard)') from None
+
+
+def application_services():
+    return ('postgres','redis','minio','api','worker','web')
+
+
+def stop():
+    if shared_edge():
+        compose('stop', *application_services())
+    else:
+        compose('stop')
+
+
+def proxy_handoff(resume=False):
+    """Only the old staging proxy participates; applications and data services keep running."""
+    if shared_edge() or not INSTANCE.get('public'):
+        raise SystemExit('Proxy handoff requires public staging before shared-edge adoption')
+    require_gate()
+    if resume:
+        compose('up', '--no-build', '--no-deps', '-d', '--wait', 'proxy')
+        verify_gate()
+    else:
+        compose('stop', 'proxy')
+
+
 def gate_problem():
     """Why the reviewer gate file cannot be trusted, or None. Never reveals its contents."""
     if GATE.is_symlink() or not GATE.exists():
@@ -86,7 +138,10 @@ def up():
     require_gate()
     if INSTANCE.get('public'):
         preflight()
-    compose('up', '--no-build', '-d', '--wait')
+    if shared_edge():
+        compose('up', '--no-build', '-d', '--wait', *application_services())
+    else:
+        compose('up', '--no-build', '-d', '--wait')
     if 'compose.review.yml' in OVERLAYS:
         verify_gate()
 
@@ -115,17 +170,26 @@ def verify_gate():
     try:
         compose('run', '--rm', '--no-deps', 'tools', 'node', '/operations/gate-check.mjs')
     except subprocess.CalledProcessError:
+        if shared_edge():
+            compose('stop', 'web', 'api')
+            raise SystemExit('Reviewer gate check failed; staging web/API stopped; shared edge untouched')
         compose('stop', 'proxy')
         raise SystemExit('Reviewer gate check failed; proxy stopped (fail closed)')
 
 
-def compose_files():
-    return [arg for name in ['compose.yml', *OVERLAYS] for arg in ('-f', str(ROOT / 'deploy' / name))]
+def compose_files(project=PROJECT):
+    # Recovery never inherits the public or shared-edge overlays.
+    names = ['compose.yml', *(OVERLAYS if project == PROJECT else [])]
+    files = [arg for name in names for arg in ('-f', str(ROOT / 'deploy' / name))]
+    record = shared_edge() if project == PROJECT else None
+    if record:
+        files.extend(['-f', str(Path(record['directory'])/'staging-overlay.json')])
+    return files
 
 
 def compose(*args, project=PROJECT, **kwargs):
     kwargs.setdefault('env', dict(os.environ, **instance_environment()))
-    return subprocess.run(['docker', 'compose', '--project-name', project, *compose_files(), *args], cwd=ROOT, check=True, **kwargs)
+    return subprocess.run(['docker', 'compose', '--project-name', project, *compose_files(project), *args], cwd=ROOT, check=True, **kwargs)
 
 
 def manifest(directory):
@@ -149,7 +213,10 @@ def backup():
     directory.mkdir(mode=0o700)
     # A stopped worker is not proof that Redis has no pending work. Refuse incomplete recovery sets.
     try:
-        compose('stop', 'proxy', 'web', 'api')
+        if shared_edge():
+            compose('stop', 'web', 'api')
+        else:
+            compose('stop', 'proxy', 'web', 'api')
         compose('stop', 'worker')
         require_stopped_worker()
         compose('run', '--rm', '--no-deps', 'backup-readiness')
@@ -183,7 +250,8 @@ def restore_test(name):
     compose('exec', '-T', 'postgres', 'psql', '-U', 'docversity_owner', '-d', 'docversity_staging', '-v', 'ON_ERROR_STOP=1', '-c', 'GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO docversity_app; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO docversity_app;', project=RESTORE)
     def database_fingerprint(project):
         def query(sql):
-            return subprocess.check_output(['docker','compose','-p',project,*compose_files(),'exec','-T','postgres','psql','-U','docversity_owner','-d','docversity_staging','-Atc',sql], text=True).strip()
+            return compose('exec','-T','postgres','psql','-U','docversity_owner','-d','docversity_staging','-Atc',sql,
+                           project=project,capture_output=True,text=True).stdout.strip()
         tables = query("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename").splitlines()
         result = {}
         for table in tables:
@@ -204,7 +272,7 @@ def restore_test(name):
 if __name__ == '__main__':
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['up','stop','status','build','fixture','smoke','backup','restore-test','ca','review-init','review-fixture','preflight'])
+    parser.add_argument('action', choices=['up','stop','status','build','fixture','smoke','backup','restore-test','ca','review-init','review-fixture','preflight','gate-check','retire-proxy','resume-proxy'])
     parser.add_argument('backup_name', nargs='?')
     args = parser.parse_args()
     require_local_engine()
@@ -212,6 +280,9 @@ if __name__ == '__main__':
         require_gate()
     if args.action == 'review-init': review_init()
     elif args.action == 'preflight': preflight()
+    elif args.action == 'gate-check': verify_gate()
+    elif args.action == 'retire-proxy': proxy_handoff()
+    elif args.action == 'resume-proxy': proxy_handoff(resume=True)
     elif args.action == 'ca': export_ca()
     elif args.action == 'review-fixture':
         if 'compose.review.yml' not in OVERLAYS:
@@ -220,7 +291,7 @@ if __name__ == '__main__':
     elif args.action == 'backup': backup()
     elif args.action == 'restore-test': restore_test(args.backup_name)
     elif args.action == 'up': up()
-    elif args.action == 'stop': compose('stop')
+    elif args.action == 'stop': stop()
     elif args.action == 'status': compose('ps')
     elif args.action == 'build': compose('build')
     elif args.action == 'fixture':

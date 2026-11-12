@@ -107,8 +107,22 @@ jobs:
         run: |
           python3 deploy/scripts/check-config.py
           python3 deploy/scripts/test_staging.py
+          python3 deploy/university/test_clean.py
+          python3 deploy/coexist/test_coexist.py
       - name: Reviewer gate fails closed (real Caddy startup configuration)
         run: python3 deploy/scripts/gate_regression.py
+      - name: Shared proxy routes and reviewer authentication (offline pinned Caddy)
+        run: python3 deploy/coexist/caddy_regression.py
+      - name: Shared proxy HTTPS, network isolation, handoff and rollback (synthetic transport)
+        run: python3 deploy/coexist/runtime_regression.py
+      - name: Retain shared proxy transport evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: shared-proxy-transport-${{ env.IMAGE_TAG }}
+          path: test-results/coexistence.json
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Render staging configuration (Phase 14C)
         run: |
           python3 deploy/render/check_render.py

@@ -1,5 +1,10 @@
 # Hostinger operator runbook
 
+Shared-host update: see [shared proxy coexistence](shared-proxy-coexistence.md) before university
+provisioning. After valid shared-edge adoption, the updated staging launcher excludes the proxy from
+stops/backups/starts and closes only staging web/API on reviewer-gate failure. The old launcher must
+not operate an adopted instance. Existing resources and this runbook's non-shared behavior remain.
+
 Prepared 10 November 2026 against `d791afd7da3b0efc2db7965cc3a2fa6417a90d60`.
 **No VPS, DNS, ACME or deployment operation has been performed.** The isolated native recovery
 checkpoint below is separate from full-stack launcher acceptance.

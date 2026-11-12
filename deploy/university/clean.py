@@ -19,6 +19,9 @@ PINS = {
     'proxy': 'caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f',
 }
 ROLES = ('api', 'worker', 'web', 'tools')
+# MiB / CPU ceilings to rehearse, not a claim of measured capacity on KVM 2.
+UNIVERSITY_LIMITS = {'api': (1024, .45), 'worker': (512, .25), 'web': (512, .20),
+                     'postgres': (512, .15), 'redis': (192, .05), 'minio': (320, .10)}
 
 
 def image_ids(manifest):
@@ -123,25 +126,48 @@ def caddyfile():
     return '''{\n  admin off\n}\nhttps://localhost:443 {\n  tls internal\n  encode zstd gzip\n  request_body {\n    max_size 16MiB\n  }\n  header {\n    X-Robots-Tag "noindex, nofollow, noarchive"\n    Referrer-Policy "same-origin"\n    -Server\n  }\n  handle {\n    reverse_proxy web:3000 {\n      header_up X-Forwarded-For {client_ip}\n    }\n  }\n}\n'''
 
 
-def prepare(directory, origin, manifest, port=3553):
+def prepare(directory, origin, manifest, port=3553, shared_proxy=False):
     directory = Path(directory).absolute()
     if directory.exists() or directory.is_symlink() or any(parent.is_symlink() for parent in directory.parents):
         raise ValueError('Choose a fresh private directory without symlink parents; existing instances are never overwritten')
     if directory == ROOT or ROOT in directory.parents:
         raise ValueError('Credentials must be outside the checkout')
+    if any((parent/'.git').exists() for parent in (directory,*directory.parents)):
+        raise ValueError('Credentials must be outside every Git checkout')
     if not 1024 < port < 65536:
         raise ValueError('Use an unused unprivileged local HTTPS port')
     directory=directory.resolve()
     if directory == ROOT or ROOT in directory.parents:
         raise ValueError('Credentials must be outside the checkout')
-    images=image_ids(manifest); files=runtime_files(origin, f'https://localhost:{port}'); instance=uuid.uuid4().hex
+    images=image_ids(manifest); files=runtime_files(origin, None if shared_proxy else f'https://localhost:{port}'); instance=uuid.uuid4().hex
+    if shared_proxy:
+        files['redis_config'] = files['redis_config'].replace('maxmemory 192mb', 'maxmemory 96mb')
     directory.mkdir(mode=0o700,parents=True);(directory/'secrets').mkdir(mode=0o700);(directory/'backups').mkdir(mode=0o700)
     for name, content in files.items():
         target=directory/'secrets'/name;target.write_text(content.rstrip()+'\n');target.chmod(0o444)
     config=compose_config(directory,images,instance,port)
+    if shared_proxy:
+        del config['services']['proxy']
+        config['services']['staff-bootstrap'] = {
+            **{key:value for key,value in config['services']['api'].items() if key not in ('depends_on','healthcheck')},
+            'profiles':['operator'], 'restart':'no', 'healthcheck':{'disable':True},
+            'command':['node','dist/cli/create-admin.js'],
+        }
+        for name in ('caddy', 'caddy_config'):
+            del config['volumes'][name]
+        for name, service in config['services'].items():
+            memory, cpu = UNIVERSITY_LIMITS.get(name, (512, .25))
+            service.update(mem_limit=f'{memory}m', memswap_limit=f'{memory}m', cpus=cpu,
+                           pids_limit=256, cpu_shares=512)
+        # Compose always registers the service name as DNS; an alias alone cannot remove "web".
+        web_service = 'uniweb-' + instance[:8]
+        config['services'][web_service] = config['services'].pop('web')
+        config['networks']['edge'] = {'internal': True, 'name': config['name'] + '_edge'}
     (directory/'compose.json').write_text(json.dumps(config,indent=2)+'\n');(directory/'compose.json').chmod(0o600)
     (directory/'Caddyfile').write_text(caddyfile());(directory/'Caddyfile').chmod(0o444)
     record={'format':1,'instance':instance,'project':config['name'],'intendedUniversityOrigin':origin,'privateLocalOrigin':f'https://localhost:{port}','imageSourceCommit':manifest['commit'],'images':images,'realDataAuthorized':False,'publicCutoverAuthorized':False,'sourceRoot':str(ROOT)}
+    if shared_proxy:
+        record.update(sharedProxy=True, privateLocalOrigin=None, webService=web_service, frontendNetwork=config['name']+'_edge')
     (directory/'instance.json').write_text(json.dumps(record,indent=2)+'\n');(directory/'instance.json').chmod(0o600)
     return record
 
@@ -154,6 +180,11 @@ def plan(directory):
     if config['name']!=record['project']:
         raise ValueError('Project identity mismatch')
     command=['docker','compose','--project-name',record['project'],'-f',str(directory/'compose.json')]
+    if record.get('sharedProxy'):
+        return [command+['config','--quiet'], command+['up','--no-build','-d','--wait','postgres','redis','minio'],
+                command+['--profile','operator','run','--rm','--no-deps','migrate'],
+                command+['--profile','operator','run','--rm','--no-deps','check-empty'],
+                command+['up','--no-build','-d','--wait','api','worker',record['webService']]]
     commands=[command+['config','--quiet'], command+['up','-d','--wait','postgres','redis','minio'],command+['--profile','operator','run','--rm','migrate'],command+['--profile','operator','run','--rm','check-empty'],command+['run','--rm','--no-deps','api','node','dist/cli/create-admin.js'],command+['--profile','operator','run','--rm','check-empty','node','/operations/check-empty.mjs','--after-bootstrap'],command+['up','--no-build','-d','--wait','api','worker','web','proxy']]
     return commands
 
@@ -163,6 +194,8 @@ def prepare_public(directory, acme_email):
     directory=Path(directory).absolute()
     plan(directory)  # Validate clean project identity before producing a cutover candidate.
     record=json.loads((directory/'instance.json').read_text())
+    if record.get('sharedProxy'):
+        raise ValueError('Shared-proxy instances must use deploy/coexist/prepare.py; a second public proxy is refused')
     domain=validate_origin(record['intendedUniversityOrigin'])
     if not re.fullmatch(r'[A-Za-z0-9.!#$%&*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}',acme_email):
         raise ValueError('An approved ACME contact email is required')
@@ -199,14 +232,14 @@ def validate_release(directory, approved_sha):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='action',required=True)
-    init=sub.add_parser('prepare');init.add_argument('--directory',required=True);init.add_argument('--origin',required=True);init.add_argument('--images',required=True);init.add_argument('--https-port',type=int,default=3553)
+    init=sub.add_parser('prepare');init.add_argument('--directory',required=True);init.add_argument('--origin',required=True);init.add_argument('--images',required=True);init.add_argument('--https-port',type=int,default=3553);init.add_argument('--shared-proxy',action='store_true')
     show=sub.add_parser('plan');show.add_argument('--directory',required=True)
     public=sub.add_parser('prepare-public-candidate');public.add_argument('--directory',required=True);public.add_argument('--acme-email',required=True)
     verify=sub.add_parser('validate-release');verify.add_argument('--directory',required=True);verify.add_argument('--approved-sha',required=True)
     args=parser.parse_args()
     try:
         if args.action=='prepare':
-            record=prepare(args.directory,args.origin,json.loads(Path(args.images).read_text()),args.https_port)
+            record=prepare(args.directory,args.origin,json.loads(Path(args.images).read_text()),args.https_port,args.shared_proxy)
             print('Prepared private configuration only. No Docker, VPS, database, DNS or account operation performed.')
             print('Project: '+record['project'])
         elif args.action=='plan':

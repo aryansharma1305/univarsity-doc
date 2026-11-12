@@ -5,7 +5,7 @@ Runs the pinned Caddy image with the real deploy/Caddyfile.review and deploy/rev
 loopback-only throwaway port, once per gate variant, and polls from the moment the container starts:
 
 - a valid gate answers 401 to anonymous requests from its very first response (no unprotected
-  window during startup), admits the reviewer, and cannot be reloaded at runtime (admin off);
+  window during startup), admits the reviewer, and refuses admin-API reloads (admin off);
 - a missing, empty, unwrapped, misnamed or plaintext gate makes Caddy refuse to start, and the port
   never serves a response;
 - an empty snippet is accepted by Caddy itself, so it must be (and is) refused by staging.py's

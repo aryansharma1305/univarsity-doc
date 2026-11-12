@@ -1,5 +1,12 @@
 # Clean university environment and student onboarding
 
+For shared staging/university hosting, use the newer [coexistence operator guide](shared-proxy-coexistence.md)
+and [fast-track launch packet](university-fast-track-launch.md). The single-owner public cutover below
+stops staging and must **not** be used for coexistence. `prepare --shared-proxy` creates no university
+proxy/host ports; the shared edge has its own lifecycle. The reviewed CLI also supports explicit
+`create-staff.js --role REGISTRAR` and `create-staff.js --role EXAM_ADMIN`, with the same hidden prompts
+and transactional audit; the separate entry fails closed on older images.
+
 Development branch: `feature/clean-university-onboarding`, based on green main
 `e1ad1c30c84cc1941602bb013e49f61869aa7eb4`. No SSH, DNS, public deployment, real migration,
 real import, actual account creation or payment activation has been performed.
