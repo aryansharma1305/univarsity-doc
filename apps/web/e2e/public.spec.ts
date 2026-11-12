@@ -1,19 +1,23 @@
 import { expect, test } from '@playwright/test';
 import { capture, expectNoHorizontalOverflow, expectNoSeriousA11yViolations } from './support';
 
-const SERVICES = [
-  { id: 'result', title: 'Result Checking', detail: 'Academic results' },
-  { id: 'registration', title: 'Registration Verification', detail: 'University registrations' },
-  { id: 'certificate', title: 'Certificate Verification', detail: 'Academic certificates' },
-  { id: 'admission-letter', title: 'Admission Letter Verification', detail: 'Admission letters' },
-];
+const NAVIGATION = [
+  ['Verify Admission Letter', '/verify/admission-letter'],
+  ['Verify Certificate', '/verify/certificate'],
+  ['Verify Registration', '/verify/registration'],
+  ['Check Result', '/results'],
+  ['Student Sign in', '/student/login'],
+] as const;
+
 for (const [width, height] of [
-  [1440, 1000],
+  [1440, 900],
   [768, 1024],
   [390, 844],
   [320, 844],
 ] as const) {
-  test(`verification homepage is accessible and unavailable at ${width}px`, async ({ page }) => {
+  test(`compact homepage preserves the hero and five accessible destinations at ${width}px`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width, height });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const requests: string[] = [];
@@ -25,48 +29,59 @@ for (const [width, height] of [
     await expect(
       page.getByRole('heading', { level: 1, name: 'Verify. Trust. Confirm.' }),
     ).toBeVisible();
-    await expect(page.getByRole('tab')).toHaveCount(4);
-    await expect(page.getByRole('tab', { name: 'Result Checking', exact: true })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    await expect(page.getByRole('link', { name: 'Verify Certificate', exact: true })).toHaveCount(
-      0,
-    );
-    await expect(page.getByRole('link', { name: 'View Services', exact: true })).toHaveCount(0);
-    const cards = await page.getByRole('tablist').boundingBox();
-    const panel = await page.getByRole('tabpanel').boundingBox();
-    expect(cards).not.toBeNull();
-    expect(panel).not.toBeNull();
-    if (cards && panel) expect(panel.y).toBeGreaterThanOrEqual(cards.y + cards.height);
-    await capture(page, `ui04-home-${width}`);
-    for (const service of SERVICES) {
-      const tab = page.getByRole('tab', { name: service.title, exact: true });
-      await tab.click();
-      await expect(tab).toHaveAttribute('aria-selected', 'true');
-      await expect(tab.getByText(service.detail, { exact: true })).toBeVisible();
-      await expect(page.getByRole('tabpanel')).toHaveCount(1);
-      await expect(
-        page.getByRole('tabpanel').getByRole('heading', { name: service.title, exact: true }),
-      ).toBeVisible();
-      await expect(page.getByRole('tabpanel').getByRole('status')).toHaveText('Not available yet');
-      await expect(page.locator('main form,main input,main textarea,main select')).toHaveCount(0);
-      await expectNoHorizontalOverflow(page);
+    await expect(page.getByRole('img', { name: 'Docversity University' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in to the student portal' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Activate your account' })).toBeVisible();
+    await expect(page.locator('main section')).toHaveCount(1);
+    await expect(
+      page.locator(
+        '#services,#students,#how,#privacy,#portals,#features,#faq,#get-started,#roadmap',
+      ),
+    ).toHaveCount(0);
+    await expect(page.getByRole('tab')).toHaveCount(0);
+    await expect(page.locator('main form,main input,main textarea,main select')).toHaveCount(0);
+    await expect(page.getByRole('contentinfo').getByRole('link')).toHaveText(['Privacy', 'Terms']);
+    if (width === 1440) {
+      expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(
+        height + 1,
+      );
+    }
+    await expectNoHorizontalOverflow(page);
+    await expectNoSeriousA11yViolations(page);
+    await capture(page, `mentor-home-${width}`);
+
+    if (width < 1280) await page.getByRole('button', { name: 'Open menu' }).click();
+    const nav = page.getByRole('navigation', {
+      name: width < 1280 ? 'Mobile' : 'Main',
+      exact: true,
+    });
+    await expect(nav.getByRole('link')).toHaveText(NAVIGATION.map(([label]) => label));
+    for (const [label, href] of NAVIGATION)
+      await expect(nav.getByRole('link', { name: label, exact: true })).toHaveAttribute(
+        'href',
+        href,
+      );
+    await expect(nav.getByRole('link')).toHaveCount(5);
+    if (width < 1280) {
       await expectNoSeriousA11yViolations(page);
-      if (width === 1440 && service.id !== 'result')
-        await capture(page, `ui04-service-${service.id}`);
+      await capture(page, `mentor-home-menu-${width}`);
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('button', { name: 'Open menu' })).toBeFocused();
     }
     expect(requests).toEqual([]);
-    await expect(page.locator('#features,#faq,#get-started,#roadmap')).toHaveCount(0);
   });
 }
 
-test('service tabs support visible keyboard focus and immediate reduced motion', async ({
+test('header links and mobile drawer retain visible keyboard focus with reduced motion', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/');
-  const first = page.getByRole('tab', { name: 'Result Checking', exact: true });
+  const first = page
+    .getByRole('navigation', { name: 'Main', exact: true })
+    .getByRole('link')
+    .first();
   await first.focus();
   const outline = await first.evaluate((el) => ({
     width: parseFloat(getComputedStyle(el).outlineWidth),
@@ -74,101 +89,153 @@ test('service tabs support visible keyboard focus and immediate reduced motion',
   }));
   expect(outline.width).toBeGreaterThanOrEqual(2);
   expect(outline.style).not.toBe('none');
-  await page.keyboard.press('ArrowRight');
-  await expect(
-    page.getByRole('tab', { name: 'Registration Verification', exact: true }),
-  ).toBeFocused();
-  await page.keyboard.press('End');
-  await expect(
-    page.getByRole('tab', { name: 'Admission Letter Verification', exact: true }),
-  ).toBeFocused();
-  await page.keyboard.press('Home');
-  await expect(first).toBeFocused();
+  for (const [label] of NAVIGATION.slice(1)) {
+    await page.keyboard.press('Tab');
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Main', exact: true })
+        .getByRole('link', { name: label, exact: true }),
+    ).toBeFocused();
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const trigger = page.getByRole('button', { name: 'Open menu' });
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog');
+  for (let index = 0; index < 8; index++) {
+    expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press('Tab');
+  }
+  await expectNoSeriousA11yViolations(page);
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
   expect(
     await page
-      .getByRole('tabpanel')
+      .locator('main')
       .evaluate(
         (el) => el.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length,
       ),
   ).toBe(0);
-  await expectNoSeriousA11yViolations(page);
 });
 
-test('student and staff login navigation retains the existing routes', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Student portal', exact: true }).click();
-  await expect(page).toHaveURL(/\/student\/login$/);
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Staff access', exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/login$/);
-});
-
-test('legacy service routes retain honest placeholders without verification forms', async ({
+test('student sign-in, activation and direct staff sign-in retain existing routes', async ({
   page,
 }) => {
-  for (const [path, title] of [
-    ['/results', 'Check Results'],
-    ['/verify/registration', 'Registration Verification'],
-    ['/verify/certificate', 'Certificate Verification'],
-    ['/verify/qr', 'Scan QR'],
-  ] as const) {
-    await page.goto(path);
-    await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
-    await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
-  }
+  await page.goto('/');
+  await page
+    .getByRole('navigation', { name: 'Main', exact: true })
+    .getByRole('link', { name: 'Student Sign in' })
+    .click();
+  await expect(page).toHaveURL(/\/student\/login$/);
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Activate your account', exact: true }).click();
+  await expect(page).toHaveURL(/\/student\/register$/);
+  await expect(page.getByLabel('Activation code')).toBeVisible();
+  await page.goto('/admin/login');
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
 });
 
-test('small-screen text remains readable without clipping at 200 percent text scale', async ({
+test('all verification destinations retain honest placeholders without verification forms', async ({
+  page,
+}) => {
+  for (const [label, path, title] of [
+    ['Verify Admission Letter', '/verify/admission-letter', 'Admission Letter Verification'],
+    ['Verify Certificate', '/verify/certificate', 'Certificate Verification'],
+    ['Verify Registration', '/verify/registration', 'Registration Verification'],
+    ['Check Result', '/results', 'Check Results'],
+  ] as const) {
+    await page.goto('/');
+    await page
+      .getByRole('navigation', { name: 'Main', exact: true })
+      .getByRole('link', { name: label, exact: true })
+      .click();
+    await expect(page).toHaveURL(path);
+    await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
+    await expect(page.getByTestId('not-available')).toContainText('Not available yet');
+    await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
+  }
+  await page.goto('/verify/qr');
+  await expect(page.getByRole('heading', { level: 1, name: 'Scan QR' })).toBeVisible();
+  await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
+});
+
+test('small-screen text and navigation remain readable at 200 percent text scale', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
-  const title = page
-    .getByRole('tab', { name: 'Result Checking', exact: true })
-    .locator('span')
-    .first();
+  const title = page.getByRole('heading', { level: 1 });
   const normalSize = await title.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
   await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
   await expect
     .poll(() => title.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)))
-    .toBeCloseTo(normalSize * 2);
-  const first = await page.getByRole('tab').nth(0).boundingBox();
-  const second = await page.getByRole('tab').nth(1).boundingBox();
-  expect(first).not.toBeNull();
-  expect(second).not.toBeNull();
-  if (first && second) expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
-  const brokenWords = await page
-    .locator('main h1,main [role="tab"] span')
-    .evaluateAll((elements) => {
-      const broken: string[] = [];
-      for (const element of elements) {
-        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-        let node: Node | null;
-        while ((node = walker.nextNode())) {
-          for (const match of (node.textContent ?? '').matchAll(/\S+/g)) {
-            const range = document.createRange();
-            range.setStart(node, match.index);
-            range.setEnd(node, match.index + match[0].length);
-            if ([...range.getClientRects()].filter((r) => r.width > 0).length > 1)
-              broken.push(match[0]);
-          }
+    .toBeGreaterThan(normalSize);
+  await expectNoHorizontalOverflow(page);
+  const brokenWords = await page.locator('main h1').evaluateAll((elements) => {
+    const broken: string[] = [];
+    for (const element of elements) {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        for (const match of (node.textContent ?? '').matchAll(/\S+/g)) {
+          const range = document.createRange();
+          range.setStart(node, match.index);
+          range.setEnd(node, match.index + match[0].length);
+          if ([...range.getClientRects()].filter((r) => r.width > 0).length > 1)
+            broken.push(match[0]);
         }
       }
-      return broken;
-    });
+    }
+    return broken;
+  });
   expect(brokenWords).toEqual([]);
-  await expectNoHorizontalOverflow(page);
-  const clipped = await page
-    .getByRole('tab')
-    .evaluateAll((cards) =>
-      cards.some((card) =>
-        [...card.querySelectorAll('span')].some((span) => span.scrollWidth > span.clientWidth + 1),
-      ),
-    );
-  expect(clipped).toBe(false);
+  expect(
+    await page.locator('main h1 [data-hero-word]').evaluateAll((words) =>
+      words.every((word) => {
+        const box = word.getBoundingClientRect();
+        return box.left >= -1 && box.right <= innerWidth + 1;
+      }),
+    ),
+  ).toBe(true);
   await expectNoSeriousA11yViolations(page);
-  await capture(page, 'ui04-text-scale-320');
+  expect(
+    await page
+      .locator('header a[aria-label="Docversity home"] span')
+      .evaluateAll((spans) => spans.some((span) => span.scrollWidth > span.clientWidth + 1)),
+  ).toBe(false);
+  await page.getByRole('button', { name: 'Open menu' }).click();
+  const links = page.getByRole('navigation', { name: 'Mobile' }).getByRole('link');
+  await expect(links).toHaveText(NAVIGATION.map(([label]) => label));
+  expect(
+    await links.evaluateAll((elements) =>
+      elements.some(
+        (el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1,
+      ),
+    ),
+  ).toBe(false);
+  await expectNoHorizontalOverflow(page);
+  await expectNoSeriousA11yViolations(page);
+  await capture(page, 'mentor-home-text-scale-320');
+});
+test('desktop header uses the same five drawer links when text is enlarged', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await expect(page.getByRole('navigation', { name: 'Main', exact: true })).toBeVisible();
+  await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+  await expect(page.getByRole('navigation', { name: 'Main', exact: true })).toBeHidden();
+  await page.getByRole('button', { name: 'Open menu' }).click();
+  await expect(page.getByRole('navigation', { name: 'Mobile' }).getByRole('link')).toHaveText(
+    NAVIGATION.map(([label]) => label),
+  );
+  await expectNoHorizontalOverflow(page);
+  await expectNoSeriousA11yViolations(page);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Open menu' })).toBeFocused();
 });
 
 test('optional GSAP entrance stays visible and responds to reduced-motion changes', async ({

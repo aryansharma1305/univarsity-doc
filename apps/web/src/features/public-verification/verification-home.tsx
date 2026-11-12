@@ -5,17 +5,9 @@ import Link from 'next/link';
 import { useRef } from 'react';
 import { ArrowRightIcon, FingerprintIcon, KeyRoundIcon, ShieldCheckIcon } from 'lucide-react';
 import { HeroField } from './hero-field';
-import {
-  HowItWorks,
-  LandingFooter,
-  LandingHeader,
-  Portals,
-  Safeguards,
-  ServicesIntro,
-} from './landing-sections';
-import { StudentShowcase } from './student-showcase';
+import { PublicHeader } from '@/components/public/public-header';
+import { LandingFooter } from './landing-sections';
 import { useLandingMotion } from './use-landing-motion';
-import { VerificationPanel } from './verification-panel';
 import crest from './university-crest.png';
 import styles from './verification-home.module.css';
 
@@ -25,11 +17,7 @@ const ASSURANCES = [
   { icon: ShieldCheckIcon, label: 'Separate staff access' },
 ] as const;
 
-/**
- * UI-06 public homepage. Student-facing and honest: the four public verification services are
- * explained but cannot be used yet, and every portal capability described exists today. All motion
- * is progressive enhancement (use-landing-motion.ts, hero-field.tsx, student-showcase.tsx).
- */
+/** Compact public homepage with the existing hero and direct, unavailable verification routes. */
 export function VerificationHome({ year }: { year: number }) {
   const root = useRef<HTMLDivElement>(null);
   useLandingMotion(root);
@@ -39,7 +27,7 @@ export function VerificationHome({ year }: { year: number }) {
       <a href="#main" className={styles.skip}>
         Skip to content
       </a>
-      <LandingHeader />
+      <PublicHeader variant="landing" />
       <main id="main" tabIndex={-1}>
         <section className={styles.hero} aria-labelledby="verification-title" data-hero>
           <HeroField className={styles.field} />
@@ -110,33 +98,7 @@ export function VerificationHome({ year }: { year: number }) {
               </div>
             </div>
           </div>
-          <a
-            href="#services"
-            className={styles.scrollCue}
-            aria-label="Scroll to verification services"
-          >
-            <span aria-hidden="true" />
-          </a>
         </section>
-
-        <section
-          id="services"
-          aria-labelledby="services-title"
-          tabIndex={-1}
-          className={styles.services}
-        >
-          <div className={styles.wrap}>
-            <ServicesIntro />
-            <div data-reveal>
-              <VerificationPanel />
-            </div>
-          </div>
-        </section>
-
-        <StudentShowcase />
-        <HowItWorks />
-        <Safeguards />
-        <Portals />
       </main>
       <LandingFooter year={year} />
     </div>
