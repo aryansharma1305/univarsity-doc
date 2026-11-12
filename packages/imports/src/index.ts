@@ -78,3 +78,4 @@ export {
 } from './workbook.js';
 export * from './result-rows.js';
 export * from './legacy-dry-run.js';
+export { rejectPopulatedIdentityColumns } from './source-privacy.js';

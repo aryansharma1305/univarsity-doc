@@ -36,3 +36,5 @@ export * from './public-verification/schemas.js';
 export * from './certificate-requests/synthetic-lifecycle.js';
 export * from './release-workflows.js';
 export * from './canonical-json.js';
+
+export * from './payment-buttons.js';

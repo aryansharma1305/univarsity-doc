@@ -1337,6 +1337,7 @@ model ReExamPaymentDestinationRate {
 /// student's submitted transaction reference / evidence and the staff review. Never deleted; at most
 /// one live obligation per application; a transaction reference satisfies at most one live payment.
 model ReExamPayment {
+  razorpayReconciliation         RazorpayReconciliation?
   gatewayOrders                  SandboxGatewayOrder[]
   id                             String                    @id @default(uuid(7)) @db.Uuid
   applicationId                  String                    @map("application_id") @db.Uuid
@@ -1414,22 +1415,23 @@ model ExternalExamApplication {
 }
 
 model User {
+  razorpayReconciliations    RazorpayReconciliation[]
   retotalingEvents           RetotalingEvent[]
-  preparedSyntheticReleases  SyntheticRelease[]     @relation("SyntheticReleasePreparer")
-  approvedSyntheticReleases  SyntheticRelease[]     @relation("SyntheticReleaseApprover")
-  publishedSyntheticReleases SyntheticRelease[]     @relation("SyntheticReleasePublisher")
+  preparedSyntheticReleases  SyntheticRelease[]       @relation("SyntheticReleasePreparer")
+  approvedSyntheticReleases  SyntheticRelease[]       @relation("SyntheticReleaseApprover")
+  publishedSyntheticReleases SyntheticRelease[]       @relation("SyntheticReleasePublisher")
   migrationDryRuns           LegacyMigrationBatch[]
   resultReviewEvents         ResultReviewEvent[]
   draftBatches               ResultDraftBatch[]
-  id                         String                 @id @default(uuid(7)) @db.Uuid
+  id                         String                   @id @default(uuid(7)) @db.Uuid
   /// Stored lower-case (CHECK) so uniqueness is case-insensitive.
-  email                      String                 @unique @db.VarChar(254)
-  displayName                String                 @map("display_name") @db.VarChar(120)
+  email                      String                   @unique @db.VarChar(254)
+  displayName                String                   @map("display_name") @db.VarChar(120)
   /// Argon2id hash (Phase 3). Null = cannot sign in with a password.
-  passwordHash               String?                @map("password_hash")
-  status                     UserStatus             @default(ACTIVE)
-  createdAt                  DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                  DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  passwordHash               String?                  @map("password_hash")
+  status                     UserStatus               @default(ACTIVE)
+  createdAt                  DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                  DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   roles                          UserRole[]
   importJobs                     ImportJob[]                     @relation("ImportJobCreatedBy")
@@ -1808,4 +1810,41 @@ model RetotalingEvent {
 
   @@unique([requestId, version])
   @@map("retotaling_events")
+}
+
+/// Sanitized, append-only signed provider event; never an automatic student/application match.
+model RazorpayWebhookReceipt {
+  id                String                  @id @default(uuid(7)) @db.Uuid
+  eventId           String                  @unique @map("event_id") @db.VarChar(128)
+  bodySha256        String                  @map("body_sha256") @db.Char(64)
+  merchantId        String                  @map("merchant_id") @db.VarChar(64)
+  providerPaymentId String                  @map("provider_payment_id") @db.VarChar(64)
+  eventType         String                  @map("event_type") @db.VarChar(32)
+  amountMinor       Int                     @map("amount_minor")
+  currency          String                  @db.Char(3)
+  captured          Boolean
+  amountRefunded    Int                     @map("amount_refunded")
+  providerCreatedAt DateTime                @map("provider_created_at") @db.Timestamptz(3)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  reconciliation    RazorpayReconciliation?
+
+  @@index([providerPaymentId])
+  @@map("razorpay_webhook_receipts")
+}
+
+/// Manual report-backed attribution is one-to-one and does not decide an academic application.
+model RazorpayReconciliation {
+  id                  String                 @id @default(uuid(7)) @db.Uuid
+  receiptId           String                 @unique @map("receipt_id") @db.Uuid
+  paymentId           String                 @unique @map("payment_id") @db.Uuid
+  providerPaymentId   String                 @unique @map("provider_payment_id") @db.VarChar(64)
+  buttonId            String                 @map("button_id") @db.VarChar(64)
+  reportReferenceHash String                 @map("report_reference_hash") @db.Char(64)
+  actorUserId         String                 @map("actor_user_id") @db.Uuid
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  receipt             RazorpayWebhookReceipt @relation(fields: [receiptId], references: [id], onDelete: Restrict)
+  payment             ReExamPayment          @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  actor               User                   @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@map("razorpay_reconciliations")
 }

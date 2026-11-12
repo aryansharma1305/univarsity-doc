@@ -1,6 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import Link from 'next/link';
+import { PaymentButtonPanel } from '@/features/payments/payment-button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileBadgeIcon, ArrowRightIcon } from 'lucide-react';
 import { PERMISSIONS } from '@docversity/types';
@@ -641,6 +642,9 @@ function RequestDetailView({
           )}
         </div>
       </section>
+      {student && (
+        <PaymentButtonPanel service="CERTIFICATE_HARD_COPY" path={`certificate/${r.id}`} />
+      )}
       <section aria-labelledby="history-heading">
         <h2 id="history-heading" className="mb-4 text-lg font-semibold">
           Application history

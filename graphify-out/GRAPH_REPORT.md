@@ -1,36 +1,41 @@
-# Graph Report - repo  (2026-11-10)
+# Graph Report - docversity-onboarding-razorpay  (2026-11-11)
 
 ## Corpus Check
-- 945 files · ~2,662,311 words
+- 965 files · ~2,674,045 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 30 file(s) not represented in the graph (top: (none) 8, .css 6, .example 4)
+- Unclassified: 31 file(s) not represented in the graph (top: (none) 9, .css 6, .example 4)
 
 ## Summary
-- 8032 nodes · 19091 edges · 967 communities (269 shown, 698 thin omitted)
-- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 726 edges (avg confidence: 0.84)
+- 8220 nodes · 19478 edges · 1005 communities (265 shown, 740 thin omitted)
+- Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 747 edges (avg confidence: 0.84)
 - Token cost: 0 input · 0 output
 
+## Graph Freshness
+- Built from commit: `8e28b34b`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
+
 ## Community Hubs (Navigation)
-- upload-view.tsx
+- document-dialogs.tsx
 - student-accounts/schemas.ts
 - ImportsController
 - config/package.json
+- payment-detail-view.tsx
 - ref_react
-- cn
-- common.ts
+- programs.ts
 - ui/package.json
-- packages_types_dist_index_academic_audit_actions
-- programs-view.tsx
-- packages_validation_dist_index_department
+- clean.py
+- useCan
+- errorMessage
 - database/package.json
 - ref_vitest
 - ProfileRequestsService
 - CertificateRequestsService
 - worker/package.json
 - students.ts
-- .prepare
+- SyntheticCertificatesService
 - support/db.ts
-- AppError
+- @nestjs/common
 - re-exams.ts
 - scripts
 - auth.schema.ts
@@ -39,23 +44,23 @@
 - examinations/re-exam-payments.test.ts
 - activity.ts
 - web/package.json
-- views.tsx
+- ui/src/index.ts
 - tasks
 - Academic Trust Matrix design system
-- DOCVERSITY README
-- FeeRulesService
+- Authentication
+- packages_documents_dist_index_marksheettemplate
 - types/package.json
 - api/package.json
 - contract.ts
-- errorMessage
+- packages_validation_dist_index_currencyminordigits
 - WorkflowsController
 - env.test.ts
 - validation/src/index.ts
 - re-exam-payments.ts
 - Database Documentation
 - documents/package.json
-- .current
-- packages_documents_dist_index
+- .writeAuditEvent
+- PublicVerificationController
 - ref_docversity_validation
 - academic-certificates.test.ts
 - historical-documents/schemas.ts
@@ -64,19 +69,19 @@
 - Institutional Certificate Registry
 - e2e/support.ts
 - Public Verification Portal Home Screen
-- StudentContext
+- ReExamsService
 - devDependencies
 - engine.ts
 - prepare-e2e.mjs
 - components.json
 - Academic Result Verification Detail Screen
 - dependencies
-- coming-soon.tsx
+- next
 - dependencies
 - imports/schemas.ts
 - compilerOptions
 - Admin Registry Dashboard Screen
-- useCan
+- packages_validation_dist_index_commitdraftimport
 - payments/src/index.ts
 - curricula.service.ts
 - ApiOperation
@@ -84,8 +89,8 @@
 - Docker Compose (local infra)
 - result-preview.ts
 - @testing-library/react
-- RateLimiter
-- @nestjs/common
+- academic-samples.test.ts
+- app.module.ts
 - ExaminationsController
 - packages_storage_dist_index_memoryobjectstorage
 - compilerOptions
@@ -94,7 +99,7 @@
 - imports/package.json
 - academic-certificates.ts
 - imports/src/index.ts
-- SyntheticCertificatesService
+- paginationMeta
 - QR Document Scanner & Verifier Screen
 - curricula.ts
 - compilerOptions
@@ -113,7 +118,7 @@
 - Phase 6.5 — Student portal UI
 - web/tsconfig.json
 - student-rows.ts
-- ReExamsService
+- MarksheetTemplatesController
 - database/tsconfig.build.json
 - api/tsconfig.json
 - curriculum-editor-view.tsx
@@ -131,19 +136,19 @@
 - Phase 15A — security and reliability hardening
 - entrypoint.sh
 - minio/init.sh
-- .activate
+- packages_types_dist_index_permissionsforroles
 - workbook.ts
-- imports.test.tsx
+- test/certificate-eligibility.test.ts
 - storage/src/index.ts
 - TestOnlyController
 - storage/package.json
-- UI-04 — Public verification homepage integration
+- examinations.service.ts
 - drafts.ts
 - CLAUDE.md — Docversity
 - Header
 - registration-rules.ts
 - staging.py
-- capabilities.tsx
+- PaymentButtonsService
 - node.js
 - nextjs.js
 - dependencies
@@ -161,31 +166,31 @@
 - backup-readiness.test.ts
 - ImportsService
 - server-auth.ts
-- test/certificate-eligibility.test.ts
+- ref_node_fs
 - student-profile/schemas.ts
-- api/src/main.ts
-- AuthContext
-- next
+- app.setup.ts
+- RequirePermissions
+- formatDateTime
 - examinations/schemas.ts
-- ProgramsService
-- ReleasesService
+- programs.service.ts
+- CertificateEligibilityController
 - .replace
 - Imports (Phase 5: students / registrations)
 - Phase 12C — course certificate eligibility and academic certificate templates
-- rehearse-release.py
-- historical-documents/historical-documents.test.ts
-- .create
+- pathlib
+- student-copy.test.ts
+- ResultImportsService
 - import-detail-view.tsx
-- RequirePermissions
-- CurrentAuth
+- Query
+- CertificateTemplatesService
 - certificate-requests/schemas.ts
 - academic-renderer.ts
 - gate_regression.py
-- packages_validation_dist_index_activityitem
+- Clean university environment and student onboarding
 - render.py
 - auth-page.tsx
 - Phase 14B — Full-stack live staging for university review
-- DraftResultsService
+- value-maps.tsx
 - GLOSSARY.md
 - users_gugloo_docvarsity_docversity_apps_api_dist_auth_password_service_js
 - users_gugloo_docvarsity_docversity_apps_api_dist_auth_password_service_passwordservice
@@ -193,26 +198,26 @@
 - users_gugloo_docvarsity_docversity_apps_api_dist_cli_create_admin_core_js
 - users_gugloo_docvarsity_docversity_apps_api_dist_cli_roles_ensureroles
 - users_gugloo_docvarsity_docversity_apps_api_dist_cli_roles_js
-- auth.service.ts
+- capabilities.tsx
 - Phase 10D — internal result review and publication safeguards
 - RecoverySafetyTests
 - training-certificate.test.ts
-- packages_validation_dist_index_activation_code_alphabet
-- .writeAuditEvent
+- scripts
+- rehearse-release.py
 - UI-05 — student certificate sample preview
-- packages_validation_dist_index_documentdisposition
-- course-certificate-samples.test.tsx
+- historical-documents.service.ts
+- packages_validation_dist_index_studentregistrationeligibilityv1
 - PaymentDestinationsService
-- DraftResultsController
+- payment-buttons.ts
 - product-mockups.tsx
 - Student certificate samples
 - grading.ts
 - Phase 9 — External examinations, re-exam applications and regional QR payments (delivery report)
-- academic.controllers.ts
+- academic.module.ts
 - smoke.mjs
-- Infrastructure issue — Phase 14A private `.local` data lost (22 October 2026)
+- CleanPreparation
 - marksheet.test.ts
-- result-rows.ts
+- result-preview.test.ts
 - LoginForm
 - academic-certificate-samples.test.ts
 - primitives.tsx
@@ -223,11 +228,11 @@
 - Course certificate eligibility API (Phase 12C)
 - testing.ts
 - public-verification/schemas.ts
-- packages_types_dist_index_audit_actions
-- use-gsap.ts
-- Frontend
-- gate-check.mjs
-- result-imports.service.ts
+- student-copy-backfill.ts
+- how-it-works.tsx
+- DOCVERSITY README
+- StudentResultsController
+- packages_imports_dist_index_buildresulterrorreport
 - training-certificate.ts
 - devDependencies
 - phase-12a-visual-review.md
@@ -236,7 +241,7 @@
 - use-landing-motion.ts
 - Phase 12C.1 — registration-specific academic certificate samples
 - UI-02 — Final visual review
-- course/page.tsx
+- loadWebEnv
 - packages_validation_dist_index_createexamination
 - edge_regression.py
 - opengraph-image.tsx
@@ -252,15 +257,15 @@
 - Hostinger operator runbook
 - verification-home.tsx
 - certificate-requests.md
-- historical-documents.service.ts
+- HistoricalDocumentsService
 - Docversity web product
 - Phase 8 — Historical certificates and the student document library (delivery report)
 - historical-documents.spec.ts
-- packages_validation_dist_index_paginationmeta
-- re-exams.test.tsx
+- schema/historical-documents.test.ts
+- profile-request-detail-view.tsx
 - UI-05 design comparison
 - ui-05-visual-review.md
-- ref_node_fs
+- review-fixture.mjs
 - postgres/init.sh
 - minio.sh
 - storage.sh
@@ -269,56 +274,55 @@
 - (portal)/page.tsx
 - schema/certificate-eligibility.test.ts
 - read-minio.sh
-- imports.service.ts
+- ApiConfig
 - UI-04 public verification homepage integration
 - S3ObjectStorage
 - public-verification/README.md
 - release-workflows.ts
 - ObjectStorage
 - marksheet-preview.ts
-- packages_validation_dist_index_publicverificationservices
-- loadWebEnv
-- StudentAccountsService
+- packages_validation_dist_index_publicverificationservice
+- documents/student-certificate-sample.ts
+- student-results.test.tsx
 - Phase 11B — synthetic marksheet infrastructure
-- schema/result-review.test.ts
-- schema/curricula.test.ts
+- pdf-memory.mjs
+- gate-check.mjs
 - payments/tsconfig.build.json
-- JsonLogger
-- re-exam-payments.test.tsx
-- Release-candidate integration verification
+- synthetic-lifecycle.ts
+- packages_validation_dist_index_paymentdestinationdetail
+- QueueModule
 - student-certificate-sample.test.ts
-- packages_validation_dist_index_normalizeverificationreference
+- EvidenceUploadInterceptor
 - payments/tsconfig.json
 - staging.spec.ts
-- profile-request-detail-view.tsx
+- curricula.spec.ts
 - devDependencies
 - scripts
-- mapping.test.ts
+- post
 - devDependencies
-- packages_database_dist_index_databasemodels
+- CertificateTemplatesModule
 - (portal)/examinations/page.tsx
-- auth-shell.tsx
-- packages_database_src_generated_prisma_client_prisma
+- admin/login/page.tsx
+- student-course-samples.spec.ts
 - ImportFileError
-- StorageModule
+- setup.ts
 - Phase 11B design comparison
-- StudentResultsController
-- curricula.spec.ts
-- Results import previews (Phase 10B)
-- student-fields.ts
-- edge-start.sh
-- images.sh
-- vps-preflight.sh
+- .file
 - apps_api_dist_auth_password_service
-- Phase 14A — Local staging and deployment readiness
 - apps_api_dist_auth_password_service_passwordservice
 - apps_api_dist_cli_create_admin_core
 - apps_api_dist_cli_create_admin_core_createadmin
+- edge-start.sh
+- images.sh
+- vps-preflight.sh
 - apps_api_dist_cli_roles
 - apps_api_dist_cli_roles_ensureroles
 - packages_database_dist_index
 - packages_database_dist_index_checkdatabaseconnection
 - packages_database_dist_index_createprismaclient
+- users_gugloo_security_audit_skill_univarsity_doc_phase15a_closure_agents_graphify_release_scratch_repo_packages_database_src_generated_prisma_client_js
+- users_gugloo_security_audit_skill_univarsity_doc_phase15a_closure_agents_graphify_release_scratch_repo_packages_database_src_generated_prisma_models_js
+- packages_database_dist_index_databasemodels
 - packages_database_dist_index_domainguardname
 - packages_database_dist_index_isdomainintegrityviolation
 - packages_database_dist_index_prisma
@@ -328,16 +332,18 @@
 - packages_database_dist_testing_index
 - packages_database_dist_testing_index_preparetestdatabase
 - packages_database_src_generated_prisma_client
+- packages_database_src_generated_prisma_client_prisma
 - packages_database_src_generated_prisma_client_prismaclient
 - packages_database_src_generated_prisma_models
+- packages_documents_dist_index
+- packages_documents_dist_index_academic_sample_max_bytes
 - packages_documents_dist_index_academic_fixtures
 - packages_documents_dist_index_academic_sample_pins
 - packages_documents_dist_index_academiccertificatesample
 - packages_documents_dist_index_academiccertificatetemplate
 - packages_documents_dist_index_academiccertificatetemplates
-- draft-results.spec.ts
+- post
 - packages_documents_dist_index_academicsampleintegrityerror
-- packages_documents_dist_index_marksheettemplate
 - packages_documents_dist_index_marksheettemplates
 - packages_documents_dist_index_renderacademiccertificatepreview
 - packages_documents_dist_index_rendermarksheetpreview
@@ -349,10 +355,11 @@
 - packages_documents_dist_index_training_fixtures
 - packages_documents_dist_index_training_sample_sha256
 - packages_documents_dist_index_trainingcertificatesample
+- ref_zod
 - packages_documents_dist_index_trainingcertificatetemplate
 - packages_documents_dist_index_trainingcertificatetemplates
 - packages_imports_dist_index
-- packages_imports_dist_index_buildresulterrorreport
+- packages_documents_dist_index_verifyacademicsample
 - packages_imports_dist_index_buildresulttemplate
 - packages_imports_dist_index_celldisplay
 - packages_imports_dist_index_columnletter
@@ -364,11 +371,13 @@
 - packages_imports_dist_index_importfileerror
 - packages_imports_dist_index_importstateerror
 - packages_imports_dist_index_inspectxlsxcontainer
+- packages_imports_dist_index_legacydryrun
 - packages_imports_dist_index_loadworkbook
 - packages_imports_dist_index_normalizedstudentrow
 - packages_imports_dist_index_processimportjob
 - packages_imports_dist_index_rawrowdata
 - packages_imports_dist_index_readworksheetrows
+- packages_imports_dist_index_rejectpopulatedidentitycolumns
 - packages_imports_dist_index_resultexistingregistration
 - packages_imports_dist_index_resultprogramsubject
 - packages_imports_dist_index_retrytarget
@@ -383,28 +392,35 @@
 - packages_imports_dist_index_validateresultrows
 - packages_imports_dist_index_validatestudentmapping
 - packages_imports_dist_index_verifyxlsxcontainer
+- packages_imports_dist_testing_fixturecell
 - packages_imports_dist_testing
 - packages_imports_dist_testing_buildworkbook
-- packages_imports_dist_testing_fixturecell
 - packages_imports_dist_testing_generatedstudents
 - packages_imports_dist_testing_registration2025sheet
+- student-copy.ts
 - packages_imports_dist_testing_studentsheet
+- packages_payments_dist_index
+- packages_payments_dist_index_mockpaymentprovider
+- packages_payments_dist_index_mockwebhookheaders
+- packages_payments_dist_index_paymentorder
+- packages_payments_dist_index_paymentreceipt
 - packages_storage_dist_index
+- packages_types_dist_index_permission
 - packages_storage_dist_index_objectkeys
 - packages_storage_dist_index_objectnotfounderror
 - packages_storage_dist_index_objectstorage
 - packages_storage_dist_index_s3objectstorage
 - packages_types_dist_index
+- packages_types_dist_index_rolename
+- packages_types_dist_index_academic_audit_actions
+- packages_types_dist_index_audit_actions
 - packages_types_dist_index_auditaction
 - packages_types_dist_index_import_job_names
 - packages_types_dist_index_importjobname
-- packages_types_dist_index_permission
 - packages_types_dist_index_permissions
-- packages_types_dist_index_permissionsforroles
 - packages_types_dist_index_queue_names
 - packages_types_dist_index_role_descriptions
 - packages_types_dist_index_role_names
-- packages_types_dist_index_rolename
 - packages_types_dist_index_system_job_names
 - packages_validation_dist_index
 - packages_validation_dist_index_academic_sample_ids
@@ -426,38 +442,41 @@
 - packages_validation_dist_index_academicsamplecertificatetype
 - packages_validation_dist_index_academicsamplefileurl
 - packages_validation_dist_index_academicsession
+- packages_validation_dist_index_addcurriculumsubject
 - packages_validation_dist_index_academicsessionlist
 - packages_validation_dist_index_academicsessionlistschema
 - packages_validation_dist_index_academicsessionquery
 - packages_validation_dist_index_academicsessionqueryschema
 - packages_validation_dist_index_academicsessionschema
+- packages_validation_dist_index_approveprofilerequestschema
 - packages_validation_dist_index_academicstructure
+- packages_validation_dist_index_activation_code_alphabet
 - packages_validation_dist_index_activation_code_length
+- packages_validation_dist_index_activityitem
 - packages_validation_dist_index_activitylist
 - packages_validation_dist_index_activitylistschema
-- packages_validation_dist_index_addcurriculumsubject
 - packages_validation_dist_index_addcurriculumsubjectinput
 - packages_validation_dist_index_addcurriculumsubjectschema
 - packages_validation_dist_index_all_certificate_types
 - packages_validation_dist_index_approvepaymentdestination
 - packages_validation_dist_index_approvepaymentdestinationschema
-- packages_validation_dist_index_approveprofilerequestschema
 - packages_validation_dist_index_approvereexamapplication
 - packages_validation_dist_index_approvereexamapplicationschema
 - packages_validation_dist_index_assigncurriculum
 - packages_validation_dist_index_assigncurriculumresult
+- packages_validation_dist_index_certificaterequestdetail
 - packages_validation_dist_index_assigncurriculumresultschema
 - packages_validation_dist_index_assigncurriculumschema
 - packages_validation_dist_index_assignmentruleissues
 - packages_validation_dist_index_authenticity_labels
 - packages_validation_dist_index_authuser
 - packages_validation_dist_index_authuserschema
+- packages_validation_dist_index_canonicaljson
 - packages_validation_dist_index_certificateapplicationpolicy
 - packages_validation_dist_index_certificateapplicationpolicyschema
 - packages_validation_dist_index_certificateeligibilityapprovalauthorityschema
 - packages_validation_dist_index_certificateeligibilityconfig
 - packages_validation_dist_index_certificateeligibilityconfigschema
-- packages_validation_dist_index_certificaterequestdetail
 - packages_validation_dist_index_certificaterequestlistschema
 - packages_validation_dist_index_certificaterequestquery
 - packages_validation_dist_index_certificaterequestqueryschema
@@ -475,7 +494,6 @@
 - packages_validation_dist_index_changepasswordrequestschema
 - packages_validation_dist_index_checkregistrationrelations
 - packages_validation_dist_index_columnmapping
-- packages_validation_dist_index_commitdraftimport
 - packages_validation_dist_index_commitdraftimportschema
 - packages_validation_dist_index_commitimport
 - packages_validation_dist_index_commitimportschema
@@ -514,7 +532,6 @@
 - packages_validation_dist_index_createsubjectinput
 - packages_validation_dist_index_createsubjectschema
 - packages_validation_dist_index_csrftokenresponseschema
-- packages_validation_dist_index_currencyminordigits
 - packages_validation_dist_index_current_certificate_duration_policy_version
 - packages_validation_dist_index_curriculumdetail
 - packages_validation_dist_index_curriculumdetailschema
@@ -531,6 +548,7 @@
 - packages_validation_dist_index_dashboardschema
 - packages_validation_dist_index_databaseenvschema
 - packages_validation_dist_index_datesinorder
+- packages_validation_dist_index_department
 - packages_validation_dist_index_departmentlist
 - packages_validation_dist_index_departmentlistschema
 - packages_validation_dist_index_departmentquery
@@ -539,6 +557,7 @@
 - packages_validation_dist_index_describecertificatedurationpolicy
 - packages_validation_dist_index_document_provenances
 - packages_validation_dist_index_documentauthenticity
+- packages_validation_dist_index_documentdisposition
 - packages_validation_dist_index_documentdispositionschema
 - packages_validation_dist_index_documentreference
 - packages_validation_dist_index_documentvariant
@@ -560,6 +579,7 @@
 - packages_validation_dist_index_durationunit
 - packages_validation_dist_index_eligibilityconfigstatus
 - packages_validation_dist_index_eligibilitydecision
+- packages_validation_dist_index_examination_kind_labels
 - packages_validation_dist_index_eligibilitydecisionschema
 - packages_validation_dist_index_eligibilityrejectionschema
 - packages_validation_dist_index_emailschema
@@ -568,11 +588,12 @@
 - packages_validation_dist_index_envboolean
 - packages_validation_dist_index_envvalidationerror
 - packages_validation_dist_index_error_codes
+- packages_validation_dist_index_examinationrow
 - packages_validation_dist_index_errorcode
 - packages_validation_dist_index_errorresponse
 - packages_validation_dist_index_errorresponseschema
 - packages_validation_dist_index_evaluatecourseduration
-- packages_validation_dist_index_examination_kind_labels
+- packages_validation_dist_index_evaluatesyntheticgrades
 - packages_validation_dist_index_examination_kinds
 - packages_validation_dist_index_examinationdetail
 - packages_validation_dist_index_examinationdetailschema
@@ -581,7 +602,6 @@
 - packages_validation_dist_index_examinationlistschema
 - packages_validation_dist_index_examinationquery
 - packages_validation_dist_index_examinationqueryschema
-- packages_validation_dist_index_examinationrow
 - packages_validation_dist_index_examinationstatus
 - packages_validation_dist_index_externalexamapp
 - packages_validation_dist_index_externalexamapplist
@@ -659,6 +679,10 @@
 - packages_validation_dist_index_issueactivationcodesschema
 - packages_validation_dist_index_issuedactivationcodes
 - packages_validation_dist_index_issuedactivationcodesschema
+- packages_validation_dist_index_legacydryrun
+- packages_validation_dist_index_legacydryrunschema
+- packages_validation_dist_index_legacyrecovery
+- packages_validation_dist_index_legacyrecoveryschema
 - packages_validation_dist_index_loginrequest
 - packages_validation_dist_index_loginrequestschema
 - packages_validation_dist_index_loglevelschema
@@ -677,10 +701,13 @@
 - packages_validation_dist_index_normalizeimportvalue
 - packages_validation_dist_index_normalizeregistrationnumber
 - packages_validation_dist_index_normalizetransactionreference
+- packages_validation_dist_index_normalizeverificationreference
 - packages_validation_dist_index_okresponseschema
+- packages_validation_dist_index_paginationmeta
 - packages_validation_dist_index_parseenv
 - packages_validation_dist_index_passwordpolicyviolations
 - packages_validation_dist_index_payment_destination_state_labels
+- packages_validation_dist_index_profile_photo_rules
 - packages_validation_dist_index_payment_evidence_rules
 - packages_validation_dist_index_payment_method_labels
 - packages_validation_dist_index_payment_methods
@@ -689,7 +716,6 @@
 - packages_validation_dist_index_payment_region_unavailable_messages
 - packages_validation_dist_index_payment_regions
 - packages_validation_dist_index_paymentdestination
-- packages_validation_dist_index_paymentdestinationdetail
 - packages_validation_dist_index_paymentdestinationdetailschema
 - packages_validation_dist_index_paymentdestinationlist
 - packages_validation_dist_index_paymentdestinationlistschema
@@ -699,8 +725,11 @@
 - packages_validation_dist_index_periodunit
 - packages_validation_dist_index_port
 - packages_validation_dist_index_portalstate
+- packages_validation_dist_index_preparerelease
+- packages_validation_dist_index_preparereleaseschema
+- packages_validation_dist_index_preparesyntheticcertificate
+- packages_validation_dist_index_preparesyntheticcertificateschema
 - packages_validation_dist_index_profile_field_labels
-- packages_validation_dist_index_profile_photo_rules
 - packages_validation_dist_index_profile_request_fields
 - packages_validation_dist_index_profilechanges
 - packages_validation_dist_index_profilechangesinput
@@ -732,7 +761,7 @@
 - packages_validation_dist_index_public_verification_unavailable
 - packages_validation_dist_index_publicverificationrequest
 - packages_validation_dist_index_publicverificationrequestschema
-- packages_validation_dist_index_publicverificationservice
+- packages_validation_dist_index_publicverificationservices
 - packages_validation_dist_index_publicverificationserviceschema
 - packages_validation_dist_index_queueenvschema
 - packages_validation_dist_index_re_exam_attempt_basis
@@ -775,6 +804,7 @@
 - packages_validation_dist_index_registrationlistschema
 - packages_validation_dist_index_registrationnumberschema
 - packages_validation_dist_index_registrationquery
+- packages_validation_dist_index_resultimportcontextoptionsschema
 - packages_validation_dist_index_registrationqueryschema
 - packages_validation_dist_index_registrationschema
 - packages_validation_dist_index_rejectprofilerequest
@@ -797,7 +827,6 @@
 - packages_validation_dist_index_resultcomponent
 - packages_validation_dist_index_resultcontextblocker
 - packages_validation_dist_index_resultimportcontextoptions
-- packages_validation_dist_index_resultimportcontextoptionsschema
 - packages_validation_dist_index_resultimportfield
 - packages_validation_dist_index_resultimportsheet
 - packages_validation_dist_index_resultpreview
@@ -812,6 +841,7 @@
 - packages_validation_dist_index_resultpreviewrowquery
 - packages_validation_dist_index_resultpreviewrowqueryschema
 - packages_validation_dist_index_resultpreviewschema
+- packages_validation_dist_index_retotalingreceiptschema
 - packages_validation_dist_index_reviewaction
 - packages_validation_dist_index_reviewactionschema
 - packages_validation_dist_index_reviewauthenticity
@@ -830,6 +860,12 @@
 - packages_validation_dist_index_ruledepartment
 - packages_validation_dist_index_ruleprogram
 - packages_validation_dist_index_rulesession
+- packages_validation_dist_index_sandboxcallback
+- packages_validation_dist_index_sandboxcallbackschema
+- packages_validation_dist_index_sandboxorder
+- packages_validation_dist_index_sandboxorderschema
+- packages_validation_dist_index_sandboxrefund
+- packages_validation_dist_index_sandboxrefundschema
 - packages_validation_dist_index_saveddraft
 - packages_validation_dist_index_saveddraftschema
 - packages_validation_dist_index_savedraft
@@ -901,7 +937,6 @@
 - packages_validation_dist_index_studentreexampaymentview
 - packages_validation_dist_index_studentreexampaymentviewschema
 - packages_validation_dist_index_studentregistrationeligibilityresponsev1schema
-- packages_validation_dist_index_studentregistrationeligibilityv1
 - packages_validation_dist_index_studentresultspage
 - packages_validation_dist_index_studentresultspageschema
 - packages_validation_dist_index_studentresultsquery
@@ -920,6 +955,14 @@
 - packages_validation_dist_index_submitprofilerequestschema
 - packages_validation_dist_index_submitreexampayment
 - packages_validation_dist_index_submitreexampaymentschema
+- packages_validation_dist_index_submitretotaling
+- packages_validation_dist_index_submitretotalingschema
+- packages_validation_dist_index_syntheticcertificatecommand
+- packages_validation_dist_index_syntheticcertificatecommandschema
+- packages_validation_dist_index_syntheticcertificatepolicyschema
+- packages_validation_dist_index_syntheticcertificatereceiptschema
+- packages_validation_dist_index_syntheticlookupschema
+- packages_validation_dist_index_syntheticpublishedresultschema
 - packages_validation_dist_index_teststoragebucket
 - packages_validation_dist_index_tominorunits
 - packages_validation_dist_index_trainingcertificateinput
@@ -930,12 +973,17 @@
 - packages_validation_dist_index_trainingcertificatetemplateschema
 - packages_validation_dist_index_trainingcertificatetemplatesresponseschema
 - packages_validation_dist_index_typeeligibility
+- scripts
 - packages_validation_dist_index_unavailableverificationresponse
+- Phase 10B — results import preview
 - packages_validation_dist_index_unavailableverificationresponseschema
 - packages_validation_dist_index_unresolveddurationreason
 - packages_validation_dist_index_updateacademicsession
+- Synthetic release workflows
+- Phase 10C — internal draft marks
 - packages_validation_dist_index_updateacademicsessionschema
 - packages_validation_dist_index_updatecurriculum
+- legacy-dry-run.ts
 - packages_validation_dist_index_updatecurriculumschema
 - packages_validation_dist_index_updatecurriculumsubject
 - packages_validation_dist_index_updatecurriculumsubjectschema
@@ -943,6 +991,7 @@
 - packages_validation_dist_index_updatedepartmentschema
 - packages_validation_dist_index_updateexamination
 - packages_validation_dist_index_updateexaminationschema
+- api/vitest.config.ts
 - packages_validation_dist_index_updateexternalexamapp
 - packages_validation_dist_index_updateexternalexamappschema
 - packages_validation_dist_index_updatehistoricaldocument
@@ -961,45 +1010,39 @@
 - packages_validation_dist_index_uploadhistoricaldocument
 - packages_validation_dist_index_uploadhistoricaldocumentinput
 - packages_validation_dist_index_uploadhistoricaldocumentschema
+- packages_validation_dist_index_uploadrequestbodylimitbytes
 - packages_validation_dist_index_valuemappedfield
 - packages_validation_dist_index_verifyreexampayment
 - packages_validation_dist_index_verifyreexampaymentschema
 - packages_validation_dist_index_withdrawhistoricaldocument
 - packages_validation_dist_index_withdrawhistoricaldocumentschema
-- scripts
-- (portal)/results/page.tsx
-- Phase 10B — results import preview
-- Synthetic release workflows
-- Phase 10C — internal draft marks
-- legacy-dry-run.ts
-- QueueModule
-- Phase 10: Manual Marks Entry & Excel Results Import Foundation
-- Internal draft results (Phase 10C)
-- api/vitest.config.ts
+- packages_validation_dist_index_workflowcommand
+- packages_validation_dist_index_workflowcommandschema
+- packages_validation_dist_index_workflowfixturepolicyschema
 
 ## God Nodes (most connected - your core abstractions)
-1. `@nestjs/common` - 176 edges
-2. `RequirePermissions()` - 154 edges
+1. `@nestjs/common` - 180 edges
+2. `RequirePermissions()` - 157 edges
 3. `cn()` - 143 edges
-4. `next` - 135 edges
-5. `AuthContext` - 133 edges
-6. `CurrentAuth` - 123 edges
-7. `AppError` - 108 edges
-8. `errorMessage()` - 106 edges
-9. `AuditService` - 82 edges
-10. `PrismaService` - 82 edges
+4. `AuthContext` - 135 edges
+5. `next` - 135 edges
+6. `CurrentAuth` - 125 edges
+7. `AppError` - 110 edges
+8. `errorMessage()` - 108 edges
+9. `AuditService` - 84 edges
+10. `PrismaService` - 84 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Architecture` --references--> `RateLimiter`  [INFERRED]
   docs/development/phase-13a-public-verification-foundation.md → apps/api/src/auth/rate-limiter.ts
-- `PDF correction and renewed testing window` --references--> `assertStaticPdf()`  [INFERRED]
-  docs/development/phase-15a-quality-hardening.md → apps/api/src/historical-documents/document-file.ts
 - `Consequences` --references--> `StudentRoute()`  [INFERRED]
   docs/decisions/ADR-0010-student-authentication.md → apps/api/src/student-auth/student-auth.decorators.ts
 - `Scope` --references--> `Wordmark()`  [INFERRED]
   docs/development/ui-01-landing-page.md → apps/web/src/components/brand/wordmark.tsx
 - `Staff endpoints` --references--> `search()`  [INFERRED]
   docs/api/student-accounts.md → apps/web/src/components/public/command-palette.tsx
+- `Source and route inventory` --references--> `RazorpayReconciliation()`  [INFERRED]
+  docs/development/razorpay-payment-integration.md → apps/web/src/features/payments/razorpay-reconciliation.tsx
 
 ## Import Cycles
 - None detected.
@@ -1023,55 +1066,63 @@
 - **Stitch reference screens implementing Academic Trust Matrix** — references_stitch_stitch_docversity_ui_ux_design_system_academic_result_verification_detail_code_screen, references_stitch_stitch_docversity_ui_ux_design_system_admin_registry_dashboard_code_screen, references_stitch_stitch_docversity_ui_ux_design_system_certificate_management_preview_code_screen, references_stitch_stitch_docversity_ui_ux_design_system_excel_bulk_import_validation_code_screen, references_stitch_stitch_docversity_ui_ux_design_system_public_verification_portal_home_code_screen, references_stitch_stitch_docversity_ui_ux_design_system_qr_document_scanner_verifier_code_screen, references_stitch_stitch_docversity_ui_ux_design_system_academic_trust_matrix_design_academic_trust_matrix [INFERRED 0.85]
 - **Shared Zod contract across API, OpenAPI and web forms** — readme_packages_validation, docs_api_readme_zod_openapi_single_source, docs_api_readme_swagger, docs_architecture_frontend_api_client, docs_architecture_frontend_react_hook_form_shared_zod [INFERRED 0.85]
 
-## Communities (967 total, 698 thin omitted)
+## Communities (1005 total, 740 thin omitted)
 
-### Community 0 - "upload-view.tsx"
-Cohesion: 0.07
-Nodes (38): metadata, metadata, metadata, documentFileUrl(), documentForm(), documentKeys, documentsApi, useDocumentMutation() (+30 more)
+### Community 0 - "document-dialogs.tsx"
+Cohesion: 0.08
+Nodes (37): metadata, metadata, documentFileUrl(), documentForm(), documentKeys, documentsApi, useDocumentMutation(), useHistoricalDocument() (+29 more)
 
 ### Community 1 - "student-accounts/schemas.ts"
-Cohesion: 0.06
-Nodes (32): studentStatusSchema, ACTIVATION_CODE_ALPHABET, ACTIVATION_CODE_LENGTH, activationCodeInput, IssueActivationCodes, issueActivationCodesSchema, IssuedActivationCodes, issuedActivationCodesSchema (+24 more)
+Cohesion: 0.04
+Nodes (47): ActivityItem, activityItemSchema, blankToUndefined(), dateOnlySchema, listQuerySchema(), optionalFilter(), optionalUuidSchema, PAGE_SIZE_DEFAULT (+39 more)
 
 ### Community 2 - "ImportsController"
-Cohesion: 0.15
+Cohesion: 0.14
 Nodes (22): download(), ImportsController, RowNumberPipe, StepDocs(), ApiBody, ApiConsumes, ApiCookieAuth, ApiCreatedResponse (+14 more)
 
 ### Community 3 - "config/package.json"
 Cohesion: 0.12
 Nodes (15): description, devDependencies, eslint, eslint, globals, typescript, name, peerDependencies (+7 more)
 
-### Community 4 - "ref_react"
-Cohesion: 0.07
-Nodes (75): metadata, metadata, Field(), getError(), SelectField(), selectValue(), applyServerErrors(), Command (+67 more)
+### Community 4 - "payment-detail-view.tsx"
+Cohesion: 0.05
+Nodes (87): metadata, metadata, Field(), SelectField(), applyServerErrors(), Command, PAGES, useSaveAcademicSession() (+79 more)
 
-### Community 5 - "cn"
+### Community 5 - "ref_react"
 Cohesion: 0.03
-Nodes (101): metadata, AdminBreadcrumbs(), NavLinks(), sidebarPreference, useBreadcrumbLabel(), ADMIN_NAV, AdminNavItem, activeNavHref() (+93 more)
+Nodes (124): metadata, AdminBreadcrumbs(), AdminShell(), NavLinks(), sidebarPreference, BreadcrumbLabelProvider(), LabelContext, Setter (+116 more)
 
-### Community 6 - "common.ts"
+### Community 6 - "programs.ts"
 Cohesion: 0.04
-Nodes (64): ACADEMIC_SESSION_DATE_ORDER_MESSAGE, ACADEMIC_SESSION_SORT_FIELDS, AcademicSessionList, academicSessionListSchema, AcademicSessionQuery, academicSessionQuerySchema, academicSessionSchema, CreateAcademicSession (+56 more)
+Nodes (60): ACADEMIC_SESSION_DATE_ORDER_MESSAGE, ACADEMIC_SESSION_SORT_FIELDS, AcademicSessionList, academicSessionListSchema, AcademicSessionQuery, academicSessionQuerySchema, academicSessionSchema, CreateAcademicSession (+52 more)
 
 ### Community 7 - "ui/package.json"
 Cohesion: 0.04
 Nodes (46): dependencies, class-variance-authority, clsx, lucide-react, radix-ui, sonner, tailwind-merge, description (+38 more)
 
-### Community 9 - "programs-view.tsx"
-Cohesion: 0.04
-Nodes (72): metadata, metadata, metadata, metadata, metadata, metadata, metadata, DataTable() (+64 more)
+### Community 8 - "clean.py"
+Cohesion: 0.11
+Nodes (23): argparse, Phase 14C static assertions for the Render staging configuration; nothing is…, Generate local-only staging secrets once. Never reads the development .env., caddyfile(), compose_config(), image_ids(), main(), plan() (+15 more)
+
+### Community 9 - "useCan"
+Cohesion: 0.05
+Nodes (79): metadata, metadata, metadata, metadata, metadata, metadata, metadata, metadata (+71 more)
+
+### Community 10 - "errorMessage"
+Cohesion: 0.06
+Nodes (29): metadata, metadata, ApplicationForm(), submit(), RequestAction(), submit(), AcademicTemplatesPreview(), generate() (+21 more)
 
 ### Community 11 - "database/package.json"
-Cohesion: 0.05
-Nodes (41): dependencies, @prisma/adapter-pg, @prisma/client, description, devDependencies, @docversity/config, eslint, prisma (+33 more)
+Cohesion: 0.07
+Nodes (26): dependencies, @prisma/adapter-pg, @prisma/client, description, devDependencies, @docversity/config, eslint, prisma (+18 more)
 
 ### Community 12 - "ref_vitest"
 Cohesion: 0.03
-Nodes (160): ARGON2_PARAMETERS, ensureRoles(), RESULT_REVIEW_POLICY, OBJECT_STORAGE, storage, waitForBlockedWrite(), activeCurriculum(), add() (+152 more)
+Nodes (146): AppModule, Module, configureApp(), installNotFoundFallback(), logLevelsFor(), loadApiConfig(), loadRootEnv(), bootstrap() (+138 more)
 
 ### Community 13 - "ProfileRequestsService"
 Cohesion: 0.09
-Nodes (28): ProfileRequestsController, StudentProfileController, ApiBody, ApiConsumes, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation (+20 more)
+Nodes (30): PhotoUploadRequest, imageContentType(), ProfileRequestsController, StudentProfileController, ApiBody, ApiConsumes, ApiCookieAuth, ApiCreatedResponse (+22 more)
 
 ### Community 14 - "CertificateRequestsService"
 Cohesion: 0.13
@@ -1082,24 +1133,24 @@ Cohesion: 0.05
 Nodes (42): dependencies, bullmq, @docversity/database, @docversity/imports, @docversity/storage, @docversity/types, @docversity/validation, ioredis (+34 more)
 
 ### Community 16 - "students.ts"
-Cohesion: 0.04
-Nodes (49): Create / update / skip policy, Validation, curriculumRefSchema, departmentQuerySchema, updateDepartmentSchema, ActivityList, activityListSchema, CreateRegistration (+41 more)
+Cohesion: 0.06
+Nodes (36): curriculumRefSchema, ActivityList, activityListSchema, CreateRegistration, CreateRegistrationInput, createRegistrationSchema, CreateStudent, CreateStudentInput (+28 more)
 
-### Community 17 - ".prepare"
-Cohesion: 0.19
-Nodes (15): StudentSyntheticCertificatesController, SyntheticCertificatePreparationController, SyntheticCertificatesController, ApiBody, ApiCookieAuth, ApiOkResponse, ApiProduces, ApiTags (+7 more)
+### Community 17 - "SyntheticCertificatesService"
+Cohesion: 0.11
+Nodes (22): StudentSyntheticCertificatesController, SyntheticCertificatePreparationController, SyntheticCertificatesController, ApiBody, ApiCookieAuth, ApiOkResponse, ApiProduces, ApiTags (+14 more)
 
 ### Community 18 - "support/db.ts"
-Cohesion: 0.11
-Nodes (21): packages_database_src_index_prismaclient, db, f, db, f, db, f, db (+13 more)
+Cohesion: 0.12
+Nodes (18): db, draftCurriculum(), f, db, f, db, f, db (+10 more)
 
-### Community 19 - "AppError"
+### Community 19 - "@nestjs/common"
 Cohesion: 0.03
-Nodes (113): AuditModule, Global, Module, AuditEvent, AuditService, Injectable, actorSelect, BOUNDARIES (+105 more)
+Nodes (121): AuditEvent, AuditService, Injectable, LimitResult, LimitRule, actorSelect, BOUNDARIES, ConfigRow (+113 more)
 
 ### Community 20 - "re-exams.ts"
 Cohesion: 0.04
-Nodes (64): refineDestination(), verifyReExamPaymentSchema, ApproveReExamApplication, approveReExamApplicationSchema, CreateReExamApplication, createReExamApplicationSchema, CreateReExamFeeRule, CreateReExamFeeRuleInput (+56 more)
+Nodes (48): ApproveReExamApplication, approveReExamApplicationSchema, CreateReExamApplication, createReExamApplicationSchema, CreateReExamFeeRule, CreateReExamFeeRuleInput, currencySchema, FeeSnapshot (+40 more)
 
 ### Community 21 - "scripts"
 Cohesion: 0.06
@@ -1118,36 +1169,32 @@ Cohesion: 0.07
 Nodes (28): dependencies, zod, description, devDependencies, @docversity/config, eslint, @types/node, typescript (+20 more)
 
 ### Community 25 - "examinations/re-exam-payments.test.ts"
-Cohesion: 0.18
-Nodes (15): Agent, assessedApplication(), draftBody(), durableCase(), expectStatus(), publish(), retireRegion(), sandboxCase() (+7 more)
+Cohesion: 0.07
+Nodes (37): Agent, assessedApplication(), draftBody(), durableCase(), expectStatus(), newStudent(), obligation(), publish() (+29 more)
 
 ### Community 26 - "activity.ts"
-Cohesion: 0.07
-Nodes (34): AuditRow, count(), FIELD_LABELS, fields(), plural(), status(), summarizeAudit(), viaImport() (+26 more)
+Cohesion: 0.08
+Nodes (29): AuditRow, count(), FIELD_LABELS, fields(), plural(), status(), summarizeAudit(), viaImport() (+21 more)
 
 ### Community 27 - "web/package.json"
-Cohesion: 0.06
-Nodes (29): description, @docversity/config, @docversity/database, @docversity/imports, @docversity/types, @docversity/validation, eslint, globals (+21 more)
-
-### Community 28 - "views.tsx"
 Cohesion: 0.07
-Nodes (31): certificateEligibilityApi, programEligibilityKey(), useProgramCertificateEligibility(), ConfigSummary(), CourseCertificateEligibilityPanel(), decide(), ProposeForm(), submit() (+23 more)
+Nodes (28): description, @docversity/config, @docversity/database, @docversity/imports, @docversity/types, @docversity/validation, eslint, globals (+20 more)
+
+### Community 28 - "ui/src/index.ts"
+Cohesion: 0.06
+Nodes (42): STATUS_LABELS, TONE, certificateEligibilityApi, programEligibilityKey(), useProgramCertificateEligibility(), ConfigSummary(), CourseCertificateEligibilityPanel(), decide() (+34 more)
 
 ### Community 29 - "tasks"
 Cohesion: 0.07
 Nodes (27): agentGuidance, dependsOn, outputs, cache, inputs, outputs, cache, dependsOn (+19 more)
 
 ### Community 30 - "Academic Trust Matrix design system"
-Cohesion: 0.07
-Nodes (47): ADR-0002: Separate NestJS API instead of Next.js server logic, NestJS REST API (apps/api), Next.js as UI only (no direct DB/Redis/storage access), BullMQ worker on Redis (apps/worker), ADR-0006: Academic integrity rules enforced by PostgreSQL, Database-enforced integrity (CHECK constraints, triggers, partial unique indexes), Immutability of PUBLISHED results / ISSUED certificates; append-only audit logs, Prisma partialIndexes preview feature (+39 more)
-
-### Community 31 - "DOCVERSITY README"
 Cohesion: 0.06
-Nodes (52): Academic Masters API (Phase 4), Server-side relation resolution rules, API Documentation, /api/v1 business endpoint prefix, Standard error envelope (code, message, requestId), Swagger / OpenAPI (generated), Zod schemas as single source of truth for OpenAPI, Authentication (+44 more)
+Nodes (49): ADR-0002: Separate NestJS API instead of Next.js server logic, NestJS REST API (apps/api), Next.js as UI only (no direct DB/Redis/storage access), BullMQ worker on Redis (apps/worker), health-test job on system queue, ADR-0006: Academic integrity rules enforced by PostgreSQL, Database-enforced integrity (CHECK constraints, triggers, partial unique indexes), Immutability of PUBLISHED results / ISSUED certificates; append-only audit logs (+41 more)
 
-### Community 32 - "FeeRulesService"
-Cohesion: 0.31
-Nodes (4): conflict(), FeeRulesService, toRule(), Injectable
+### Community 31 - "Authentication"
+Cohesion: 0.09
+Nodes (36): Redis 7.4 service, Authentication, pnpm admin:create (first admin), Argon2id password hashing, CSRF protection (session HMAC token + signed double-submit), Login rate limiting (fixed-window Redis counters), Password reset (single-use token in URL fragment), Redis unavailable → fail closed (503) (+28 more)
 
 ### Community 33 - "types/package.json"
 Cohesion: 0.08
@@ -1161,41 +1208,41 @@ Nodes (29): description, bullmq, @docversity/config, @docversity/database, @docv
 Cohesion: 0.05
 Nodes (45): actorSchema, ApprovedConfigInput, CertificateEligibilityApprovalAuthority, certificateEligibilityApprovalAuthoritySchema, CertificateEligibilityConfig, certificateEligibilityConfigSchema, CourseConfigurationState, courseConfigurationStateSchema (+37 more)
 
-### Community 36 - "errorMessage"
-Cohesion: 0.08
-Nodes (36): metadata, metadata, ApplicationForm(), submit(), RequestAction(), submit(), generate(), generate() (+28 more)
-
 ### Community 37 - "WorkflowsController"
-Cohesion: 0.19
-Nodes (13): SandboxCallbackController, StudentWorkflowsController, ApiBody, ApiCookieAuth, ApiTags, Body, Controller, Get (+5 more)
+Cohesion: 0.24
+Nodes (11): SandboxCallbackController, ApiBody, ApiCookieAuth, ApiTags, Body, Controller, HttpCode, Param (+3 more)
 
 ### Community 38 - "env.test.ts"
 Cohesion: 0.08
 Nodes (25): Shared MinIO bucket: investigation and test storage isolation, ImportLimitsEnv, importLimitsEnvSchema, QueueEnv, queueEnvSchema, EnvValidationError, parseEnv(), envBoolean (+17 more)
 
 ### Community 39 - "validation/src/index.ts"
-Cohesion: 0.05
-Nodes (29): canonicalJson(), ordered(), PrepareSyntheticCertificate, prepareSyntheticCertificateSchema, SyntheticCertificateCommand, syntheticCertificateCommandSchema, syntheticCertificatePolicySchema, syntheticCertificateReceiptSchema (+21 more)
+Cohesion: 0.09
+Nodes (17): canonicalJson(), ordered(), ERROR_CODES, ErrorCode, ErrorResponse, errorResponseSchema, HealthResponse, healthResponseSchema (+9 more)
 
 ### Community 40 - "re-exam-payments.ts"
-Cohesion: 0.03
-Nodes (81): isRegionGroup(), PAYMENT_REGION_GROUPS, PAYMENT_REGION_LABELS, PAYMENT_REGIONS, PaymentRegion, paymentRegionSchema, RE_EXAM_PAYMENT_STATUS_LABELS, RE_EXAM_PAYMENT_STATUSES (+73 more)
+Cohesion: 0.02
+Nodes (97): isRegionGroup(), PAYMENT_REGION_GROUPS, PAYMENT_REGION_LABELS, PAYMENT_REGIONS, PaymentRegion, paymentRegionSchema, RE_EXAM_PAYMENT_STATUS_LABELS, RE_EXAM_PAYMENT_STATUSES (+89 more)
 
 ### Community 41 - "Database Documentation"
-Cohesion: 0.06
-Nodes (54): Academic audit events (safe metadata), No-deletes rule (deactivate via status), Transactional student + registration creation, Frontend Animation Rules, Framer Motion (default UI motion), GSAP (timeline-heavy special effects only), No animation in admin data views / verification results, Respect prefers-reduced-motion (+46 more)
+Cohesion: 0.07
+Nodes (42): Academic Masters API (Phase 4), Academic audit events (safe metadata), Paginated list contract (page, pageSize, sortBy allow-list), No-deletes rule (deactivate via status), Server-side relation resolution rules, Transactional student + registration creation, /api/v1 business endpoint prefix, Standard error envelope (code, message, requestId) (+34 more)
 
 ### Community 42 - "documents/package.json"
 Cohesion: 0.07
 Nodes (27): dependencies, @docversity/validation, pdfkit, playwright, qrcode, description, exports, files (+19 more)
 
-### Community 43 - ".current"
-Cohesion: 0.22
-Nodes (4): RetotalingService, Injectable, SandboxGatewayService, Injectable
+### Community 43 - ".writeAuditEvent"
+Cohesion: 0.13
+Nodes (12): LegacyMigrationService, Injectable, ReleasesService, Injectable, RetotalingService, Injectable, SandboxGatewayService, Injectable (+4 more)
+
+### Community 44 - "PublicVerificationController"
+Cohesion: 0.06
+Nodes (39): PublicVerificationController, ApiBody, ApiOkResponse, ApiTags, Body, Controller, HttpCode, Post (+31 more)
 
 ### Community 45 - "ref_docversity_validation"
 Cohesion: 0.06
-Nodes (52): metadata, metadata, UserMenu(), signOut(), sessionKeys, sessionsApi, useSessionOptions(), useActiveDepartmentOptions() (+44 more)
+Nodes (42): certificateRequestsApi, actions, CertificateRequestDetailView(), CertificateRequestsView(), labels, RequestDetailView(), RequestsView(), StaffRequestDetail() (+34 more)
 
 ### Community 46 - "academic-certificates.test.ts"
 Cohesion: 0.12
@@ -1206,8 +1253,8 @@ Cohesion: 0.03
 Nodes (57): AUTHENTICITY_LABELS, certificateNumberSchema, DOCUMENT_AUTHENTICITY, DOCUMENT_PROVENANCES, DocumentAuthenticity, documentAuthenticitySchema, DocumentDisposition, documentDispositionSchema (+49 more)
 
 ### Community 48 - ".issue"
-Cohesion: 0.18
-Nodes (15): StudentAccountsController, ApiBody, ApiCookieAuth, ApiOkResponse, ApiOperation, ApiResponse, ApiSecurity, ApiTags (+7 more)
+Cohesion: 0.13
+Nodes (18): StudentAccountsController, ApiBody, ApiCookieAuth, ApiOkResponse, ApiOperation, ApiResponse, ApiSecurity, ApiTags (+10 more)
 
 ### Community 49 - "compilerOptions"
 Cohesion: 0.10
@@ -1218,24 +1265,24 @@ Cohesion: 0.14
 Nodes (20): Academic Session Selector & Global Search, Arweave Decentralized Storage Node, Audit Trail (Verification Queries), Certificate Revocation / Disciplinary Annulment, Certificate Status Lifecycle (Issued, Pending Sign-off, Revoked), Credential Status KPI Cards, Degree Certificate Parchment Template, Foil & Watermark Physical Security (+12 more)
 
 ### Community 51 - "e2e/support.ts"
-Cohesion: 0.14
-Nodes (22): shared, staffPage(), SERVICES, shared, staffPage(), post(), issueCode(), openRequest() (+14 more)
+Cohesion: 0.19
+Nodes (15): SERVICES, issueCode(), openRequest(), staffPage(), capture(), E2EFixtures, expectNoHorizontalOverflow(), expectNoSeriousA11yViolations() (+7 more)
 
 ### Community 52 - "Public Verification Portal Home Screen"
 Cohesion: 0.13
 Nodes (19): Bulk Verification & Institutional Access (Enterprise Gateway), Certificate Serial Format DOC-[YEAR]-[SERIAL], Certificate Verification (Conferrals & Degrees), Certified PDF Attestation (sealed PDF with audit trail and verification token), Check Results (Transcripts & Grades), Authenticated Credentials Stats Banner (148,290+ issued, 100% official, instant), Docversity Academic Registry, FERPA & GDPR Compliance (+11 more)
 
-### Community 53 - "StudentContext"
-Cohesion: 0.13
-Nodes (28): ApiProduces, Get, Param, Res, FeeRulesController, ReExamApplicationsController, StudentReExamsController, ApiBody (+20 more)
+### Community 53 - "ReExamsService"
+Cohesion: 0.07
+Nodes (31): conflict(), FeeRulesService, toRule(), Injectable, latestPaymentSummary(), FeeRulesController, ReExamApplicationsController, StudentReExamsController (+23 more)
 
 ### Community 54 - "devDependencies"
 Cohesion: 0.11
 Nodes (19): devDependencies, @axe-core/playwright, @docversity/config, @docversity/database, @docversity/imports, eslint, globals, jsdom (+11 more)
 
 ### Community 55 - "engine.ts"
-Cohesion: 0.08
-Nodes (53): cellDisplay(), appendAudit(), chunks(), computeRowCounts(), dateOnly(), Db, ExistingRow, existingSelect (+45 more)
+Cohesion: 0.10
+Nodes (48): appendAudit(), chunks(), computeRowCounts(), dateOnly(), Db, ExistingRow, existingSelect, fromDateOnly() (+40 more)
 
 ### Community 56 - "prepare-e2e.mjs"
 Cohesion: 0.13
@@ -1251,11 +1298,11 @@ Nodes (17): Institutional Academic Ledger (Folio), Academic Result Verification 
 
 ### Community 59 - "dependencies"
 Cohesion: 0.09
-Nodes (22): dependencies, bullmq, cookie, @docversity/database, @docversity/documents, @docversity/imports, @docversity/payments, @docversity/storage (+14 more)
+Nodes (23): dependencies, bullmq, cookie, @docversity/database, @docversity/documents, @docversity/imports, @docversity/payments, @docversity/storage (+15 more)
 
-### Community 60 - "coming-soon.tsx"
-Cohesion: 0.10
-Nodes (9): metadata, metadata, metadata, metadata, metadata, metadata, metadata, metadata (+1 more)
+### Community 60 - "next"
+Cohesion: 0.05
+Nodes (19): metadata, metadata, metadata, metadata, metadata, metadata, metadata, metadata (+11 more)
 
 ### Community 61 - "dependencies"
 Cohesion: 0.12
@@ -1263,7 +1310,7 @@ Nodes (17): dependencies, @docversity/types, @docversity/ui, @docversity/validat
 
 ### Community 62 - "imports/schemas.ts"
 Cohesion: 0.03
-Nodes (58): ColumnMapping, columnMappingSchema, CommitImport, commitImportSchema, fieldValuesSchema, IMPORT_ROW_FILTERS, IMPORT_SORT_FIELDS, ImportActions (+50 more)
+Nodes (68): ColumnMapping, columnMappingSchema, CommitImport, commitImportSchema, fieldValuesSchema, IMPORT_ROW_FILTERS, IMPORT_SORT_FIELDS, ImportActions (+60 more)
 
 ### Community 63 - "compilerOptions"
 Cohesion: 0.12
@@ -1273,17 +1320,13 @@ Nodes (15): compilerOptions, allowJs, declaration, declarationMap, incremental, 
 Cohesion: 0.16
 Nodes (16): Academic Session Selector, Admin Registry Dashboard Screen, Docversity Registrar Core, Generate Certificate Action, Global Search (Matric ID / Diploma Hash), Import Excel Action, KPI Stat Cards, Recent Certificates Panel (+8 more)
 
-### Community 65 - "useCan"
-Cohesion: 0.04
-Nodes (57): metadata, metadata, metadata, metadata, metadata, metadata, PageHeader(), EmptyState() (+49 more)
-
 ### Community 66 - "payments/src/index.ts"
-Cohesion: 0.10
-Nodes (23): amount, currency, digest(), eventSchema, MockPaymentProvider, MockWebhookHeaders, orderRequestSchema, PaymentEvent (+15 more)
+Cohesion: 0.06
+Nodes (37): Activation and unresolved inputs, Final local results (10 November 2026), Mentor requirements and current availability, Razorpay Payment Button integration — development review, Reconciliation and attribution boundaries, Source and route inventory, Verification, Razorpay development integration (+29 more)
 
 ### Community 67 - "curricula.service.ts"
 Cohesion: 0.10
-Nodes (22): ASSIGNMENT_ORDER, AssignmentRow, componentsJson(), componentsOf(), CurriculaService, detailInclude, DetailRow, notEditable() (+14 more)
+Nodes (21): ASSIGNMENT_ORDER, AssignmentRow, componentsJson(), componentsOf(), CurriculaService, detailInclude, DetailRow, notEditable() (+13 more)
 
 ### Community 68 - "ApiOperation"
 Cohesion: 0.17
@@ -1294,36 +1337,36 @@ Cohesion: 0.20
 Nodes (15): Academic Rules Enforcement, Academic Session Selector & Global Search, Atomic Transaction Import with Rollback, Validation Error Log CSV Export, Row-level Error Review Table with Suggested Actions, Six-Step Import Wizard Stepper, SHA256 Data Ingestion Checksum / Cryptographic Roster Commitment, Detected Intelligent Column Mapping (Docversity Semantic Engine) (+7 more)
 
 ### Community 70 - "Docker Compose (local infra)"
-Cohesion: 0.14
-Nodes (21): CI Workflow, Playwright browser smoke test, Database schema drift check (pnpm db:check), CI verify job (install, lint, typecheck, test, build, e2e), Docker Compose (local infra), Loopback-only non-default host ports, MinIO service (Chainguard image), PostgreSQL 17 service (+13 more)
+Cohesion: 0.20
+Nodes (14): CI Workflow, Playwright browser smoke test, Database schema drift check (pnpm db:check), CI verify job (install, lint, typecheck, test, build, e2e), Docker Compose (local infra), Loopback-only non-default host ports, MinIO service (Chainguard image), PostgreSQL 17 service (+6 more)
 
 ### Community 71 - "result-preview.ts"
 Cohesion: 0.05
 Nodes (38): examinationKindSchema, examinationStatusSchema, RESULT_IMPORT_FIELD_KEYS, RESULT_IMPORT_FIELDS, resultImportField, ResultImportFieldDefinition, ResultImportFieldKind, periodSchema (+30 more)
 
 ### Community 72 - "@testing-library/react"
-Cohesion: 0.12
-Nodes (26): CURRICULUM_ADMIN, program, READER, serveCurriculum(), department, EXAM_ADMIN, program, READER (+18 more)
+Cohesion: 0.06
+Nodes (49): body(), RazorpayTestEmbed(), StudentReExamApplications(), CURRICULUM_ADMIN, program, READER, serveCurriculum(), department (+41 more)
 
-### Community 73 - "RateLimiter"
-Cohesion: 0.05
-Nodes (37): IdentifierHasher, Inject, Injectable, RateLimiter, Injectable, AcademicSamplesService, Injectable, Inject (+29 more)
-
-### Community 74 - "@nestjs/common"
+### Community 73 - "academic-samples.test.ts"
 Cohesion: 0.03
-Nodes (118): error, NOT_EDITABLE, API_ROUTE_PREFIX, LOG_LEVELS, OPENAPI_JSON_PATH, errorResponse, Inject, AUTH_MODE_KEY (+110 more)
+Nodes (54): IdentifierHasher, Inject, Injectable, RateLimiter, Injectable, AcademicSamplesService, Injectable, Inject (+46 more)
+
+### Community 74 - "app.module.ts"
+Cohesion: 0.03
+Nodes (55): AuditModule, Global, Module, AuthGuard, Injectable, AuthModule, Global, Module (+47 more)
 
 ### Community 75 - "ExaminationsController"
-Cohesion: 0.18
-Nodes (19): ExaminationAppsController, ExaminationsController, StudentExaminationsController, ApiBody, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation (+11 more)
+Cohesion: 0.15
+Nodes (21): ExaminationAppsController, ExaminationsController, StudentExaminationsController, ApiBody, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation (+13 more)
 
 ### Community 77 - "compilerOptions"
 Cohesion: 0.17
 Nodes (11): compilerOptions, declaration, declarationMap, erasableSyntaxOnly, noEmit, outDir, rewriteRelativeImportExtensions, rootDir (+3 more)
 
 ### Community 78 - "ReExamPaymentsService"
-Cohesion: 0.15
-Nodes (8): isUsable(), resolveAmount(), applicationBlock(), conflict(), ReExamPaymentsService, toRow(), Injectable, Synthetic payment foundation
+Cohesion: 0.14
+Nodes (9): destinationState(), isUsable(), resolveAmount(), PreparedFile, applicationBlock(), conflict(), ReExamPaymentsService, toRow() (+1 more)
 
 ### Community 79 - "payments/package.json"
 Cohesion: 0.07
@@ -1338,12 +1381,12 @@ Cohesion: 0.09
 Nodes (21): ACADEMIC_TEMPLATE_IDS, AcademicCertificateInput, academicCertificateInputSchema, AcademicCertificatePreviewQuery, academicCertificatePreviewQuerySchema, AcademicCertificateTemplate, academicCertificateTemplateSchema, academicCertificateTemplatesResponseSchema (+13 more)
 
 ### Community 82 - "imports/src/index.ts"
-Cohesion: 0.17
-Nodes (21): RFC-9562, transitionImportJob(), actionRequired(), buildErrorReport(), buildResultErrorReport(), ReportRow, ReportSummary, ResultReportRow (+13 more)
+Cohesion: 0.13
+Nodes (26): RFC-9562, transitionImportJob(), AttemptInfo, ImportEngine, ImportStage, ImportStepResult, actionRequired(), buildErrorReport() (+18 more)
 
-### Community 83 - "SyntheticCertificatesService"
-Cohesion: 0.31
-Nodes (5): conflict(), digest(), digestBytes(), SyntheticCertificatesService, Injectable
+### Community 83 - "paginationMeta"
+Cohesion: 0.09
+Nodes (15): CODE_CONFLICT, DepartmentRow, DepartmentsService, include, toDepartment(), Injectable, CODE_CONFLICT, historyUsage (+7 more)
 
 ### Community 84 - "QR Document Scanner & Verifier Screen"
 Cohesion: 0.24
@@ -1363,7 +1406,7 @@ Nodes (10): Acceptance fixes, Complete final specification acceptance matrix, Ev
 
 ### Community 88 - "Architecture Overview"
 Cohesion: 0.07
-Nodes (32): Student photo upload deferred, Architecture Overview, ADR-0002 Separate API, ADR-0003 Background worker, ADR-0004 Object storage, ADR-0005 Toolchain baseline, API enqueues heavy jobs to worker via Redis, Browser talks to Next.js only (+24 more)
+Nodes (38): Student photo upload deferred, Frontend Animation Rules, Framer Motion (default UI motion), GSAP (timeline-heavy special effects only), No animation in admin data views / verification results, Respect prefers-reduced-motion, Initial Stitch Migration Plan (archived), grading module (pure calculation engine) (+30 more)
 
 ### Community 89 - "nestjs.json"
 Cohesion: 0.20
@@ -1375,7 +1418,7 @@ Nodes (8): collection, compilerOptions, builder, deleteOutDir, tsConfigPath, ent
 
 ### Community 91 - "uid"
 Cohesion: 0.24
-Nodes (17): db, draft(), f, imageDraft(), sha(), staffUser(), uid(), fixtures() (+9 more)
+Nodes (16): db, f, db, f, uid(), fixtures(), examContext(), examination() (+8 more)
 
 ### Community 92 - "scripts"
 Cohesion: 0.20
@@ -1406,7 +1449,7 @@ Cohesion: 0.22
 Nodes (8): compilerOptions, noEmit, outDir, rootDir, exclude, extends, include, @docversity/config/typescript/node.json
 
 ### Community 99 - "Phase 6.5 — Student portal UI"
-Cohesion: 0.18
+Cohesion: 0.17
 Nodes (10): Staff endpoints, Student endpoints (student session; never staff), Student portal & student accounts API, Development indicator investigation, Evidence, Phase 6.5 — Student portal UI, Phase boundary, Review polish (before merge) (+2 more)
 
 ### Community 100 - "web/tsconfig.json"
@@ -1414,12 +1457,12 @@ Cohesion: 0.25
 Nodes (7): compilerOptions, paths, rootDir, exclude, extends, include, @docversity/config/typescript/nextjs.json
 
 ### Community 101 - "student-rows.ts"
-Cohesion: 0.14
-Nodes (20): SourceCell, error(), FieldValues, indexRecords(), NormalizedStudentRow, PROTECTED_FIELDS, readText(), RecordIndex (+12 more)
+Cohesion: 0.11
+Nodes (27): SourceCell, calendarDate(), DateParse, FORMAT_HINT, pad(), parseDateCell(), parseDateText(), error() (+19 more)
 
-### Community 102 - "ReExamsService"
-Cohesion: 0.14
-Nodes (7): conflict(), csvCell(), feeData(), feeOf(), ReExamsService, toRow(), Injectable
+### Community 102 - "MarksheetTemplatesController"
+Cohesion: 0.12
+Nodes (12): MarksheetTemplatesController, ApiCookieAuth, ApiOkResponse, ApiProduces, ApiTags, Controller, Get, Res (+4 more)
 
 ### Community 103 - "database/tsconfig.build.json"
 Cohesion: 0.25
@@ -1431,11 +1474,11 @@ Nodes (6): compilerOptions, noEmit, rootDir, extends, include, @docversity/confi
 
 ### Community 105 - "curriculum-editor-view.tsx"
 Cohesion: 0.08
-Nodes (32): metadata, metadata, BreadcrumbLabelProvider(), LabelContext, Setter, useSetBreadcrumbLabel(), curriculumKeys, useCurricula() (+24 more)
+Nodes (30): metadata, metadata, curriculaApi, curriculumKeys, useCurricula(), useCurriculum(), useCurriculumMutation(), useCurriculumRegistrations() (+22 more)
 
 ### Community 106 - "create-admin-core.ts"
-Cohesion: 0.32
-Nodes (8): createAdmin(), CreateAdminError, CreateAdminInput, main(), prompt(), promptHidden(), rootEnv, ref_node_readline
+Cohesion: 0.27
+Nodes (9): createAdmin(), CreateAdminError, CreateAdminInput, main(), prompt(), promptHidden(), rootEnv, ensureRoles() (+1 more)
 
 ### Community 107 - "database/tsconfig.json"
 Cohesion: 0.29
@@ -1454,8 +1497,8 @@ Cohesion: 0.29
 Nodes (6): compilerOptions, noEmit, rootDir, extends, include, @docversity/config/typescript/node.json
 
 ### Community 111 - ".login"
-Cohesion: 0.06
-Nodes (53): ApiAcceptedResponse, ApiServiceUnavailableResponse, AuthController, ApiBody, ApiCookieAuth, ApiOkResponse, ApiOperation, ApiResponse (+45 more)
+Cohesion: 0.07
+Nodes (48): ApiAcceptedResponse, ApiServiceUnavailableResponse, AuthController, ApiBody, ApiCookieAuth, ApiOkResponse, ApiOperation, ApiResponse (+40 more)
 
 ### Community 112 - "ui/tsconfig.json"
 Cohesion: 0.33
@@ -1466,8 +1509,8 @@ Cohesion: 0.13
 Nodes (22): StudentValidationContext, ARCHIVED, DEPT, existingRegistration(), INACTIVE_DEPT, INACTIVE_PROGRAM, LOOSE, MBA (+14 more)
 
 ### Community 114 - "run.ts"
-Cohesion: 0.19
-Nodes (10): DEV_FIXTURE_LABEL, PROGRAMS, seedDevelopmentFixtures(), SeedSummary, STUDENTS, SUBJECTS, db, LOCAL_HOSTS (+2 more)
+Cohesion: 0.18
+Nodes (11): DEV_FIXTURE_LABEL, PROGRAMS, seedDevelopmentFixtures(), SeedSummary, STUDENTS, SUBJECTS, db, LOCAL_HOSTS (+3 more)
 
 ### Community 115 - ".prettierrc.json"
 Cohesion: 0.50
@@ -1478,20 +1521,16 @@ Cohesion: 0.67
 Nodes (3): @docversity/config shared tooling configuration, Shared ESLint configs (base/node/nextjs) + Prettier formatting, Shared TypeScript configs (base/node/nestjs/nextjs)
 
 ### Community 117 - "Phase 15A — security and reliability hardening"
-Cohesion: 0.07
-Nodes (25): Commands and actual results, Demonstrated defects and focused corrections, Environment and preservation, Final independent-review correction, Final workspace verification (23 October), PDF correction and renewed testing window, Phase 15A — security and reliability hardening, PostgreSQL startup diagnosis (+17 more)
-
-### Community 121 - ".activate"
-Cohesion: 0.12
-Nodes (22): preAuthCsrfCookieOptions(), clientInfo(), StudentAuthController, StudentController, ApiBody, ApiCookieAuth, ApiOkResponse, ApiOperation (+14 more)
+Cohesion: 0.08
+Nodes (24): Commands and actual results, Demonstrated defects and focused corrections, Environment and preservation, Final independent-review correction, Final workspace verification (23 October), Phase 15A — security and reliability hardening, PostgreSQL startup diagnosis, Regression coverage (+16 more)
 
 ### Community 122 - "workbook.ts"
-Cohesion: 0.12
-Nodes (29): BLANK, dateToIso(), isRecord(), plainResult(), richText(), toSourceCell(), MappingProblem, MARK_FIELDS (+21 more)
+Cohesion: 0.13
+Nodes (27): BLANK, cellDisplay(), dateToIso(), isRecord(), plainResult(), richText(), toSourceCell(), rawDisplay() (+19 more)
 
-### Community 123 - "imports.test.tsx"
-Cohesion: 0.17
-Nodes (10): body(), COUNTS, IMPORTER, detail, me, push, refresh, REVIEWER (+2 more)
+### Community 123 - "test/certificate-eligibility.test.ts"
+Cohesion: 0.09
+Nodes (27): 10g. Course certificate eligibility (Phase 12C), Course-to-certificate configuration architecture, ALL_CERTIFICATE_TYPES, configMatchesCourse(), proposeCertificateEligibilitySchema, resolveCourseConfigurationState(), resolveTypeEligibility(), studentCertificateEligibilityItemV1Schema (+19 more)
 
 ### Community 124 - "storage/src/index.ts"
 Cohesion: 0.22
@@ -1505,33 +1544,33 @@ Nodes (5): TestOnlyController, Controller, Get, HttpCode, Post
 Cohesion: 0.12
 Nodes (16): dependencies, @aws-sdk/client-s3, @docversity/validation, description, exports, files, @docversity/config, @docversity/validation (+8 more)
 
-### Community 127 - "UI-04 — Public verification homepage integration"
-Cohesion: 0.12
-Nodes (15): VerificationPanel(), titles, Scope and starting point, Current verification evidence, Design documentation handoff, Focused CI recovery after initial delivery, Implementation and routing plan, Initial audit and base (+7 more)
+### Community 127 - "examinations.service.ts"
+Cohesion: 0.17
+Nodes (10): AppRecord, CODE_CONFLICT, ExaminationsService, examInclude, ExamRecord, notEditable(), SUMMARIES, toApp() (+2 more)
 
 ### Community 128 - "drafts.ts"
 Cohesion: 0.06
 Nodes (36): resultPreviewContextSchema, CommitDraftImport, commitDraftImportSchema, DRAFT_MARK_FIELDS, draftAuditSchema, draftImportOutcomeSchema, DraftImportPlan, draftImportPlanSchema (+28 more)
 
 ### Community 129 - "CLAUDE.md — Docversity"
-Cohesion: 0.11
-Nodes (18): 10. Authentication boundaries, 10a. Student profile change requests (Phase 7), 10c. Historical documents (Phase 8), 10d. Examinations (Phase 9), 10e. Internal draft results (Phase 10C), 10f. Internal result review (Phase 10D), 11. Student import workflow (Phase 5), 12. API conventions (+10 more)
+Cohesion: 0.06
+Nodes (34): 10. Authentication boundaries, 10a. Student profile change requests (Phase 7), 10b. Course and curriculum management (Phase 7B), 10c. Historical documents (Phase 8), 10d. Examinations (Phase 9), 10e. Internal draft results (Phase 10C), 10f. Internal result review (Phase 10D), 11. Student import workflow (Phase 5) (+26 more)
 
 ### Community 130 - "Header"
-Cohesion: 0.11
-Nodes (22): ApiBody, ApiCreatedResponse, ApiSecurity, Body, Post, ResultReviewController, ApiBody, ApiCookieAuth (+14 more)
+Cohesion: 0.09
+Nodes (29): DraftResultsController, ApiBody, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiSecurity, ApiTags, Body (+21 more)
 
 ### Community 131 - "registration-rules.ts"
-Cohesion: 0.23
-Nodes (11): AcademicSessionStatus, MasterDataStatus, checkRegistrationRelations(), issue(), RegistrationRelationInput, RegistrationRelationIssue, RegistrationRelationIssueCode, RegistrationRelationResult (+3 more)
+Cohesion: 0.17
+Nodes (14): Create / update / skip policy, Validation, AcademicSessionStatus, MasterDataStatus, checkRegistrationRelations(), issue(), RegistrationRelationInput, RegistrationRelationIssue (+6 more)
 
 ### Community 132 - "staging.py"
-Cohesion: 0.13
-Nodes (28): datetime, backup(), compose(), compose_files(), export_ca(), gate_problem(), gate_required(), instance_environment() (+20 more)
+Cohesion: 0.09
+Nodes (37): datetime, backup(), compose(), compose_files(), export_ca(), gate_problem(), gate_required(), instance_environment() (+29 more)
 
-### Community 133 - "capabilities.tsx"
-Cohesion: 0.17
-Nodes (8): EASE, Feature, FEATURES, CHOICES, Magnetic(), SpotlightLayer(), trackSpotlight(), StudentPhone()
+### Community 133 - "PaymentButtonsService"
+Cohesion: 0.11
+Nodes (14): PaymentButtonsController, RazorpayWebhookController, ApiBody, ApiCookieAuth, ApiSecurity, ApiTags, Body, Controller (+6 more)
 
 ### Community 135 - "nextjs.js"
 Cohesion: 0.31
@@ -1566,16 +1605,16 @@ Cohesion: 0.29
 Nodes (6): compilerOptions, noEmit, rootDir, extends, include, @docversity/config/typescript/node.json
 
 ### Community 144 - "prepare-test-database.ts"
-Cohesion: 0.19
-Nodes (12): checkDatabaseConnection(), createPrismaClient(), CreatePrismaClientOptions, LOCAL_HOSTS, prepare(), prepareTestDatabase(), PrepareTestDatabaseOptions, loadRootEnv() (+4 more)
+Cohesion: 0.18
+Nodes (13): checkDatabaseConnection(), createPrismaClient(), CreatePrismaClientOptions, packages_database_src_index_prismaclient, LOCAL_HOSTS, prepare(), prepareTestDatabase(), PrepareTestDatabaseOptions (+5 more)
 
 ### Community 145 - "base.js"
 Cohesion: 0.40
 Nodes (4): baseConfig(), eslint-config-prettier, @eslint/js, typescript-eslint
 
 ### Community 146 - "database/src/index.ts"
-Cohesion: 0.23
-Nodes (11): DOMAIN_GUARD_SQLSTATE, domainGuardName(), DriverCause, isDomainIntegrityViolation(), prismaErrorCode(), uniqueConstraintName(), DatabaseModels, ref_generated_prisma_client_js (+3 more)
+Cohesion: 0.15
+Nodes (13): DOMAIN_GUARD_SQLSTATE, domainGuardName(), DriverCause, isDomainIntegrityViolation(), prismaErrorCode(), uniqueConstraintName(), DatabaseModels, packages_database_src_index_prisma (+5 more)
 
 ### Community 147 - "CertificateEligibilityService"
 Cohesion: 0.18
@@ -1586,40 +1625,44 @@ Cohesion: 0.10
 Nodes (27): assertBackupReady(), unfinished, bullmqConnection(), createWorkers(), CreateWorkersOptions, importProcessor(), loadRootEnv(), loadWorkerEnv() (+19 more)
 
 ### Community 149 - "ImportsService"
-Cohesion: 0.16
+Cohesion: 0.18
 Nodes (9): ImportsService, iso(), issues(), notNow(), parseFailure(), parseMapping(), parseSheets(), stateConflict() (+1 more)
 
 ### Community 150 - "server-auth.ts"
-Cohesion: 0.21
-Nodes (11): metadata, Page(), metadata, Page(), getStudentReExamOptions, getStudentReExamPayment, SESSION_COOKIES, SessionState (+3 more)
+Cohesion: 0.16
+Nodes (14): metadata, Page(), metadata, Page(), metadata, Page(), getStudentCurriculum, getStudentReExamOptions (+6 more)
 
-### Community 151 - "test/certificate-eligibility.test.ts"
-Cohesion: 0.09
-Nodes (27): 10g. Course certificate eligibility (Phase 12C), Course-to-certificate configuration architecture, ALL_CERTIFICATE_TYPES, configMatchesCourse(), proposeCertificateEligibilitySchema, resolveCourseConfigurationState(), resolveTypeEligibility(), studentCertificateEligibilityItemV1Schema (+19 more)
+### Community 151 - "ref_node_fs"
+Cohesion: 0.07
+Nodes (27): signal(), preflight(), quote(), script, sha, options(), API_PORT, e2eDatabaseUrl (+19 more)
 
 ### Community 152 - "student-profile/schemas.ts"
 Cohesion: 0.04
-Nodes (48): 10h. Reviewer staging (Phase 14B), dateOnlySchema, PAYMENT_EVIDENCE_RULES, PAYMENT_QR_RULES, HISTORICAL_DOCUMENT_RULES, packages_validation_src_index_historical_document_rules, packages_validation_src_index_upload_request_overhead_bytes, packages_validation_src_index_uploadrequestbodylimitbytes (+40 more)
+Nodes (47): 10h. Reviewer staging (Phase 14B), PAYMENT_EVIDENCE_RULES, PAYMENT_QR_RULES, HISTORICAL_DOCUMENT_RULES, packages_validation_src_index_historical_document_rules, packages_validation_src_index_upload_request_overhead_bytes, packages_validation_src_index_uploadrequestbodylimitbytes, approveProfileRequestSchema (+39 more)
 
-### Community 153 - "api/src/main.ts"
+### Community 153 - "app.setup.ts"
 Cohesion: 0.08
-Nodes (26): AppModule, Module, configureApp(), installNotFoundFallback(), logLevelsFor(), SWAGGER_PATH, LogSink, redact() (+18 more)
+Nodes (21): API_ROUTE_PREFIX, LOG_LEVELS, OPENAPI_JSON_PATH, SWAGGER_PATH, accessLogMiddleware(), logger, ErrorDetail, GlobalExceptionFilter (+13 more)
 
-### Community 154 - "AuthContext"
-Cohesion: 0.19
-Nodes (22): MutationDocs(), CurriculaController, ProgramCurriculaController, StudentCurriculumController, SubjectsController, ApiBody, ApiCookieAuth, ApiCreatedResponse (+14 more)
+### Community 154 - "RequirePermissions"
+Cohesion: 0.16
+Nodes (30): MutationDocs(), ApiBody, ApiCreatedResponse, ApiOperation, Body, Patch, Post, CurriculaController (+22 more)
 
-### Community 155 - "next"
-Cohesion: 0.03
-Nodes (86): metadata, metadata, metadata, AdminShell(), ExamAppView(), CompletedPanel(), PaymentDestinationsView(), CodesDialog() (+78 more)
+### Community 155 - "formatDateTime"
+Cohesion: 0.05
+Nodes (62): metadata, CodesDialog(), Detail(), StudentCertificateSamples(), primaryRegistration(), STUDENT_NAV, StudentNavHref, StudentNavItem (+54 more)
 
 ### Community 156 - "examinations/schemas.ts"
 Cohesion: 0.05
 Nodes (35): CreateExamination, CreateExaminationInput, createExaminationSchema, CreateExternalExamApp, CreateExternalExamAppInput, createExternalExamAppSchema, examAppFields, EXAMINATION_KIND_LABELS (+27 more)
 
-### Community 157 - "ProgramsService"
-Cohesion: 0.33
-Nodes (6): assertActiveDepartment(), legacySemesters(), ProgramsService, structureOf(), toProgram(), Injectable
+### Community 157 - "programs.service.ts"
+Cohesion: 0.25
+Nodes (9): assertActiveDepartment(), CODE_CONFLICT, include, legacySemesters(), ProgramRow, ProgramsService, structureOf(), toProgram() (+1 more)
+
+### Community 158 - "CertificateEligibilityController"
+Cohesion: 0.24
+Nodes (13): actor(), CertificateEligibilityController, StudentCertificateEligibilityController, ApiBody, ApiCookieAuth, ApiOkResponse, ApiTags, Body (+5 more)
 
 ### Community 159 - ".replace"
 Cohesion: 0.14
@@ -1630,32 +1673,32 @@ Cohesion: 0.18
 Nodes (11): Audit, Commit and idempotency, Flow, Imports (Phase 5: students / registrations), Known limitations, Limits and production tuning, Retries and failures, Security (+3 more)
 
 ### Community 161 - "Phase 12C — course certificate eligibility and academic certificate templates"
-Cohesion: 0.14
+Cohesion: 0.13
 Nodes (14): Backend authorization and validation, Baseline, Environment incident and recovery, Final gate run (real exit codes), Integration with main (UI-05), Multipage transcripts, Pending Rector approval and issuance policies, Phase 12B integration (+6 more)
 
-### Community 162 - "rehearse-release.py"
-Cohesion: 0.08
-Nodes (31): argparse, contextlib, Phase 14C static assertions for the Render staging configuration; nothing is…, main(), psql(), Phase 14C (G2) local rehearsal of migration/runtime role separation on a…, run(), Phase 14C render.py safety tests: private files, strict provider validation, no… (+23 more)
+### Community 162 - "pathlib"
+Cohesion: 0.14
+Nodes (18): contextlib, main(), psql(), Phase 14C (G2) local rehearsal of migration/runtime role separation on a…, run(), Phase 14C render.py safety tests: private files, strict provider validation, no…, Regression assertions for the local staging trust boundary; no services are…, importlib_util (+10 more)
 
-### Community 163 - "historical-documents/historical-documents.test.ts"
-Cohesion: 0.05
-Nodes (57): main(), rootEnv, assertCleanJpeg(), assertCleanPng(), assertNoEmbeddedMetadata(), BackfillItem, backfillOne(), BackfillOutcome (+49 more)
+### Community 163 - "student-copy.test.ts"
+Cohesion: 0.28
+Nodes (10): certificatePage(), comSegment(), containsEmbeddedValue(), EMBEDDED, iptcSegment(), jpegWithEmbeddedMetadata(), pngChunk(), pngWithEmbeddedMetadata() (+2 more)
 
-### Community 164 - ".create"
-Cohesion: 0.12
-Nodes (23): ApiNoContentResponse, download(), ResultImportsController, ApiBody, ApiConsumes, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse (+15 more)
+### Community 164 - "ResultImportsService"
+Cohesion: 0.06
+Nodes (38): ApiNoContentResponse, download(), ResultImportsController, ApiBody, ApiConsumes, ApiCookieAuth, ApiCreatedResponse, ApiOkResponse (+30 more)
 
 ### Community 165 - "import-detail-view.tsx"
-Cohesion: 0.07
-Nodes (44): metadata, metadata, metadata, importKeys, importsApi, RUNNING_STATUSES, useCreateImport(), useImportJob() (+36 more)
+Cohesion: 0.05
+Nodes (56): metadata, metadata, metadata, importKeys, importsApi, RUNNING_STATUSES, useCreateImport(), useImportJob() (+48 more)
 
-### Community 166 - "RequirePermissions"
-Cohesion: 0.16
-Nodes (20): AcademicSessionsController, DashboardController, DepartmentsController, ProgramsController, RegistrationsController, StudentsController, ApiBody, ApiCookieAuth (+12 more)
+### Community 166 - "Query"
+Cohesion: 0.15
+Nodes (15): AcademicSessionsController, DashboardController, DepartmentsController, ProgramsController, RegistrationsController, StudentsController, ApiCookieAuth, ApiOkResponse (+7 more)
 
-### Community 167 - "CurrentAuth"
-Cohesion: 0.07
-Nodes (33): CurrentAuth, actor(), CertificateEligibilityController, StudentCertificateEligibilityController, ApiBody, ApiCookieAuth, ApiOkResponse, ApiTags (+25 more)
+### Community 167 - "CertificateTemplatesService"
+Cohesion: 0.15
+Nodes (10): CertificateTemplatesController, ApiCookieAuth, ApiOkResponse, ApiProduces, ApiTags, Controller, Get, Res (+2 more)
 
 ### Community 168 - "certificate-requests/schemas.ts"
 Cohesion: 0.09
@@ -1669,53 +1712,61 @@ Nodes (13): academicCertificateHtml(), academicTranscriptMultipageHtml(), asset(
 Cohesion: 0.16
 Nodes (21): basic(), caddy_public(), compose_public_refusals(), compose_refuses_missing_gate(), gate_variants(), http_status(), main(), public_route_order() (+13 more)
 
+### Community 171 - "Clean university environment and student onboarding"
+Cohesion: 0.04
+Nodes (39): Activation procedure, Clean environment setup (future authorized operator only), Clean university environment and student onboarding, Confirmed correction: source workbook privacy, Cutover and reversible rollback (not executed), DOB/photo completion and approval, Encrypted off-host backup and recovery plan, Existing functionality reused (+31 more)
+
 ### Community 172 - "render.py"
 Cohesion: 0.19
 Nodes (23): assemble(), fixture(), gate(), init(), ip_probe(), load(), main(), probe() (+15 more)
 
 ### Community 173 - "auth-page.tsx"
-Cohesion: 0.24
-Nodes (7): metadata, StudentLoginPage(), metadata, StudentRegisterPage(), ACTIVATION_STEPS, SIGN_IN_HIGHLIGHTS, StudentAuthPage()
+Cohesion: 0.22
+Nodes (8): metadata, StudentLoginPage(), metadata, StudentRegisterPage(), AuthHighlight, ACTIVATION_STEPS, SIGN_IN_HIGHLIGHTS, StudentAuthPage()
 
 ### Community 174 - "Phase 14B — Full-stack live staging for university review"
 Cohesion: 0.06
-Nodes (32): Backup and restore, Baseline (22 October 2026), Browser smoke suite (`pnpm --filter @docversity/web test:staging`), Browser smoke suite (`test:staging`, desktop Chrome and Pixel 7), Configuration and safety checks, Decisions recorded (22 October 2026), Deployment architecture (proposed), Deployment readiness checklist (+24 more)
+Nodes (30): Consequences, Infrastructure issue — Phase 14A private `.local` data lost (22 October 2026), Non-destructive recovery procedure (not executed; for the project owner to authorize), Prevention, What happened, What survives (verified read-only on 22 October), What was lost, Baseline (22 October 2026) (+22 more)
 
-### Community 175 - "DraftResultsService"
-Cohesion: 0.27
-Nodes (6): conflict(), digest(), DraftResultsService, marksOf(), sameMarks(), Injectable
+### Community 175 - "value-maps.tsx"
+Cohesion: 0.16
+Nodes (15): metadata, useSessionOptions(), departmentKeys, departmentsApi, useActiveDepartmentOptions(), CreateExaminationDialog(), AUTOMATIC_LABEL, DefaultSessionSelect() (+7 more)
 
-### Community 183 - "auth.service.ts"
-Cohesion: 0.06
-Nodes (26): Inject, AuthModule, Global, Module, assertPasswordPolicy(), AuthService, ClientInfo, toAuthUser() (+18 more)
+### Community 183 - "capabilities.tsx"
+Cohesion: 0.16
+Nodes (9): EASE, Feature, FEATURES, CHOICES, Magnetic(), SpotlightLayer(), trackSpotlight(), Reveal() (+1 more)
 
 ### Community 184 - "Phase 10D — internal result review and publication safeguards"
-Cohesion: 0.12
-Nodes (13): Completeness, concurrency and integrity, Internal result review (Phase 10D), Policy boundary, Routes and contracts, ADR-0016: Review marks independently of grading and publication, Authorization matrix, Delivered infrastructure and policy boundary, Phase 10D — internal result review and publication safeguards (+5 more)
+Cohesion: 0.17
+Nodes (9): ADR-0016: Review marks independently of grading and publication, Authorization matrix, Delivered infrastructure and policy boundary, Phase 10D — internal result review and publication safeguards, Preservation, University decisions and Phase 11 dependencies, Verification and acceptance, Versions, transactions and migration (+1 more)
 
 ### Community 186 - "training-certificate.test.ts"
 Cohesion: 0.14
 Nodes (17): packages_documents_src_index_rendertrainingcertificatepreview, packages_documents_src_index_synthetictrainingcertificate, packages_documents_src_index_trainingcertificatehtml, packages_documents_src_index_trainingcertificatetemplate, packages_documents_src_index_trainingcertificatetemplates, asset(), escape(), renderTrainingCertificatePreview() (+9 more)
 
-### Community 188 - ".writeAuditEvent"
-Cohesion: 0.16
-Nodes (10): AppRecord, CODE_CONFLICT, ExaminationsService, examInclude, ExamRecord, notEditable(), SUMMARIES, toApp() (+2 more)
+### Community 187 - "scripts"
+Cohesion: 0.13
+Nodes (15): scripts, build, clean, db:check, db:deploy, db:generate, db:migrate, db:seed (+7 more)
+
+### Community 188 - "rehearse-release.py"
+Cohesion: 0.33
+Nodes (8): command(), fingerprint(), image(), main(), Exact-SHA image rollback rehearsal on a fresh GitHub-hosted synthetic stack…, require_isolated_runner(), shutil, tarfile
 
 ### Community 189 - "UI-05 — student certificate sample preview"
 Cohesion: 0.18
 Nodes (11): API and privacy boundary, Approved delivery refinements — 17 October 2026, Final delivery verification, Final quality gates, Initial visual-review disposition, PDF provenance and deterministic delivery, Scope and review boundary, Screenshots and independent review (+3 more)
 
-### Community 191 - "course-certificate-samples.test.tsx"
-Cohesion: 0.22
-Nodes (6): degree, pending, shortCourse, TEMPLATE, Type, TYPES
+### Community 190 - "historical-documents.service.ts"
+Cohesion: 0.11
+Nodes (21): assertStaticPdf(), DocumentContentType, FORBIDDEN_PDF_NAMES, inspectDocument(), InspectedDocument, InspectionRules, invalid(), pdfNames() (+13 more)
 
 ### Community 192 - "PaymentDestinationsService"
-Cohesion: 0.21
-Nodes (7): conflict(), destinationState(), notEditable(), PaymentDestinationsService, storageUnavailable(), toDestination(), Injectable
+Cohesion: 0.25
+Nodes (5): conflict(), notEditable(), PaymentDestinationsService, toDestination(), Injectable
 
-### Community 193 - "DraftResultsController"
-Cohesion: 0.23
-Nodes (7): DraftResultsController, ApiCookieAuth, ApiOkResponse, ApiTags, Controller, Get, Param
+### Community 193 - "payment-buttons.ts"
+Cohesion: 0.18
+Nodes (12): PAYMENT_BUTTON_STATE_LABELS, PaymentButtonService, paymentButtonServiceSchema, PaymentButtonView, paymentButtonViewSchema, RAZORPAY_BUTTONS, razorpayReceiptsSchema, razorpayReconciliationSchema (+4 more)
 
 ### Community 194 - "product-mockups.tsx"
 Cohesion: 0.11
@@ -1733,25 +1784,21 @@ Nodes (19): bandSchema, componentName, componentSchema, credits, decimal(), eval
 Cohesion: 0.20
 Nodes (10): Phase 9 — External examinations, re-exam applications and regional QR payments (delivery report), Phase 9A — external examination application and examination records, Phase 9B continuation validation (2026-10-09), Phase 9B — re-exam applications, attempts and fee rules, Phase 9B screenshots (synthetic fixtures), Phase 9C — country/region re-exam payments, QR configuration and manual verification, Phase 9C verification (2026-10-10), Screenshots (synthetic E2E data) (+2 more)
 
-### Community 198 - "academic.controllers.ts"
-Cohesion: 0.05
-Nodes (47): error, MUTATION_ERRORS, AcademicModule, Module, AcademicSessionsService, CODE_CONFLICT, include, SessionRow (+39 more)
+### Community 198 - "academic.module.ts"
+Cohesion: 0.11
+Nodes (26): AcademicModule, Module, AcademicSessionsService, CODE_CONFLICT, include, SessionRow, toSession(), Injectable (+18 more)
 
 ### Community 199 - "smoke.mjs"
 Cohesion: 0.07
 Nodes (24): apiRequire, ca, db, fixture, origin, redis, request(), require (+16 more)
 
-### Community 200 - "Infrastructure issue — Phase 14A private `.local` data lost (22 October 2026)"
-Cohesion: 0.22
-Nodes (7): Consequences, Infrastructure issue — Phase 14A private `.local` data lost (22 October 2026), Non-destructive recovery procedure (not executed; for the project owner to authorize), Prevention, What happened, What survives (verified read-only on 22 October), What was lost
-
 ### Community 201 - "marksheet.test.ts"
 Cohesion: 0.09
 Nodes (20): SYNTHETIC_FIXTURES, syntheticMarksheet(), packages_documents_src_index_marksheettemplate, packages_documents_src_index_marksheettemplates, packages_documents_src_index_preview_footer, packages_documents_src_index_preview_watermark, packages_documents_src_index_rendermarksheetpreview, packages_documents_src_index_syntheticmarksheet (+12 more)
 
-### Community 202 - "result-rows.ts"
-Cohesion: 0.17
-Nodes (14): COMPONENT_FIELD_KEYS, componentConfigurationFromCurriculum(), NormalizedResultRow, parseNumericMark(), parseResultFieldValues(), RESULT_FIELD_LABELS, ResultExistingRegistration, ResultFieldValues (+6 more)
+### Community 202 - "result-preview.test.ts"
+Cohesion: 0.13
+Nodes (19): COMPONENT_FIELD_KEYS, componentConfigurationFromCurriculum(), NormalizedResultRow, parseNumericMark(), parseResultFieldValues(), RESULT_FIELD_LABELS, ResultExistingRegistration, ResultFieldValues (+11 more)
 
 ### Community 203 - "LoginForm"
 Cohesion: 0.39
@@ -1762,8 +1809,8 @@ Cohesion: 0.13
 Nodes (18): Fixed student academic samples (Phase 12C.1), Fixed student training sample, ACADEMIC_SAMPLE_MAX_BYTES, ACADEMIC_SAMPLE_PINS, academicCertificateSample(), AcademicSampleIntegrityError, AcademicSamplePinId, pinFor() (+10 more)
 
 ### Community 205 - "primitives.tsx"
-Cohesion: 0.11
-Nodes (22): Availability, Faq, FAQS, PUBLIC_SERVICES, QuickLink, ROADMAP, RoadmapStage, Step (+14 more)
+Cohesion: 0.12
+Nodes (18): Availability, Faq, FAQS, PUBLIC_SERVICES, QuickLink, ROADMAP, RoadmapStage, Step (+10 more)
 
 ### Community 206 - "status/page.tsx"
 Cohesion: 0.24
@@ -1786,28 +1833,28 @@ Cohesion: 0.33
 Nodes (6): Course certificate eligibility API (Phase 12C), Policy, Staff endpoints, Student academic certificate samples (Phase 12C.1), Student endpoints (contract v1 — integration point for UI-05), UI-05 integration requirements
 
 ### Community 211 - "testing.ts"
-Cohesion: 0.10
-Nodes (19): "Registration 2025.xlsx" — column mapping report, What an import of this file needs (once authorised), calendarDate(), DateParse, FORMAT_HINT, pad(), parseDateCell(), parseDateText() (+11 more)
+Cohesion: 0.12
+Nodes (15): "Registration 2025.xlsx" — column mapping report, What an import of this file needs (once authorised), buildWorkbook(), FixtureCell, FixtureSheet, FixtureStudent, Registration2025Row, registration2025Sheet() (+7 more)
 
 ### Community 212 - "public-verification/schemas.ts"
 Cohesion: 0.23
 Nodes (10): normalizeVerificationReference(), PUBLIC_VERIFICATION_UNAVAILABLE, PublicVerificationRequest, publicVerificationRequestSchema, publicVerificationResponseSchema, PublicVerificationService, publicVerificationServices, publicVerificationServiceSchema (+2 more)
 
-### Community 214 - "use-gsap.ts"
-Cohesion: 0.27
-Nodes (9): Hero(), HowItWorks(), Gsap, loadGsap(), prefersReducedMotion(), ScrollTriggerType, useGsapScene(), Motion, touch and performance (+1 more)
+### Community 213 - "student-copy-backfill.ts"
+Cohesion: 0.23
+Nodes (10): main(), rootEnv, BackfillItem, backfillOne(), BackfillOutcome, BackfillReport, backfillStudentCopies(), FAILURES (+2 more)
 
-### Community 215 - "Frontend"
-Cohesion: 0.12
-Nodes (24): apps/web/src README, Folders stay empty until real features exist, Planned App Router route groups (public, auth, admin), Paginated list contract (page, pageSize, sortBy allow-list), Authentication endpoints (/api/v1/auth/*), Frontend, AdminShell (protected admin layout), List state in the URL (+16 more)
+### Community 214 - "how-it-works.tsx"
+Cohesion: 0.17
+Nodes (13): STEPS, Hero(), HowItWorks(), READY_ITEMS, CtaLink(), Gsap, loadGsap(), prefersReducedMotion() (+5 more)
 
-### Community 216 - "gate-check.mjs"
-Cohesion: 0.25
-Nodes (6): failures, { gate }, origin, request(), routes, ref_node_https
+### Community 215 - "DOCVERSITY README"
+Cohesion: 0.06
+Nodes (46): apps/web/src README, Folders stay empty until real features exist, Planned App Router route groups (public, auth, admin), Authentication endpoints (/api/v1/auth/*), Frontend, AdminShell (protected admin layout), Client-agreed palette tokens (WCAG AA), Public shell app/(public) (+38 more)
 
-### Community 217 - "result-imports.service.ts"
-Cohesion: 0.10
-Nodes (20): ACCEPTED_MIME_TYPES, BLOCKER_MESSAGES, blockerFor(), COMPONENT_FIELDS, COMPONENT_KEYS, decimal(), DownloadFile, PREVIEWABLE_EXAM_STATUSES (+12 more)
+### Community 216 - "StudentResultsController"
+Cohesion: 0.17
+Nodes (8): ReleaseWorkflowsModule, Module, StudentResultsController, ApiCookieAuth, ApiTags, Controller, StudentResultsModule, Module
 
 ### Community 218 - "training-certificate.ts"
 Cohesion: 0.22
@@ -1822,15 +1869,15 @@ Cohesion: 0.14
 Nodes (9): Direction contract, Training certificate preview workspace, Knowledge graph (graphify), Regenerating, ceiling, fidelity, keep, material_fixes (+1 more)
 
 ### Community 221 - "CLAUDE.md"
-Cohesion: 0.08
-Nodes (18): Assignment and lifecycle, Course curricula (Phase 7B), Validation, roles and audit, Blockers found in the existing schema and policy, Manual marks entry — design foundation (Phase 9, Part F), Proposed data contract for manual entry (Phase 10), What already exists (Phase 2 schema, unchanged), Addendum (Phase 9C implementation, 2026-10-10) (+10 more)
+Cohesion: 0.06
+Nodes (31): Assignment and lifecycle, Course curricula (Phase 7B), Validation, roles and audit, Excel confirmation and replay, Internal draft results (Phase 10C), Manual write contract, Schema and lifecycle, API Documentation (+23 more)
 
 ### Community 222 - "UI-02 — Admin dashboard and navigation continuation"
 Cohesion: 0.22
 Nodes (8): Evidence, Final integrated verification, First-pass changes, Handoff and preservation, Initial delivery gates before main integration, Integration and delivery boundary, Motion and design, UI-02 — Admin dashboard and navigation continuation
 
 ### Community 223 - "use-landing-motion.ts"
-Cohesion: 0.19
+Cohesion: 0.21
 Nodes (8): metadata, MOTION_FLAG, MOTION_GUARD, releaseGuard(), useLandingMotion(), VerificationHome(), titles, Final testing window with UI-04 merged (22 October 2026)
 
 ### Community 224 - "Phase 12C.1 — registration-specific academic certificate samples"
@@ -1841,9 +1888,9 @@ Nodes (13): ADR-0019: Registration-scoped academic certificate samples, Conseque
 Cohesion: 0.29
 Nodes (6): Desktop — 1440px, expanded sidebar, Mobile — 390px, Mobile navigation drawer — 390px, Tablet — 768px, Tablet navigation drawer — 768px, UI-02 — Final visual review
 
-### Community 226 - "course/page.tsx"
-Cohesion: 0.67
-Nodes (3): metadata, Page(), getStudentCurriculum
+### Community 226 - "loadWebEnv"
+Cohesion: 0.21
+Nodes (9): { IMPORT_MAX_FILE_MB }, nextConfig, rootEnvFile, securityHeaders, loadWebEnv(), WebEnv, webEnvSchema, config (+1 more)
 
 ### Community 228 - "edge_regression.py"
 Cohesion: 0.28
@@ -1882,28 +1929,32 @@ Cohesion: 0.22
 Nodes (9): Approved release delivery evidence, Backup and isolated recovery, Evidence and remaining activation requirements, Hostinger operator runbook, Images and startup, One-time initialization, Read-only operations, Release and host prerequisites (+1 more)
 
 ### Community 241 - "verification-home.tsx"
-Cohesion: 0.12
-Nodes (17): HeroField(), Node, SAFEGUARDS, STEPS, STUDENT_FEATURES, StudentFeature, HowItWorks(), LandingFooter() (+9 more)
+Cohesion: 0.11
+Nodes (18): HeroField(), Node, SAFEGUARDS, STEPS, STUDENT_FEATURES, StudentFeature, HowItWorks(), LandingFooter() (+10 more)
 
-### Community 243 - "historical-documents.service.ts"
-Cohesion: 0.09
-Nodes (29): assertStaticPdf(), DocumentContentType, FORBIDDEN_PDF_NAMES, inspectDocument(), InspectedDocument, InspectionRules, invalid(), pdfNames() (+21 more)
+### Community 243 - "HistoricalDocumentsService"
+Cohesion: 0.18
+Nodes (9): UploadedDocument, cleanFilename(), HistoricalDocumentsService, isImage(), notEditable(), notReady(), sha256Of(), Injectable (+1 more)
 
 ### Community 244 - "Docversity web product"
 Cohesion: 0.25
 Nodes (8): Accessibility & Inclusion, Brand Commitments, Capabilities and Constraints, Docversity web product, Platform, Product Principles, Product Purpose, Users
 
 ### Community 245 - "Phase 8 — Historical certificates and the student document library (delivery report)"
-Cohesion: 0.13
-Nodes (13): ADR-0013: Historical documents are staff-managed evidence, separate from issued credentials, Amendment 1 (2026-10-09, pre-merge hardening), Consequences, Context, Decision, Implemented, Not in this phase, Phase 8 — Historical certificates and the student document library (delivery report) (+5 more)
+Cohesion: 0.10
+Nodes (18): Audit, File responses, Historical documents and the student document library (Phase 8), Lifecycle, Student endpoints (student session), ADR-0013: Historical documents are staff-managed evidence, separate from issued credentials, Amendment 1 (2026-10-09, pre-merge hardening), Consequences (+10 more)
 
 ### Community 246 - "historical-documents.spec.ts"
-Cohesion: 0.16
-Nodes (13): studentPage(), choose(), EXIF_VALUES, exifSegment(), scanWithExif(), shared, staffPage(), studentPage() (+5 more)
+Cohesion: 0.12
+Nodes (17): shared, staffPage(), studentPage(), choose(), EXIF_VALUES, exifSegment(), scanWithExif(), shared (+9 more)
 
-### Community 248 - "re-exams.test.tsx"
-Cohesion: 0.29
-Nodes (6): exportPath(), application, DECIDER, FINANCE, options, READER
+### Community 247 - "schema/historical-documents.test.ts"
+Cohesion: 0.39
+Nodes (6): db, draft(), f, imageDraft(), sha(), staffUser()
+
+### Community 248 - "profile-request-detail-view.tsx"
+Cohesion: 0.06
+Nodes (40): metadata, metadata, metadata, useSetBreadcrumbLabel(), useSessionUser(), DashboardView(), APPLICATION_QUERY, PAYMENT_QUERY (+32 more)
 
 ### Community 249 - "UI-05 design comparison"
 Cohesion: 0.40
@@ -1913,9 +1964,9 @@ Nodes (5): Delivery approval and minor copy refinement, Documentation boundary a
 Cohesion: 0.25
 Nodes (6): ceiling, fidelity, keep, material_fixes, persistence, Scoped verdict continuation — approved copy refinements
 
-### Community 251 - "ref_node_fs"
-Cohesion: 0.04
-Nodes (38): signal(), preflight(), quote(), script, sha, options(), API_PORT, e2eDatabaseUrl (+30 more)
+### Community 251 - "review-fixture.mjs"
+Cohesion: 0.18
+Nodes (8): db, url, db, passwords, reviewers, url, client, ref
 
 ### Community 252 - "postgres/init.sh"
 Cohesion: 0.50
@@ -1934,16 +1985,16 @@ Cohesion: 0.18
 Nodes (10): Architecture, Exact setup steps (each needs your separate approval), Go/no-go checks on the real platform (after approval), Local verification (22 October 2026), Moving to the Hostinger VPS later, Phase 14C — Temporary Render staging for university review, Private image publishing, Render service specifications and cost (+2 more)
 
 ### Community 257 - "(portal)/page.tsx"
-Cohesion: 0.20
-Nodes (11): metadata, Page(), metadata, Page(), metadata, StudentHomePage(), StudentDocuments(), StudentReExamApplications() (+3 more)
+Cohesion: 0.22
+Nodes (10): metadata, Page(), metadata, Page(), metadata, StudentHomePage(), StudentDocuments(), getStudentCertificateEligibility (+2 more)
 
 ### Community 258 - "schema/certificate-eligibility.test.ts"
 Cohesion: 0.38
 Nodes (4): context(), course(), db, user()
 
-### Community 260 - "imports.service.ts"
-Cohesion: 0.05
-Nodes (30): Inject, LimitResult, LimitRule, Inject, Inject, TimeoutError, withTimeout(), HealthModule (+22 more)
+### Community 260 - "ApiConfig"
+Cohesion: 0.03
+Nodes (62): errorResponse, Inject, AuthenticatedRequest, Inject, assertPasswordPolicy(), AuthService, ClientInfo, toAuthUser() (+54 more)
 
 ### Community 261 - "UI-04 public verification homepage integration"
 Cohesion: 0.50
@@ -1965,41 +2016,45 @@ Nodes (3): @docversity/storage, MemoryObjectStorage, ObjectStorage
 Cohesion: 0.15
 Nodes (11): MarksheetPreviewInput, marksheetPreviewInputSchema, MarksheetPreviewQuery, marksheetPreviewQuerySchema, MarksheetTemplate, marksheetTemplateSchema, marksheetTemplatesResponseSchema, numeric (+3 more)
 
-### Community 268 - "loadWebEnv"
-Cohesion: 0.21
-Nodes (9): { IMPORT_MAX_FILE_MB }, nextConfig, rootEnvFile, securityHeaders, loadWebEnv(), WebEnv, webEnvSchema, config (+1 more)
+### Community 268 - "documents/student-certificate-sample.ts"
+Cohesion: 0.25
+Nodes (6): ACADEMIC_SAMPLE_IDS, AcademicCertificateSampleId, academicCertificateSampleIdSchema, academicSampleCertificateType, studentCertificateSampleIdSchema, studentCertificateSampleQuerySchema
 
-### Community 269 - "StudentAccountsService"
-Cohesion: 0.36
-Nodes (3): portalState(), StudentAccountsService, Injectable
+### Community 269 - "student-results.test.tsx"
+Cohesion: 0.29
+Nodes (6): metadata, Page(), StudentResults(), getStudentResults, empty, refresh
 
 ### Community 270 - "Phase 11B — synthetic marksheet infrastructure"
 Cohesion: 0.12
 Nodes (15): Approved PDF security follow-up, Audit and architecture, Authorization and delivery, Baseline and scope, Changed files, Downloadable samples and visual evidence, Future official issuance — architecture only, Local quality gates (+7 more)
 
-### Community 271 - "schema/result-review.test.ts"
-Cohesion: 0.33
-Nodes (3): packages_database_src_index_prisma, db, f
+### Community 271 - "pdf-memory.mjs"
+Cohesion: 0.25
+Nodes (4): events, renders, result, started
 
-### Community 272 - "schema/curricula.test.ts"
-Cohesion: 0.40
-Nodes (3): db, draftCurriculum(), f
+### Community 272 - "gate-check.mjs"
+Cohesion: 0.25
+Nodes (6): failures, { gate }, origin, request(), routes, ref_node_https
 
 ### Community 273 - "payments/tsconfig.build.json"
 Cohesion: 0.22
 Nodes (8): compilerOptions, noEmit, outDir, rootDir, exclude, extends, include, @docversity/config/typescript/node.json
 
-### Community 275 - "re-exam-payments.test.tsx"
+### Community 274 - "synthetic-lifecycle.ts"
 Cohesion: 0.29
-Nodes (5): CONFIGURER, destination, detail, REVIEWER, VERIFIER
+Nodes (6): PrepareSyntheticCertificate, prepareSyntheticCertificateSchema, SyntheticCertificateCommand, syntheticCertificateCommandSchema, syntheticCertificatePolicySchema, syntheticCertificateReceiptSchema
 
-### Community 276 - "Release-candidate integration verification"
-Cohesion: 0.29
-Nodes (7): Changed-file inventory, Completion and blocker matrix, Executed verification, Full-run resources and recovery diagnostics, Integrated implementation, Preservation and delivery, Release-candidate integration verification
+### Community 276 - "QueueModule"
+Cohesion: 0.33
+Nodes (4): QueueModule, Global, Inject, Module
 
 ### Community 277 - "student-certificate-sample.test.ts"
 Cohesion: 0.33
 Nodes (5): packages_documents_src_index_training_sample_sha256, packages_documents_src_index_trainingcertificatesample, TRAINING_SAMPLE_SHA256, trainingCertificateSample(), pdfjs-dist
+
+### Community 278 - "EvidenceUploadInterceptor"
+Cohesion: 0.40
+Nodes (4): EvidenceUploadInterceptor, QrUploadInterceptor, readMultipart(), Injectable
 
 ### Community 279 - "payments/tsconfig.json"
 Cohesion: 0.29
@@ -2009,9 +2064,9 @@ Nodes (6): compilerOptions, noEmit, rootDir, extends, include, @docversity/confi
 Cohesion: 0.29
 Nodes (4): post(), Reviewers, staff(), staffSignIn()
 
-### Community 281 - "profile-request-detail-view.tsx"
-Cohesion: 0.11
-Nodes (21): metadata, APPLICATION_QUERY, PAYMENT_QUERY, PROFILE_QUERY, QUEUES, profileRequestKeys, profileRequestPhotoUrl(), profileRequestsApi (+13 more)
+### Community 281 - "curricula.spec.ts"
+Cohesion: 0.47
+Nodes (4): addNewSubject(), choose(), createCourse(), shared
 
 ### Community 282 - "devDependencies"
 Cohesion: 0.14
@@ -2021,109 +2076,81 @@ Nodes (14): devDependencies, @docversity/config, eslint, @nestjs/cli, @nestjs/te
 Cohesion: 0.29
 Nodes (7): scripts, build, clean, dev, lint, test, typecheck
 
-### Community 284 - "mapping.test.ts"
-Cohesion: 0.67
-Nodes (3): validateStudentMapping(), columns(), sheet()
-
 ### Community 285 - "devDependencies"
 Cohesion: 0.33
 Nodes (6): devDependencies, @docversity/config, eslint, @types/node, typescript, vitest
 
 ### Community 287 - "(portal)/examinations/page.tsx"
-Cohesion: 0.50
-Nodes (4): metadata, Page(), StudentExaminationsPage(), getStudentExaminations
+Cohesion: 0.67
+Nodes (3): metadata, Page(), getStudentExaminations
 
-### Community 288 - "auth-shell.tsx"
-Cohesion: 0.19
-Nodes (10): AdminLoginPage(), HIGHLIGHTS, metadata, ProtectedAdminLayout(), AuthAmbient(), AuthHighlight, AuthShell(), apps_web_src_components_auth_auth_shell_module (+2 more)
+### Community 288 - "admin/login/page.tsx"
+Cohesion: 0.33
+Nodes (6): AdminLoginPage(), HIGHLIGHTS, metadata, ProtectedAdminLayout(), AuthShell(), getSessionState()
 
 ### Community 290 - "ImportFileError"
-Cohesion: 0.15
-Nodes (14): checkWorksheetStructure(), ContainerEntry, ContainerLimits, inspectXlsxContainer(), OLE_SIGNATURE, verifyXlsxContainer(), openWorkbook(), readSource() (+6 more)
-
-### Community 291 - "StorageModule"
-Cohesion: 0.67
-Nodes (3): StorageModule, Global, Module
+Cohesion: 0.17
+Nodes (13): checkWorksheetStructure(), ContainerEntry, ContainerLimits, inspectXlsxContainer(), OLE_SIGNATURE, verifyXlsxContainer(), ImportFileError, ImportStateError (+5 more)
 
 ### Community 292 - "Phase 11B design comparison"
 Cohesion: 0.13
 Nodes (12): Documentation boundary and drift, Evidence checked, Incumbent fidelity, PDF comparison against the confirmed direction, Phase 11B design comparison, Verification context, ceiling, fidelity (+4 more)
 
-### Community 293 - "StudentResultsController"
-Cohesion: 0.40
-Nodes (4): StudentResultsController, ApiCookieAuth, ApiTags, Controller
+### Community 293 - ".file"
+Cohesion: 0.22
+Nodes (8): StudentCertificateSamplesController, ApiCookieAuth, ApiProduces, ApiTags, Controller, Get, Param, Res
 
-### Community 294 - "curricula.spec.ts"
-Cohesion: 0.47
-Nodes (4): addNewSubject(), choose(), createCourse(), shared
-
-### Community 297 - "student-fields.ts"
-Cohesion: 0.18
-Nodes (10): isSensitiveImportHeader(), normalizeImportHeader(), STUDENT_IMPORT_FIELD_KEYS, STUDENT_IMPORT_FIELDS, STUDENT_IMPORT_REQUIRED_FIELDS, studentImportField, StudentImportFieldDefinition, StudentImportFieldKind (+2 more)
-
-### Community 303 - "Phase 14A — Local staging and deployment readiness"
-Cohesion: 0.15
-Nodes (11): Architecture, Backup and recovery, Future-host command references (not executed), Future Ubuntu VPS runbook — preparation only, Local commands, Operations, Phase 14A — Local staging and deployment readiness, Resources observed (+3 more)
-
-### Community 328 - "draft-results.spec.ts"
-Cohesion: 0.67
+### Community 328 - "post"
+Cohesion: 0.33
 Nodes (3): choose(), context(), post()
+
+### Community 341 - "ref_zod"
+Cohesion: 0.08
+Nodes (52): error, MUTATION_ERRORS, error, NOT_EDITABLE, AUTH_MODE_KEY, AuthenticatedUser, AuthMode, CSRF_MODE_KEY (+44 more)
+
+### Community 383 - "student-copy.ts"
+Cohesion: 0.13
+Nodes (25): assertCleanJpeg(), assertCleanPng(), assertNoEmbeddedMetadata(), createStudentCopy(), decodeOptions, embeddedMetadataCategories(), EXIF_DEVICE_TAGS, EXIF_PERSON_TAGS (+17 more)
 
 ### Community 959 - "scripts"
 Cohesion: 0.20
 Nodes (10): scripts, admin:create, build, clean, dev, documents:backfill-student-copies, lint, start (+2 more)
-
-### Community 960 - "(portal)/results/page.tsx"
-Cohesion: 0.67
-Nodes (3): metadata, Page(), getStudentResults
 
 ### Community 961 - "Phase 10B — results import preview"
 Cohesion: 0.22
 Nodes (8): Acceptance and Phase 10C dependencies, Delivered boundary, Final local gates, Implemented routes, Phase 10B — results import preview, Preservation evidence, Screenshots (synthetic data only), Verification
 
 ### Community 965 - "Synthetic release workflows"
-Cohesion: 0.11
-Nodes (13): Authorization and contracts, Clerical retotaling, Durable mock payments, Generic migration dry runs, Migration and release impact, Result and admission provenance, Synthetic release workflows, Stage 1 changed-file inventory (+5 more)
+Cohesion: 0.25
+Nodes (7): Authorization and contracts, Clerical retotaling, Durable mock payments, Generic migration dry runs, Migration and release impact, Result and admission provenance, Synthetic release workflows
 
 ### Community 966 - "Phase 10C — internal draft marks"
 Cohesion: 0.25
 Nodes (8): Database safety and preservation, Delivered workflow and identity, Delivery boundary and remaining policy, Excel draft persistence, Permissions and protections, Phase 10C — internal draft marks, Screenshots and manual acceptance, Verification
-
-### Community 971 - "QueueModule"
-Cohesion: 0.33
-Nodes (4): QueueModule, Global, Inject, Module
-
-### Community 975 - "Phase 10: Manual Marks Entry & Excel Results Import Foundation"
-Cohesion: 0.12
-Nodes (16): 10b. Course and curriculum management (Phase 7B), 10. Phase 10B delivery boundary, 11. Phase 10C draft persistence, 1. Corrected Architecture, 2. Semester/Year Compatibility, 3. Manual Marks-Entry Workflow, 4. Excel Import Mapping/Validation Specification, 5. Original Exam and Re-Exam Attempt Preservation (+8 more)
-
-### Community 976 - "Internal draft results (Phase 10C)"
-Cohesion: 0.50
-Nodes (4): Excel confirmation and replay, Internal draft results (Phase 10C), Manual write contract, Schema and lifecycle
 
 ## Ambiguous Edges - Review These
 - `Six-Step Import Wizard Stepper` → `Registry Pipeline v2.4`  [AMBIGUOUS]
   references/stitch/stitch_docversity_ui_ux_design_system/excel_bulk_import_validation/screen.png · relation: conceptually_related_to
 
 ## Knowledge Gaps
-- **2559 isolated node(s):** `singleQuote`, `trailingComma`, `printWidth`, `$schema`, `collection` (+2554 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 3940 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **698 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **2589 isolated node(s):** `singleQuote`, `trailingComma`, `printWidth`, `$schema`, `collection` (+2584 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 4031 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **740 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **What is the exact relationship between `Six-Step Import Wizard Stepper` and `Registry Pipeline v2.4`?**
   _Edge tagged AMBIGUOUS (relation: conceptually_related_to) - confidence is low._
-- **Why does `CLAUDE.md — Docversity` connect `CLAUDE.md — Docversity` to `useCan`, `@nestjs/common`, `Phase 10: Manual Marks Entry & Excel Results Import Foundation`, `test/certificate-eligibility.test.ts`, `student-profile/schemas.ts`, `CLAUDE.md`?**
-  _High betweenness centrality (0.056) - this node is a cross-community bridge._
-- **Why does `6. Backend conventions (apps/api)` connect `@nestjs/common` to `CLAUDE.md — Docversity`, `AppError`, `registration-rules.ts`, `common.ts`?**
-  _High betweenness centrality (0.039) - this node is a cross-community bridge._
-- **Why does `AppError` connect `AppError` to `Header`, `imports.service.ts`, `ProfileRequestsService`, `CertificateRequestsService`, `CertificateEligibilityService`, `ImportsService`, `FeeRulesService`, `historical-documents/historical-documents.test.ts`, `CurrentAuth`, `DraftResultsService`, `auth.service.ts`, `.writeAuditEvent`, `PaymentDestinationsService`, `curricula.service.ts`, `academic.controllers.ts`, `RateLimiter`, `@nestjs/common`, `ReExamPaymentsService`, `SyntheticCertificatesService`, `result-imports.service.ts`, `ReExamsService`, `historical-documents.service.ts`, `.activate`?**
-  _High betweenness centrality (0.039) - this node is a cross-community bridge._
+- **Why does `CLAUDE.md — Docversity` connect `CLAUDE.md — Docversity` to `useCan`, `app.module.ts`, `student-profile/schemas.ts`, `test/certificate-eligibility.test.ts`, `CLAUDE.md`?**
+  _High betweenness centrality (0.042) - this node is a cross-community bridge._
+- **Why does `next` connect `next` to `document-dialogs.tsx`, `(portal)/page.tsx`, `payment-detail-view.tsx`, `ref_react`, `useCan`, `errorMessage`, `student-results.test.tsx`, `server-auth.ts`, `web/package.json`, `formatDateTime`, `(portal)/examinations/page.tsx`, `admin/login/page.tsx`, `import-detail-view.tsx`, `auth-page.tsx`, `ref_docversity_validation`, `value-maps.tsx`, `capabilities.tsx`, `primitives.tsx`, `status/page.tsx`, `app/layout.tsx`, `use-landing-motion.ts`, `loadWebEnv`, `opengraph-image.tsx`, `getStudentSessionState`, `curriculum-editor-view.tsx`, `verification-home.tsx`, `profile-request-detail-view.tsx`?**
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
+- **Why does `Reviewer gate: fail-closed startup` connect `staging.py` to `activity.ts`, `Phase 14B — Full-stack live staging for university review`?**
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
 - **What connects `singleQuote`, `trailingComma`, `printWidth` to the rest of the system?**
-  _2559 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `upload-view.tsx` be split into smaller, more focused modules?**
-  _Cohesion score 0.06748911465892599 - nodes in this community are weakly interconnected._
+  _2589 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `document-dialogs.tsx` be split into smaller, more focused modules?**
+  _Cohesion score 0.07686274509803921 - nodes in this community are weakly interconnected._
 - **Should `student-accounts/schemas.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.05714285714285714 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.04354136429608128 - nodes in this community are weakly interconnected._

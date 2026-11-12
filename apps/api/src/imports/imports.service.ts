@@ -8,7 +8,7 @@ import {
   ImportFileError,
   ImportStateError,
   importActions,
-  inspectXlsxContainer,
+  rejectPopulatedIdentityColumns,
   type NormalizedStudentRow,
   type RawRowData,
   retryTarget,
@@ -184,7 +184,7 @@ export class ImportsService {
       file.buffer.byteLength,
     );
     try {
-      inspectXlsxContainer(bytes, {
+      await rejectPopulatedIdentityColumns(bytes, {
         maxUncompressedBytes: this.config.IMPORT_MAX_UNCOMPRESSED_MB * MB,
       });
     } catch (error) {

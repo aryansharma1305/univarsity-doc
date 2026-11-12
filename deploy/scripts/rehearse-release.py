@@ -13,6 +13,7 @@ import staging
 
 ROLES = ('api', 'worker', 'web', 'tools')
 OUTPUT = staging.ROOT / 'test-results/release'
+MIGRATIONS = Path('packages/database/prisma/migrations')
 
 
 def command(*args, **kwargs):
@@ -34,6 +35,34 @@ def require_isolated_runner():
     return sha
 
 
+def candidate_migrations(sha):
+    files = command(
+        'git', '-C', str(staging.ROOT), 'ls-tree', '-rz', '--name-only', sha, '--', str(MIGRATIONS),
+    )
+    paths = (Path(name) for name in files.split('\0') if name)
+    names = sorted(
+        path.parent.name for path in paths
+        if path.name == 'migration.sql' and path.parent.parent == MIGRATIONS
+    )
+    if not names:
+        raise SystemExit('Candidate contains no Prisma migrations')
+    return names
+
+
+def require_complete_migrations(expected, history):
+    incomplete = [
+        name for name, finished, rolled_back, failed in history
+        if not finished or rolled_back or failed
+    ]
+    if incomplete:
+        raise SystemExit(f'Failed, rolled-back or unfinished Prisma migrations: {incomplete}')
+    applied = sorted(row[0] for row in history)
+    if applied != expected:
+        raise SystemExit(
+            f'Applied Prisma migration names must exactly match the candidate. Expected {expected}, got {applied}'
+        )
+
+
 def fingerprint():
     def query(sql):
         return staging.compose('exec', '-T', 'postgres', 'psql', '-X', '-U', 'docversity_owner', '-d', 'docversity_staging', '-v', 'ON_ERROR_STOP=1', '-Atc', sql, capture_output=True, text=True).stdout.strip()
@@ -42,7 +71,13 @@ def fingerprint():
     for table in tables:
         identifier = table.replace('"', '""')
         result[table] = query(f"SELECT count(*), md5(string_agg(md5(to_jsonb(t)::text), '' ORDER BY md5(to_jsonb(t)::text))) FROM public.\"{identifier}\" t")
-    return result, query('SELECT count(*), count(*) FILTER (WHERE finished_at IS NULL AND rolled_back_at IS NULL) FROM _prisma_migrations')
+    history = json.loads(query("""
+        SELECT COALESCE(json_agg(json_build_array(
+            migration_name, finished_at IS NOT NULL, rolled_back_at IS NOT NULL, logs IS NOT NULL
+        ) ORDER BY migration_name, id), '[]'::json)
+        FROM public._prisma_migrations
+    """))
+    return result, history
 
 
 def image(reference):
@@ -54,10 +89,10 @@ def image(reference):
 
 def main():
     sha = require_isolated_runner()
+    expected_migrations = candidate_migrations(sha)
     images = {role: image(f'{staging.PROJECT}-{role}:{sha}') for role in ROLES}
     before, migrations = fingerprint()
-    if migrations != '21|0':
-        raise SystemExit('All 21 candidate migrations must be complete')
+    require_complete_migrations(expected_migrations, migrations)
     fault = 'fault-' + sha
     # A wrong-role web image simulates a broken release. Known-good SHA tags never move.
     for role in ROLES:
@@ -91,7 +126,20 @@ def main():
     OUTPUT.mkdir(parents=True, exist_ok=False)
     metadata = {'commit': sha, 'runId': os.environ['GITHUB_RUN_ID'], 'architecture': 'linux/amd64', 'images': images, 'registryPublished': False}
     (OUTPUT / 'images.json').write_text(json.dumps(metadata, indent=2) + '\n')
-    (OUTPUT / 'rehearsal.json').write_text(json.dumps({'commit': sha, 'brokenImageRefused': fault_failed, 'failedProxyStayedStopped': proxy_remained_stopped, 'retainedImageIdsRestored': True, 'tableFingerprintsEqual': True, 'tablesCompared': len(before), 'migrations': migrations, 'privateObjectsReadable': True, 'productionSmokePassed': True, 'scope': 'Same-schema image-assignment failure and rollback; not downgrade or cross-version migration compatibility'}, indent=2) + '\n')
+    rehearsal = {
+        'commit': sha,
+        'brokenImageRefused': fault_failed,
+        'failedProxyStayedStopped': proxy_remained_stopped,
+        'retainedImageIdsRestored': True,
+        'tableFingerprintsEqual': True,
+        'tablesCompared': len(before),
+        'migrations': f'{len(expected_migrations)}|0',
+        'migrationNames': expected_migrations,
+        'privateObjectsReadable': True,
+        'productionSmokePassed': True,
+        'scope': 'Same-schema image-assignment failure and rollback; not downgrade or cross-version migration compatibility',
+    }
+    (OUTPUT / 'rehearsal.json').write_text(json.dumps(rehearsal, indent=2) + '\n')
     if shutil.disk_usage(OUTPUT).free < 4 * 1024**3:
         raise SystemExit('Insufficient disk headroom for the release archive')
     archive = OUTPUT / 'images.tar.gz'

@@ -78,3 +78,6 @@ graphify-out/20*/
 .local/
 deploy/scripts/__pycache__/
 deploy/render/__pycache__/
+
+# Clean university operator tooling
+deploy/university/__pycache__/

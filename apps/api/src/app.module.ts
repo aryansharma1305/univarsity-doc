@@ -1,3 +1,4 @@
+import { PaymentButtonsModule } from './payment-buttons/payment-buttons.module.js';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AcademicModule } from './academic/academic.module.js';
@@ -63,6 +64,7 @@ export class AppModule {
         HistoricalDocumentsModule,
         ExaminationsModule,
         ReExamsModule,
+        PaymentButtonsModule,
         HealthModule,
         PublicVerificationModule,
       ],

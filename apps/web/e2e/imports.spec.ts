@@ -176,17 +176,27 @@ test('a "Registration 2025"-shaped workbook imports with one session, course nam
   await page.goto('/admin/imports/new');
   const base = 800_000_000 + Math.floor(Math.random() * 90_000_000);
   // Synthetic data with the real workbook's columns: course and school are NAMES, no session column,
-  // empty Date of Birth/Photo, "Active"/"Inactive" statuses, fake national IDs.
+  // Empty DOB/photo and translated status remain; real uploads must exclude identity values.
+  const rows = Array.from({ length: 4 }, (_, index) => ({
+    name: `Test Student ${index + 1}`,
+    registrationNumber: base + index,
+    courseName: 'E2E Fixture Program',
+    schoolName: 'E2E Fixture Department',
+    status: index === 3 ? 'Inactive' : 'Active',
+  }));
+  const refused = await buildWorkbook([registration2025Sheet(rows)]);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'synthetic-with-identity.xlsx',
+    mimeType: XLSX,
+    buffer: Buffer.from(refused),
+  });
+  await page.getByRole('button', { name: 'Upload and continue' }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Remove national identity numbers' }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/admin\/imports\/new$/);
   const bytes = await buildWorkbook([
-    registration2025Sheet(
-      Array.from({ length: 4 }, (_, index) => ({
-        name: `Test Student ${index + 1}`,
-        registrationNumber: base + index,
-        courseName: 'E2E Fixture Program',
-        schoolName: 'E2E Fixture Department',
-        status: index === 3 ? 'Inactive' : 'Active',
-      })),
-    ),
+    registration2025Sheet(rows, { includeIdentityValues: false }),
   ]);
   await uploadWorkbook(page, bytes, 'registration-2025-synthetic.xlsx');
   await expect(page.getByRole('heading', { name: 'Map columns' })).toBeVisible({ timeout: 30_000 });

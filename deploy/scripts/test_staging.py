@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import runpy
 import tempfile
 import shutil
 import subprocess
@@ -7,6 +8,56 @@ import sys
 import unittest
 from unittest.mock import patch
 import staging
+
+REHEARSAL = runpy.run_path(str(Path(__file__).with_name('rehearse-release.py')))
+
+
+class ReleaseMigrationTests(unittest.TestCase):
+    def test_rehearsal_accepts_the_exact_candidate_at_any_migration_count(self):
+        for count in (21, 22, 30):
+            with self.subTest(count=count), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                migrations = root / REHEARSAL['MIGRATIONS']
+                names = [f'20261112{index:06d}_synthetic' for index in range(count)]
+                for name in names:
+                    directory = migrations / name
+                    directory.mkdir(parents=True)
+                    (directory / 'migration.sql').write_text('SELECT 1;\n')
+                (migrations / 'migration_lock.toml').write_text('provider = "postgresql"\n')
+                subprocess.run(['git', 'init', '-q', folder], check=True)
+                subprocess.run(['git', '-C', folder, 'add', '.'], check=True)
+                tree = subprocess.check_output(['git', '-C', folder, 'write-tree'], text=True).strip()
+                untracked = migrations / 'untracked'
+                untracked.mkdir()
+                (untracked / 'migration.sql').write_text('SELECT 2;\n')
+
+                with patch.object(staging, 'ROOT', root):
+                    expected = REHEARSAL['candidate_migrations'](tree)
+                self.assertEqual(expected, names)
+                REHEARSAL['require_complete_migrations'](
+                    expected, [[name, True, False, False] for name in reversed(names)],
+                )
+
+    def test_rehearsal_refuses_missing_extra_substituted_or_duplicate_names(self):
+        expected = ['first', 'second']
+        for names in (['first'], ['first', 'second', 'extra'], ['first', 'extra'], ['first', 'second', 'second']):
+            with self.subTest(names=names), self.assertRaisesRegex(SystemExit, 'must exactly match'):
+                REHEARSAL['require_complete_migrations'](
+                    expected, [[name, True, False, False] for name in names],
+                )
+
+    def test_rehearsal_refuses_failed_rolled_back_and_unfinished_history(self):
+        applied = ['second', True, False, False]
+        for row in (
+            ['second', False, False, True],
+            ['second', True, False, True],
+            ['second', False, True, False],
+            ['second', False, False, False],
+        ):
+            with self.subTest(row=row), self.assertRaisesRegex(SystemExit, 'Failed, rolled-back or unfinished'):
+                REHEARSAL['require_complete_migrations'](
+                    ['first', 'second'], [['first', True, False, False], applied, row],
+                )
 
 
 class RecoverySafetyTests(unittest.TestCase):

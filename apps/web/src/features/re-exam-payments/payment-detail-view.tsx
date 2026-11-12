@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { RazorpayReconciliation } from '@/features/payments/razorpay-reconciliation';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
 import { PERMISSIONS } from '@docversity/types';
@@ -292,6 +293,11 @@ export function ReExamPaymentDetailView({ paymentId }: { paymentId: string }) {
           received the money — confirm it in the university’s own account first.
         </p>
       )}
+      {canVerify &&
+        p.status === 'SUBMITTED' &&
+        /^pay_[A-Za-z0-9]+$/.test(p.transactionReference ?? '') && (
+          <RazorpayReconciliation paymentId={p.id} />
+        )}
       {p.sameReference.length > 0 && (
         <p
           role="alert"
