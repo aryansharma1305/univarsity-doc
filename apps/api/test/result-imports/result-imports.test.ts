@@ -598,6 +598,7 @@ describe('isolation, expiry and cleanup', () => {
       const ttl = await redis.pttl(key);
       expect(ttl).toBeGreaterThan(0);
       expect(ttl).toBeLessThanOrEqual(2 * 60 * 60 * 1000);
+      expect(await redis.pexpiretime(key)).toBe(Date.parse(kept.expiresAt));
     }
     // Simulated expiry: Redis removes the keys; the preview is gone.
     for (const key of keys) await redis.pexpire(key, 1);
