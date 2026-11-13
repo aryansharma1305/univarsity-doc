@@ -84,32 +84,42 @@ Owner-reported host: Ubuntu 24.04.5, 2 vCPU, 7.8 GiB RAM, 96 GB disk with about 
 existing Caddy on 80/443. These facts were supplied by the owner, not independently measured here.
 Idle measurements do not certify PDF/photo/import peaks or simultaneous use.
 
-| Service    | University MiB / CPU | Staging MiB / CPU |
-| ---------- | -------------------- | ----------------- |
-| API        | 1024 / 0.30          | 640 / 0.10        |
-| Worker     | 512 / 0.10           | 320 / 0.05        |
-| Web        | 512 / 0.20           | 384 / 0.05        |
-| PostgreSQL | 512 / 0.10           | 384 / 0.03        |
-| Redis      | 192 / 0.03           | 384 / 0.02        |
-| MinIO      | 320 / 0.05           | 384 / 0.02        |
-| Total      | 3072 / 0.78          | 2496 / 0.27       |
+| Service    | University MiB / CPU burst cap | Staging MiB / CPU burst cap |
+| ---------- | ------------------------------ | --------------------------- |
+| API        | 1024 / 0.75                    | 640 / 0.50                  |
+| Worker     | 512 / 0.25                     | 320 / 0.10                  |
+| Web        | 512 / 0.50                     | 384 / 0.50                  |
+| PostgreSQL | 512 / 0.25                     | 384 / 0.15                  |
+| Redis      | 192 / 0.10                     | 384 / 0.10                  |
+| MinIO      | 320 / 0.25                     | 384 / 0.15                  |
+| Total caps | 3072 / 2.10                    | 2496 / 1.50                 |
 
-Shared edge: **128 MiB / 0.75 CPU**, 4096 CPU shares. University services have 512 shares each,
-staging services 128 each. Shares prioritize short authentication bursts under contention; they do
-not reserve CPU or override the hard limits. Steady ceilings total **5696 MiB (5.5625 GiB), 1.8 CPUs**,
-leaving 0.2 CPU nominal headroom on the reported two-core host. This is a proposed small-launch budget;
-application throughput and OS/daemon contention must pass the target-host acceptance before adoption.
-Reserve 1536 MiB for host/Docker and 512 MiB for **one** operator job: 7744 MiB total, below the reported
-7.8 GiB with only about 243 MiB additional margin. An operator job is capped at 0.10 CPU and requires
-quiescing that environment's API/web/worker first; do not overlap operator jobs across environments.
-Encryption/transfer after writers restart also needs that 0.10-CPU cap (total <=1.9 CPUs); pause it if
-host headroom deteriorates. A ceiling sum is not proof of free RAM, bounded kernel/cache overhead or
-acceptable latency. Memory limits and the bcrypt work factor are unchanged.
+Shared edge: **128 MiB / 0.75 CPU**, 8192 CPU shares. University services and staging API/web have
+512 shares each; staging worker/data services have 128. All services retain finite per-container CPU
+caps. These are burst ceilings: their sum **4.35 CPU exceeds the two physical cores** and is not a
+reservation or an aggregate host cap. CFS weights distribute contention; they do not guarantee CPU
+or OS headroom. The initial caps whose sum fit 1.8 CPUs caused severe throttling and 5–16-second page
+tails despite only .316 cores average utilization. The revised caps permit short interactive bursts
+while preserving the unchanged measured acceptance thresholds. See [evidence](shared-proxy-performance.md)
+and [Docker CPU scheduling semantics](https://docs.docker.com/engine/containers/resource_constraints/#cpu).
 
-The previous 0.1-CPU cap caused cold bcrypt to be quota-throttled for approximately 17 seconds;
-0.25 and 0.5 CPU also missed the declared two-second cold-p95 goal locally. See
-[repeatable performance evidence and acceptance gates](shared-proxy-performance.md). Do not apply the
-new caps until exact-source native CI, review and the authorized Hostinger acceptance have passed.
+**No hard CPU reserve is claimed.** Accept the workload only if measured server use stays <=1.6 cores
+average in CI and the target-host rehearsal preserves <=75% sustained total host CPU, acceptable
+CPU steal, and the declared latency/error goals. Otherwise lower approved demand, reallocate limits
+or upgrade; do not deploy merely because a standalone proxy benchmark passes. The burst policy and
+actual target-host headroom require operator approval before adoption.
+
+Memory ceilings remain **5696 MiB (5.5625 GiB)**. Reserve 1536 MiB for host/Docker and 512 MiB for
+**one** operator job: 7744 MiB total, below the reported 7.8 GiB with only about 243 MiB extra margin.
+Operator jobs remain capped at .10 CPU and 512 MiB. Quiesce that environment's API/web/worker first;
+do not overlap operator jobs across environments. Encryption/transfer after writers restart also
+requires the .10-CPU cap and must pause if host headroom deteriorates. A ceiling sum is not proof of
+free RAM or bounded host overhead. No memory cap, swap policy or bcrypt work factor is relaxed.
+
+The previous 0.1-CPU cap caused cold bcrypt to be quota-throttled for approximately 17 seconds.
+The .75-CPU candidate must pass exact-source transport/contention and the complete application
+workload before the separately authorized Hostinger test. Preserve the failed strict-budget and
+photo trials. Generate fresh reviewed preparation files; do not reuse old generated JSON limits.
 Stop/cap separately approved idle recovery services before testing;
 they are not included in the steady budget. Preserve all recovery volumes/images/backups.
 

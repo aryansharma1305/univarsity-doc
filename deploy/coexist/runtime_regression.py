@@ -94,7 +94,7 @@ def main(probe_cpu=None,benchmark=False,selected_only=False,probe_shares=None,pr
         for name in ('burn-a','burn-b'):
             services[name]={'image':edge.clean.PINS['proxy'],'entrypoint':['/bin/sh','-c'],
                             'command':['while :; do :; done'],'network_mode':'none',
-                            'cpus':.525,'cpu_shares':1920,'cpuset':'0,1','mem_limit':'16m','memswap_limit':'16m',
+                            'cpus':.8,'cpu_shares':2304,'cpuset':'0,1','mem_limit':'16m','memswap_limit':'16m',
                             'read_only':True,'cap_drop':['ALL'],'security_opt':['no-new-privileges:true'],'pids_limit':4}
         compose=root/'compose.json'
         compose.write_text(json.dumps({'name':project,'services':services,
@@ -220,7 +220,7 @@ if __name__=='__main__':
     parser.add_argument('--probe-cpu',type=float,choices=(.1,.25,.5,.75,1.0))
     parser.add_argument('--benchmark',action='store_true')
     parser.add_argument('--benchmark-selected',action='store_true')
-    parser.add_argument('--probe-shares',type=int,choices=(1024,4096))
+    parser.add_argument('--probe-shares',type=int,choices=(1024,4096,8192))
     parser.add_argument('--probe-contention',action='store_true')
     args=parser.parse_args()
     main(args.probe_cpu,args.benchmark or args.benchmark_selected,args.benchmark_selected,args.probe_shares,args.probe_contention)

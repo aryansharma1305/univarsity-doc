@@ -13,10 +13,12 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('university_clean', ROOT / 'deploy/university/clean.py')
 clean = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(clean)
-STAGING_LIMITS = {'api': (640, .10), 'worker': (320, .05), 'web': (384, .05),
-                  'postgres': (384, .03), 'redis': (384, .02), 'minio': (384, .02)}
+# CPU values are bounded burst ceilings, not reserved cores; acceptance measures actual contention.
+STAGING_LIMITS = {'api': (640, .50), 'worker': (320, .10), 'web': (384, .50),
+                  'postgres': (384, .15), 'redis': (384, .10), 'minio': (384, .15)}
+STAGING_SHARES = {'api': 512, 'web': 512}
 EDGE_CPUS = .75
-EDGE_CPU_SHARES = 4096
+EDGE_CPU_SHARES = 8192
 OPERATOR_CPUS = .10
 EDGE_PROJECT = 'docversity-edge'
 GATE = re.compile(r'\(reviewer_gate\) \{\n\tbasic_auth @gated \{\n\t\t[a-z]{3,32} \$2[aby]\$1[0-9]\$[./A-Za-z0-9]{53}\n\t\}\n\}\n')
@@ -140,7 +142,7 @@ def prepare(directory, university_directory, staging_state, staging_origin, acme
                             'tools': {'environment':{'GATE_CHECK_HOST':EDGE_PROJECT}}}}
     for name, (memory, cpu) in STAGING_LIMITS.items():
         overlay['services'][name] = {'mem_limit':f'{memory}m','memswap_limit':f'{memory}m',
-                                     'cpus':cpu,'cpu_shares':128,'pids_limit':256}
+                                     'cpus':cpu,'cpu_shares':STAGING_SHARES.get(name,128),'pids_limit':256}
     for name in ('tools','migrate','backup-readiness'):
         overlay['services'].setdefault(name,{}).update(mem_limit='512m',memswap_limit='512m',cpus=OPERATOR_CPUS,pids_limit=256)
     for name, value in [('compose.json',edge),('staging-overlay.json',overlay)]:

@@ -19,9 +19,9 @@ PINS = {
     'proxy': 'caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f',
 }
 ROLES = ('api', 'worker', 'web', 'tools')
-# MiB / CPU ceilings to rehearse, not a claim of measured capacity on KVM 2.
-UNIVERSITY_LIMITS = {'api': (1024, .30), 'worker': (512, .10), 'web': (512, .20),
-                     'postgres': (512, .10), 'redis': (192, .03), 'minio': (320, .05)}
+# MiB / CPU burst ceilings to rehearse; CPU caps are not reservations or aggregate host capacity.
+UNIVERSITY_LIMITS = {'api': (1024, .75), 'worker': (512, .25), 'web': (512, .50),
+                     'postgres': (512, .25), 'redis': (192, .10), 'minio': (320, .25)}
 
 
 def image_ids(manifest):

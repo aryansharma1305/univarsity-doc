@@ -14,7 +14,7 @@ THRESHOLDS={
     'cold_p95_seconds':2.0,'cold_p99_seconds':3.0,
     'warm_p95_seconds':.250,'warm_p99_seconds':.500,
     'throughput_rps':20.0,'errors':0,'edge_memory_peak_mib':96,
-    'contention_cpu_cores':1.05,
+    'contention_cpu_cores':1.6,
 }
 
 
@@ -98,7 +98,7 @@ def run_suite(request,command,authorization,wait_ready,output,configured_cpu,dur
     report['caddy_version']=command('exec','-T','edge','caddy','version').stdout.strip()
     container=command('ps','--quiet','edge').stdout.strip()
     report['edge_cpu_shares']=int(run('docker','inspect','--format','{{.HostConfig.CpuShares}}',container).stdout.strip())
-    report['conditions']['contention']='two 0.525-CPU competitors, 1920 shares each, pinned to the same two CPUs'
+    report['conditions']['contention']='two 0.8-CPU competitors, 2304 shares each, pinned to the same two CPUs'
     def save():output.parent.mkdir(parents=True,exist_ok=True);output.write_text(json.dumps(report,indent=2)+'\n')
     for cpu in ((configured_cpu,) if selected_only else CANDIDATES):
         command('stop','burn-a','burn-b')

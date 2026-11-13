@@ -183,7 +183,7 @@ def main(images,functional_only=False):
                     if name in ('api','worker',web,'postgres','redis','minio'):
                         role='web' if name==web else name
                         if label=='STAGE':
-                            memory,cpu=edge.STAGING_LIMITS[role];service.update(mem_limit=f'{memory}m',memswap_limit=f'{memory}m',cpus=cpu,cpu_shares=128)
+                            memory,cpu=edge.STAGING_LIMITS[role];service.update(mem_limit=f'{memory}m',memswap_limit=f'{memory}m',cpus=cpu,cpu_shares=edge.STAGING_SHARES.get(role,128))
                 credentials=directory/'fixtures';credentials.mkdir(mode=0o700)
                 password=lambda:secrets.token_urlsafe(24)+'Aa9!'
                 fixture={'marker':'SYNTHETIC COEXISTENCE ONLY','label':label,

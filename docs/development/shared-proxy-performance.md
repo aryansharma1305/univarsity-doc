@@ -19,14 +19,13 @@ password and an anonymous request must still fail after load; TLS SNI/Host misma
 See the pinned [Caddyfile adapter](https://github.com/caddyserver/caddy/blob/v2.11.7/modules/caddyhttp/caddyauth/caddyfile.go)
 and [Basic Auth implementation](https://github.com/caddyserver/caddy/blob/v2.11.7/modules/caddyhttp/caddyauth/basicauth.go).
 
-Current test candidate edge ceiling: **0.75 CPU, 128 MiB, no container swap, 4096 CPU shares**. Shares give a short
-bcrypt burst priority against the applications' aggregate 3840 shares (six university services at
-512 plus six staging services at 128); they do not reserve idle CPU. University ceilings total
-0.78 CPU, staging 0.27, so steady ceilings sum to 1.8 CPU. Operator jobs have 0.10 CPU and 512 MiB;
-quiesce the corresponding writers for capture/migration/restore and run only one job at a time.
-The [service budget](shared-proxy-coexistence.md#measured-inputs-and-provisional-budget) contains the memory
-allowances and maintenance constraints. These limits trade batch throughput for authentication
-responsiveness and require the full-stack test and target-host approval.
+Current test candidate: **0.75 CPU / 128 MiB for Caddy, 8192 shares**, with bounded application
+burst ceilings and interactive staging API/web weights. The [service table](shared-proxy-coexistence.md#measured-inputs-and-provisional-budget)
+is authoritative. CPU caps sum to **4.35 cores** on a two-core host; they are oversubscribed upper
+bounds, not reservations or an aggregate cap. The workload must demonstrate <=1.6 cores average and
+all latency/error limits; actual OS/daemon/steal headroom still requires the Hostinger acceptance.
+No hard CPU reserve is claimed. Memory ceilings remain 5696 MiB, plus reviewed 1536-MiB host and one
+512-MiB operator allowance. Operator jobs have .10 CPU and require corresponding writers quiesced.
 
 ## Thresholds declared before selection
 
@@ -83,7 +82,7 @@ The rehearsal now polls for the expected response within the original 15-second 
 retrying a transient connection close only during reload/rollback. Load errors/timeouts remain failures.
 
 The selected configuration then runs five cold restarts with two simultaneous reviewers and two
-0.525-CPU busy competitors (1920 shares each) pinned to the same two CPUs, 60 seconds of contended
+0.8-CPU busy competitors (2304 shares each) pinned to the same two CPUs, 60 seconds of contended
 mixed load, and 180 seconds of uncontented soak. `--benchmark-selected` repeats only this selection.
 The complete native AMD64 matrix and weighted contention must pass in CI on the exact pushed SHA.
 
@@ -175,6 +174,34 @@ is inside the measured traffic window. Load metrics are retained before checking
 and photo phase timings are retained even if the ten-second deadline fails. Startup restarts remain
 forbidden. The corrected workload and new candidate must be rerun; no earlier full-stack attempt is
 claimed as a pass. The later operator-host acceptance is still mandatory.
+
+## Rejected rigid CPU budgets and burst policy
+
+The `.75 / .78 / .27` strict-cap trial (`2dda812`) passed the proxy suite, all security/isolation
+assertions, a 58-row import in 21.898 s, and both 3.15-MB photo workflows in 9.288/9.191 s. Submission
+was the expensive phase (8.878/7.565 s); approval and private reads completed successfully.
+It nevertheless **failed** the unchanged page/API p99 threshold: staging p50/p95/p99
+.371/1.669/15.834 s; university .119/.748/5.091 s, 904 requests over 121.091 s (7.465 RPS).
+There were zero errors/timeouts/OOM/restarts, mean server usage .3162 cores, and summed lifetime
+container peaks 2229.421 MiB. Cgroup counters showed heavy throttling, including 78.389 throttled
+seconds at staging web's .05-CPU cap. Idle CPU elsewhere could not be borrowed past those quotas.
+This is a failed capacity trial; it does not justify relaxing p99 or hiding first-page requests.
+
+The revised policy raises finite application burst caps rather than artificially reserving tiny
+fractions per service: university API .75, worker .25, web .50, PostgreSQL .25, Redis .10, MinIO .25;
+staging API/web .50 each, worker .10, PostgreSQL/MinIO .15 each, Redis .10. University and staging
+API/web have 512 shares; other staging services 128; edge 8192. CPU caps total 4.35 and intentionally
+oversubscribe the host. There is no aggregate cgroup cap or guaranteed CPU reservation. Adoption
+requires measured headroom and explicit acceptance of this burst policy; otherwise use a reviewed
+aggregate-control design or upgrade. [Docker documents quota ceilings and relative weights](https://docs.docker.com/engine/containers/resource_constraints/#cpu).
+
+Transport contention is increased again to two .8-CPU busy competitors (1.6 cores total), with
+2304 shares each representing the aggregate application weight. All server processes remain pinned
+to CPUs 0,1. This deliberately creates scheduler contention during cold bcrypt. Application clients
+still start after resource snapshots, with import and both photo tasks inside the 120-second load.
+Memory caps, secure networking/authentication and every acceptance threshold remain unchanged.
+Only the final exact-source CI results can accept this revised candidate; the target-host test remains
+mandatory and no earlier rejected full-stack trial is reported as passed.
 
 ## Operator acceptance and release boundary
 
