@@ -4,8 +4,9 @@ Staging and university share one independently operated Caddy Compose project, w
 
 Status: proposed; local preparation only. Live acceptance and release approval remain required.
 
-The follow-up performance proposal raises the edge ceiling from 0.1 to 1.0 CPU, with 4096 shares,
-and reallocates application ceilings to keep steady limits at 1.8 CPUs. Cold bcrypt work must receive
+The follow-up performance proposal raises the edge ceiling from 0.1 to 0.75 CPU, with 4096 shares,
+and reallocates application ceilings to keep steady limits at 1.8 CPUs. The initial 1.0-CPU candidate passed transport but its reduced application budget missed the photo
+deadline; the 0.75-CPU candidate reallocates that quarter core to university services. Cold bcrypt work must receive
 a short burst; lowering its work factor or removing the reviewer gate is not an acceptable fix.
 See [benchmark conditions and remaining host acceptance](../development/shared-proxy-performance.md).
 No production limits change until review and authorized host acceptance.

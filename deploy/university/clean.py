@@ -20,8 +20,8 @@ PINS = {
 }
 ROLES = ('api', 'worker', 'web', 'tools')
 # MiB / CPU ceilings to rehearse, not a claim of measured capacity on KVM 2.
-UNIVERSITY_LIMITS = {'api': (1024, .20), 'worker': (512, .08), 'web': (512, .15),
-                     'postgres': (512, .05), 'redis': (192, .025), 'minio': (320, .025)}
+UNIVERSITY_LIMITS = {'api': (1024, .30), 'worker': (512, .10), 'web': (512, .20),
+                     'postgres': (512, .10), 'redis': (192, .03), 'minio': (320, .05)}
 
 
 def image_ids(manifest):

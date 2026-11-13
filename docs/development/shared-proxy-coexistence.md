@@ -86,15 +86,15 @@ Idle measurements do not certify PDF/photo/import peaks or simultaneous use.
 
 | Service    | University MiB / CPU | Staging MiB / CPU |
 | ---------- | -------------------- | ----------------- |
-| API        | 1024 / 0.20          | 640 / 0.10        |
-| Worker     | 512 / 0.08           | 320 / 0.05        |
-| Web        | 512 / 0.15           | 384 / 0.05        |
-| PostgreSQL | 512 / 0.05           | 384 / 0.03        |
-| Redis      | 192 / 0.025          | 384 / 0.02        |
-| MinIO      | 320 / 0.025          | 384 / 0.02        |
-| Total      | 3072 / 0.53          | 2496 / 0.27       |
+| API        | 1024 / 0.30          | 640 / 0.10        |
+| Worker     | 512 / 0.10           | 320 / 0.05        |
+| Web        | 512 / 0.20           | 384 / 0.05        |
+| PostgreSQL | 512 / 0.10           | 384 / 0.03        |
+| Redis      | 192 / 0.03           | 384 / 0.02        |
+| MinIO      | 320 / 0.05           | 384 / 0.02        |
+| Total      | 3072 / 0.78          | 2496 / 0.27       |
 
-Shared edge: **128 MiB / 1.0 CPU**, 4096 CPU shares. University services have 512 shares each,
+Shared edge: **128 MiB / 0.75 CPU**, 4096 CPU shares. University services have 512 shares each,
 staging services 128 each. Shares prioritize short authentication bursts under contention; they do
 not reserve CPU or override the hard limits. Steady ceilings total **5696 MiB (5.5625 GiB), 1.8 CPUs**,
 leaving 0.2 CPU nominal headroom on the reported two-core host. This is a proposed small-launch budget;

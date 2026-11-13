@@ -175,7 +175,7 @@ class SharedEdgeTests(unittest.TestCase):
         self.assertLessEqual(cpu,1.81)
         paused_stage_writers=sum(edge.STAGING_LIMITS[s][1] for s in ('api','worker','web'))
         self.assertLessEqual(cpu-paused_stage_writers+edge.OPERATOR_CPUS,1.81)
-        self.assertEqual(edge.EDGE_CPUS,1.0)
+        self.assertEqual(edge.EDGE_CPUS,.75)
         self.assertGreater(edge.EDGE_CPU_SHARES,6*512+6*128)
         self.assertLess(steady+1536+512,7.8*1024)
 

@@ -108,14 +108,15 @@ def profile(client,registrar,directory):
     raw,kind=multipart({'changes':json.dumps({'dateOfBirth':'2005-02-03'})},[('photo','synthetic.png','image/png',(directory/'fixtures/synthetic-photo.png').read_bytes())])
     began=time.monotonic();response=client.call('/api/v1/student/profile-requests','POST',raw=raw,content_type=kind)
     assert response[0]==201,'Synthetic profile submission failed'
-    value=json.loads(response[2]);identifier=value['id']
+    submitted=time.monotonic();value=json.loads(response[2]);identifier=value['id']
     registrar.json('/api/v1/profile-requests/'+identifier+'/approve','POST',{})
-    response=client.call('/api/v1/student/photo');assert response[0]==200 and response[1].get('cache-control')=='no-store'
-    seconds=time.monotonic()-began;assert seconds<=THRESHOLDS['photo_seconds'],'Synthetic photo deadline exceeded'
-    return {'seconds':round(seconds,3),'input_bytes':(directory/'fixtures/synthetic-photo.png').stat().st_size}
+    approved=time.monotonic();response=client.call('/api/v1/student/photo');assert response[0]==200 and response[1].get('cache-control')=='no-store'
+    seconds=time.monotonic()-began
+    return {'seconds':round(seconds,3),'accepted':seconds<=THRESHOLDS['photo_seconds'],
+            'phases_seconds':{'submission':round(submitted-began,3),'approval':round(approved-submitted,3),'read':round(time.monotonic()-approved,3)},'input_bytes':(directory/'fixtures/synthetic-photo.png').stat().st_size}
 
 
-def load(clients,commands):
+def load(clients,commands,ready):
     samples={'stage':[],'university':[]};errors=0;timeouts=0;lock=threading.Lock()
     services=('api','worker','postgres','redis','minio')
     def resources():
@@ -138,6 +139,7 @@ def load(clients,commands):
             i+=1;time.sleep(THRESHOLDS['think_seconds'])
     with ThreadPoolExecutor(max_workers=10) as pool:
         futures=[pool.submit(actor,label,client.clone(),paths) for label,client,paths in clients]
+        ready.set()
         for future in futures:future.result()
     elapsed=time.monotonic()-start;after=resources()
     per_service={name:metrics(before[name],after[name],elapsed) for name in before}
@@ -312,14 +314,19 @@ def main(images,functional_only=False):
             for i in range(4):clients.append(('university',students['UNIVERSITY'][i%2],('/student/profile','/api/v1/student/me')))
             # Import and two independent photo/DOB approvals overlap the HTTP load.
             with ThreadPoolExecutor(max_workers=4) as pool:
-                workload=pool.submit(load,clients,commands[:2])
+                edge_before=cgroup(e);began=time.monotonic();load_ready=threading.Event()
+                workload=pool.submit(load,clients,commands[:2],load_ready)
+                if not load_ready.wait(60):
+                    if workload.done():workload.result()
+                    raise AssertionError('HTTP load did not start before the import/photo workload')
                 import_future=pool.submit(import_rows,staff['UNIVERSITY']['REGISTRAR'].clone(),instances['UNIVERSITY']['directory'])
                 photos=[pool.submit(profile,student.clone(),staff['UNIVERSITY']['REGISTRAR'].clone(),instances['UNIVERSITY']['directory']) for student in students['UNIVERSITY']]
-                edge_before=cgroup(e);began=time.monotonic()
-                report['import']=import_future.result();report['photos']=[f.result() for f in photos]
                 report['load']=workload.result();edge_after=cgroup(e)
                 report['load']['services']['edge']=metrics(edge_before,edge_after,time.monotonic()-began)
+                report['import']=import_future.result();report['photos']=[f.result() for f in photos]
+            report['checks'].append('resource counters captured and HTTP clients started before import/photo workload')
             values=report['load'];values['cpu_cores_average']+=values['services']['edge']['cpu_cores_average'];values['sum_container_peak_mib']+=values['services']['edge']['memory_peak_since_start_mib']
+            assert all(p['accepted'] for p in report['photos']),'Synthetic photo deadline exceeded'
             report['load_acceptance']=all(v['p95']<=THRESHOLDS['p95_seconds'] and v['p99']<=THRESHOLDS['p99_seconds'] for v in values['latency_seconds'].values()) and not values['errors'] and not values['timeouts'] and values['cpu_cores_average']<=THRESHOLDS['cpu_cores_average'] and values['sum_container_peak_mib']<=THRESHOLDS['container_memory_peak_mib'] and all(v['oom_kills']==0 for v in values['services'].values()) and not any(values['restarts_during_load'].values())
             if not functional_only:assert report['load_acceptance'],'Full-stack load thresholds failed'
             edge_id=e('ps','--quiet','edge').stdout.strip()

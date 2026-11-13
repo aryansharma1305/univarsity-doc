@@ -19,10 +19,10 @@ password and an anonymous request must still fail after load; TLS SNI/Host misma
 See the pinned [Caddyfile adapter](https://github.com/caddyserver/caddy/blob/v2.11.7/modules/caddyhttp/caddyauth/caddyfile.go)
 and [Basic Auth implementation](https://github.com/caddyserver/caddy/blob/v2.11.7/modules/caddyhttp/caddyauth/basicauth.go).
 
-Proposed edge ceiling: **1.0 CPU, 128 MiB, no container swap, 4096 CPU shares**. Shares give a short
+Current test candidate edge ceiling: **0.75 CPU, 128 MiB, no container swap, 4096 CPU shares**. Shares give a short
 bcrypt burst priority against the applications' aggregate 3840 shares (six university services at
 512 plus six staging services at 128); they do not reserve idle CPU. University ceilings total
-0.53 CPU, staging 0.27, so steady ceilings sum to 1.8 CPU. Operator jobs have 0.10 CPU and 512 MiB;
+0.78 CPU, staging 0.27, so steady ceilings sum to 1.8 CPU. Operator jobs have 0.10 CPU and 512 MiB;
 quiesce the corresponding writers for capture/migration/restore and run only one job at a time.
 The [service budget](shared-proxy-coexistence.md#measured-inputs-and-provisional-budget) contains the memory
 allowances and maintenance constraints. These limits trade batch throughput for authentication
@@ -41,7 +41,7 @@ run cannot accept capacity even if its timings happen to meet these thresholds.
 
 ## Repeatable workload and evidence
 
-`runtime_regression.py --benchmark` tests 0.1/0.25/0.5/1.0 CPU against the same pinned binary and
+`runtime_regression.py --benchmark` tests 0.1/0.25/0.5/0.75/1.0 CPU against the same pinned binary and
 unchanged production gate/policy, five cold restarts each and a 60-second mixed load for each.
 Ten clients (two reviewers, eight university) think 100 ms between requests, opening a new verified
 TLS HTTP/1.1 connection each time. Internal test TLS replaces ACME; synthetic HTTP upstreams replace
@@ -83,7 +83,7 @@ The rehearsal now polls for the expected response within the original 15-second 
 retrying a transient connection close only during reload/rollback. Load errors/timeouts remain failures.
 
 The selected configuration then runs five cold restarts with two simultaneous reviewers and two
-0.4-CPU busy competitors (1920 shares each) pinned to the same two CPUs, 60 seconds of contended
+0.525-CPU busy competitors (1920 shares each) pinned to the same two CPUs, 60 seconds of contended
 mixed load, and 180 seconds of uncontented soak. `--benchmark-selected` repeats only this selection.
 The complete native AMD64 matrix and weighted contention must pass in CI on the exact pushed SHA.
 
@@ -117,8 +117,9 @@ On initial follow-up SHA `42bdd06`, the independent AMD64 runner measured cold p
 reviewer p50/p95/p99 were .0429/.0446/.0474 s at 69.85 RPS, mean .0421 CPU cores, peak 18.91 MiB,
 zero errors/timeouts/OOM. Contended cold p50/p95/p99 were .7951/.8054/.8054 s. The complete transport
 matrix/contention/soak passed. Faster AMD64 hardware lets 0.5 CPU pass the simple cold phase;
-1.0 CPU is proposed for cold-burst margin and is the allocation exercised by the contended and
-application acceptance tests. This is not a claim that 1.0 is optimal on the unmeasured VPS.
+At that stage, 1.0 CPU was proposed for cold-burst margin and exercised by the contended and
+application tests. It was subsequently rejected by the full-stack photo deadline below; standalone
+transport success does not establish an optimal allocation on the unmeasured VPS.
 
 The same SHA's full-stack attempt stopped before startup because the fresh load runner did not
 have the pinned infrastructure images. CI now explicitly pulls all four pinned AMD64 infrastructure
@@ -152,6 +153,28 @@ check true). The fixture now retains only the specific emitted AUTH error for th
 a plain disconnect/timeout or successful PING still cannot pass. No application/Redis authentication
 setting changed. Startup automatic restarts are now rejected before load, in addition to the existing
 zero-restart check during load. Full-stack load/rollback remain pending the final rerun.
+
+## Full-stack rejection and revised candidate
+
+The `408bb94` native push run verified both directions of PostgreSQL/Redis/MinIO foreign-credential
+refusal and imported all 58 synthetic rows in 24.165 s with zero import errors. It then failed the
+unchanged **10-second combined photo submission/approval/read deadline** under the initial 1.0-CPU
+proxy / 0.53-CPU university budget. Exact photo timings were not retained by that first assertion;
+they are now recorded by phase before acceptance is checked. Do not call the initial budget accepted.
+
+The next test candidate is **0.75 CPU for Caddy / 0.78 CPU university / 0.27 CPU staging = 1.8 CPUs**.
+The additional university quarter core raises API to .30, worker .10, web .20, PostgreSQL .10,
+Redis .03 and MinIO .05 CPU. Memory caps, weights, authentication strength and all latency/error
+thresholds remain unchanged. The matrix includes .75 as a new candidate; contention is increased
+to two .525-CPU competitors (1.05 total) to represent the larger application budget. This remains
+provisional until the exact-source transport and full-stack jobs both pass.
+
+The application workload now waits until every initial resource counter has been captured and HTTP
+clients have started before releasing import/photo tasks. This guarantees that upload/import CPU
+is inside the measured traffic window. Load metrics are retained before checking operation futures,
+and photo phase timings are retained even if the ten-second deadline fails. Startup restarts remain
+forbidden. The corrected workload and new candidate must be rerun; no earlier full-stack attempt is
+claimed as a pass. The later operator-host acceptance is still mandatory.
 
 ## Operator acceptance and release boundary
 

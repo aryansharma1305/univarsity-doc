@@ -15,7 +15,7 @@ clean = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(clean)
 STAGING_LIMITS = {'api': (640, .10), 'worker': (320, .05), 'web': (384, .05),
                   'postgres': (384, .03), 'redis': (384, .02), 'minio': (384, .02)}
-EDGE_CPUS = 1.0
+EDGE_CPUS = .75
 EDGE_CPU_SHARES = 4096
 OPERATOR_CPUS = .10
 EDGE_PROJECT = 'docversity-edge'
