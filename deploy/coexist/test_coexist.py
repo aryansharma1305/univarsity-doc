@@ -170,9 +170,13 @@ class SharedEdgeTests(unittest.TestCase):
 
     def test_resource_budget_and_no_unbounded_swap(self):
         steady=sum(m for m,c in edge.STAGING_LIMITS.values())+sum(m for m,c in clean.UNIVERSITY_LIMITS.values())+128
-        cpu=sum(c for m,c in edge.STAGING_LIMITS.values())+sum(c for m,c in clean.UNIVERSITY_LIMITS.values())+.1
+        cpu=sum(c for m,c in edge.STAGING_LIMITS.values())+sum(c for m,c in clean.UNIVERSITY_LIMITS.values())+edge.EDGE_CPUS
         self.assertEqual(steady,5696)
-        self.assertLessEqual(cpu,1.71)
+        self.assertLessEqual(cpu,1.81)
+        paused_stage_writers=sum(edge.STAGING_LIMITS[s][1] for s in ('api','worker','web'))
+        self.assertLessEqual(cpu-paused_stage_writers+edge.OPERATOR_CPUS,1.81)
+        self.assertEqual(edge.EDGE_CPUS,1.0)
+        self.assertGreater(edge.EDGE_CPU_SHARES,6*512+6*128)
         self.assertLess(steady+1536+512,7.8*1024)
 
     def test_container_startup_refuses_invalid_gate_before_caddy_exec(self):

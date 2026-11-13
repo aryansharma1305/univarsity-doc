@@ -108,7 +108,7 @@ and verify university health before encryption/transfer. Snapshot files are no l
 application, so writers need not stay stopped during off-server transfer. Run the next section in a
 separate approved operator shell using the recorded BACKUP_SET/BACKUP_RUN. Healthy application restart
 does not make a failed capture acceptable. Only one 512-MiB operator job may run within the proposed
-budget; use an approved systemd scope with MemoryMax=512M, MemorySwapMax=0 and CPUQuota=25% for host
+budget; use an approved systemd scope with MemoryMax=512M, MemorySwapMax=0 and CPUQuota=10% for host
 encryption/transfer, and stop approved unused recovery containers before a restore.
 
 ## Encryption and transfer

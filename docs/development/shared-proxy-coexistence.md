@@ -86,21 +86,30 @@ Idle measurements do not certify PDF/photo/import peaks or simultaneous use.
 
 | Service    | University MiB / CPU | Staging MiB / CPU |
 | ---------- | -------------------- | ----------------- |
-| API        | 1024 / 0.45          | 640 / 0.12        |
-| Worker     | 512 / 0.25           | 320 / 0.08        |
-| Web        | 512 / 0.20           | 384 / 0.07        |
-| PostgreSQL | 512 / 0.15           | 384 / 0.05        |
-| Redis      | 192 / 0.05           | 384 / 0.03        |
-| MinIO      | 320 / 0.10           | 384 / 0.05        |
-| Total      | 3072 / 1.20          | 2496 / 0.40       |
+| API        | 1024 / 0.20          | 640 / 0.10        |
+| Worker     | 512 / 0.08           | 320 / 0.05        |
+| Web        | 512 / 0.15           | 384 / 0.05        |
+| PostgreSQL | 512 / 0.05           | 384 / 0.03        |
+| Redis      | 192 / 0.025          | 384 / 0.02        |
+| MinIO      | 320 / 0.025          | 384 / 0.02        |
+| Total      | 3072 / 0.53          | 2496 / 0.27       |
 
-Shared edge: 128 MiB / 0.10 CPU. Steady ceilings total **5696 MiB (5.5625 GiB), 1.7 CPUs**.
-Reserve 1536 MiB for host/Docker and 512 MiB for one operator job: 7744 MiB total, below the reported
-7.8 GiB with only about 243 MiB additional margin. This is a provisional ceiling budget, not proof of
-sufficient free memory under load. **The 0.1-CPU edge cap is not accepted:** the pinned synthetic
-transport rehearsal measured first reviewer authentication at 16.654–19.808 seconds, above the proposed
-latency goal. Tune and re-review the CPU allocation, then repeat full-stack concurrent/load checks
-before applying any proposed limits on the VPS. Preserve bcrypt strength and throttles.
+Shared edge: **128 MiB / 1.0 CPU**, 4096 CPU shares. University services have 512 shares each,
+staging services 128 each. Shares prioritize short authentication bursts under contention; they do
+not reserve CPU or override the hard limits. Steady ceilings total **5696 MiB (5.5625 GiB), 1.8 CPUs**,
+leaving 0.2 CPU nominal headroom on the reported two-core host. This is a proposed small-launch budget;
+application throughput and OS/daemon contention must pass the target-host acceptance before adoption.
+Reserve 1536 MiB for host/Docker and 512 MiB for **one** operator job: 7744 MiB total, below the reported
+7.8 GiB with only about 243 MiB additional margin. An operator job is capped at 0.10 CPU and requires
+quiescing that environment's API/web/worker first; do not overlap operator jobs across environments.
+Encryption/transfer after writers restart also needs that 0.10-CPU cap (total <=1.9 CPUs); pause it if
+host headroom deteriorates. A ceiling sum is not proof of free RAM, bounded kernel/cache overhead or
+acceptable latency. Memory limits and the bcrypt work factor are unchanged.
+
+The previous 0.1-CPU cap caused cold bcrypt to be quota-throttled for approximately 17 seconds;
+0.25 and 0.5 CPU also missed the declared two-second cold-p95 goal locally. See
+[repeatable performance evidence and acceptance gates](shared-proxy-performance.md). Do not apply the
+new caps until exact-source native CI, review and the authorized Hostinger acceptance have passed.
 Stop/cap separately approved idle recovery services before testing;
 they are not included in the steady budget. Preserve all recovery volumes/images/backups.
 
@@ -358,7 +367,7 @@ Never load-test real student accounts or append synthetic students to the intend
 4. Run a staging stop/backup and university backup independently. Verify other-site continuity and
    unchanged edge identity. Rehearse failed gate probe, wrong university image, worker restart/retry,
    Redis/AOF pressure and approved isolated restore. Do not induce OOM/disk exhaustion on a shared host.
-5. Capture p50/p95/error rates, CPU/steal/load, available RAM/swap, OOM/restarts, DB latency/disk/inodes,
+5. Capture p50/p95/p99/error rates, CPU/steal/load, available RAM/swap, OOM/restarts, DB latency/disk/inodes,
    Redis memory/AOF, queues and storage latency. Proposed goals: p95 login/page <2 seconds, non-upload
    HTTP errors <1%, zero unexpected auth/ownership successes, zero OOM/restarts, sustained CPU <75%,
    available RAM >20%, disk >20% free and queue age <120 seconds. Negotiate goals before testing.

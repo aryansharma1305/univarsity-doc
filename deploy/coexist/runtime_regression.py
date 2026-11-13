@@ -5,6 +5,7 @@ Requires local Docker. Retains its own certificate volumes and aggregate evidenc
 state. Internal TLS is the sole site-policy substitution; production ACME needs external acceptance.
 """
 from concurrent.futures import ThreadPoolExecutor
+import argparse
 import base64
 import copy
 import http.client
@@ -25,14 +26,14 @@ edge=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(edge)
 
 
-def run(*args, **kwargs):
+def run(*args, timeout=120, **kwargs):
     try:
-        return subprocess.run(args,check=True,capture_output=True,text=True,timeout=120,**kwargs)
+        return subprocess.run(args,check=True,capture_output=True,text=True,timeout=timeout,**kwargs)
     except subprocess.CalledProcessError as error:
         raise RuntimeError(error.stderr.strip()) from None
 
 
-def main():
+def main(probe_cpu=None,benchmark=False,selected_only=False,probe_shares=None,probe_contention=False):
     endpoint=run('docker','context','inspect','--format','{{.Endpoints.docker.Host}}').stdout.strip()
     if os.environ.get('DOCKER_HOST') or not endpoint.startswith('unix://'):
         raise SystemExit('Runtime rehearsal requires the local Unix-socket Docker context')
@@ -65,7 +66,7 @@ def main():
         legacy.write_text('{\n admin off\n}\nimport /run/secrets/reviewer_gate\nhttps://review.example.invalid {\n tls internal\n import /etc/caddy/review-site.caddy\n}\n')
         common={'image':edge.clean.PINS['proxy'],'read_only':True,'tmpfs':['/tmp:size=16m'],
                 'cap_drop':['ALL'],'cap_add':['NET_BIND_SERVICE'],'security_opt':['no-new-privileges:true'],'mem_limit':'128m',
-                'memswap_limit':'128m','cpus':.1,'pids_limit':128,'restart':'no',
+                'memswap_limit':'128m','cpus':.1,'cpuset':'0,1','pids_limit':128,'restart':'no',
                 'logging':{'driver':'json-file','options':{'max-size':'2m','max-file':'1'}}}
         def fixture(name, listen, response, networks):
             path=config/(name+'.caddy')
@@ -84,10 +85,17 @@ def main():
                'ports':[f'127.0.0.1:{port}:443'],
                'networks':['listener','stage_edge','stage_backend','university_edge'],
                'volumes':[f'{config}:/etc/caddy:ro',f'{gate}:/run/secrets/reviewer_gate:ro','certificates:/data','caddy_config:/config']}
+        proxy['cpus']=probe_cpu if probe_cpu is not None else getattr(edge,'EDGE_CPUS',.1)
+        proxy['cpu_shares']=probe_shares if probe_shares is not None else getattr(edge,'EDGE_CPU_SHARES',1024)
         services['edge']=proxy
         services['legacy']={**copy.deepcopy(proxy),'entrypoint':['caddy'],
                             'command':['run','--config','/etc/caddy/legacy.caddy','--adapter','caddyfile'],
                             'networks':['listener','stage_edge','stage_backend']}
+        for name in ('burn-a','burn-b'):
+            services[name]={'image':edge.clean.PINS['proxy'],'entrypoint':['/bin/sh','-c'],
+                            'command':['while :; do :; done'],'network_mode':'none',
+                            'cpus':.4,'cpu_shares':1920,'cpuset':'0,1','mem_limit':'16m','memswap_limit':'16m',
+                            'read_only':True,'cap_drop':['ALL'],'security_opt':['no-new-privileges:true'],'pids_limit':4}
         compose=root/'compose.json'
         compose.write_text(json.dumps({'name':project,'services':services,
             'networks':networks,
@@ -123,7 +131,29 @@ def main():
             report.setdefault('first_authenticated_request_seconds',[]).append(round(time.monotonic()-start,3))
             assert request(path='/health',auth=authorization)==(200,'staging-api')
         try:
-            command('up','--pull','never','--no-build','-d','stageweb','stageapi','uniweb-12345678','stage-private','uni-private','legacy')
+            command('up','--pull','never','--no-build','-d','stageweb','stageapi','uniweb-12345678','stage-private','uni-private','edge' if probe_cpu is not None or benchmark else 'legacy')
+            if benchmark:
+                from benchmark import run_suite
+                wait_ready('edge')
+                output=edge.ROOT/'test-results/coexist-benchmark.json'
+                report=run_suite(request,command,authorization,wait_ready,output,proxy['cpus'],selected_only=selected_only)
+                return
+            if probe_cpu is not None:
+                if probe_contention:command('up','--pull','never','--no-build','-d','burn-a','burn-b')
+                wait_ready('edge')
+                def cpu_stat():
+                    return {k:int(v) for k,v in (line.split() for line in command('exec','-T','edge','cat','/sys/fs/cgroup/cpu.stat').stdout.splitlines())}
+                before=cpu_stat();latencies=[]
+                for auth in (authorization,authorization,None):
+                    start=time.monotonic()
+                    assert request('review.example.invalid' if auth else 'university.example.invalid',auth=auth)[0]==200
+                    latencies.append(round(time.monotonic()-start,3))
+                after=cpu_stat()
+                report.update(cpu=probe_cpu,cpu_shares=proxy['cpu_shares'],contention=probe_contention,cold_seconds=latencies[0],warm_seconds=latencies[1],university_seconds=latencies[2],
+                              cpu_delta={k:after[k]-before[k] for k in before})
+                print(json.dumps(report,indent=2),flush=True)
+                assert latencies[0]<=2, 'Cold reviewer authentication exceeds the predefined 2-second limit'
+                return
             wait_ready('legacy');check_gate()
             report['checks'].append('legacy HTTPS and reviewer gate')
             before={s:identity(s) for s in ('stageweb','stageapi','uniweb-12345678')}
@@ -173,9 +203,18 @@ def main():
             report['result']='passed'
         finally:
             command('stop','--timeout','10')
-            target=edge.ROOT/'test-results/coexistence.json';target.parent.mkdir(parents=True,exist_ok=True)
-            target.write_text(json.dumps(report,indent=2)+'\n')
+            if not benchmark:
+                target=edge.ROOT/('test-results/coexist-probe.json' if probe_cpu is not None else 'test-results/coexistence.json');target.parent.mkdir(parents=True,exist_ok=True)
+                target.write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps(report,indent=2))
 
 
-if __name__=='__main__':main()
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--probe-cpu',type=float,choices=(.1,.25,.5,1.0))
+    parser.add_argument('--benchmark',action='store_true')
+    parser.add_argument('--benchmark-selected',action='store_true')
+    parser.add_argument('--probe-shares',type=int,choices=(1024,4096))
+    parser.add_argument('--probe-contention',action='store_true')
+    args=parser.parse_args()
+    main(args.probe_cpu,args.benchmark or args.benchmark_selected,args.benchmark_selected,args.probe_shares,args.probe_contention)

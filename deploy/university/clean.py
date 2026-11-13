@@ -20,8 +20,8 @@ PINS = {
 }
 ROLES = ('api', 'worker', 'web', 'tools')
 # MiB / CPU ceilings to rehearse, not a claim of measured capacity on KVM 2.
-UNIVERSITY_LIMITS = {'api': (1024, .45), 'worker': (512, .25), 'web': (512, .20),
-                     'postgres': (512, .15), 'redis': (192, .05), 'minio': (320, .10)}
+UNIVERSITY_LIMITS = {'api': (1024, .20), 'worker': (512, .08), 'web': (512, .15),
+                     'postgres': (512, .05), 'redis': (192, .025), 'minio': (320, .025)}
 
 
 def image_ids(manifest):
@@ -156,7 +156,7 @@ def prepare(directory, origin, manifest, port=3553, shared_proxy=False):
         for name in ('caddy', 'caddy_config'):
             del config['volumes'][name]
         for name, service in config['services'].items():
-            memory, cpu = UNIVERSITY_LIMITS.get(name, (512, .25))
+            memory, cpu = UNIVERSITY_LIMITS.get(name, (512, .10))
             service.update(mem_limit=f'{memory}m', memswap_limit=f'{memory}m', cpus=cpu,
                            pids_limit=256, cpu_shares=512)
         # Compose always registers the service name as DNS; an alias alone cannot remove "web".

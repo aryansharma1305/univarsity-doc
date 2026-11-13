@@ -13,8 +13,11 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('university_clean', ROOT / 'deploy/university/clean.py')
 clean = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(clean)
-STAGING_LIMITS = {'api': (640, .12), 'worker': (320, .08), 'web': (384, .07),
-                  'postgres': (384, .05), 'redis': (384, .03), 'minio': (384, .05)}
+STAGING_LIMITS = {'api': (640, .10), 'worker': (320, .05), 'web': (384, .05),
+                  'postgres': (384, .03), 'redis': (384, .02), 'minio': (384, .02)}
+EDGE_CPUS = 1.0
+EDGE_CPU_SHARES = 4096
+OPERATOR_CPUS = .10
 EDGE_PROJECT = 'docversity-edge'
 GATE = re.compile(r'\(reviewer_gate\) \{\n\tbasic_auth @gated \{\n\t\t[a-z]{3,32} \$2[aby]\$1[0-9]\$[./A-Za-z0-9]{53}\n\t\}\n\}\n')
 
@@ -125,7 +128,7 @@ def prepare(directory, university_directory, staging_state, staging_origin, acme
         'volumes': [f'{directory}/config:/etc/caddy:ro','caddy:/data','caddy_config:/config'],
         'secrets': ['reviewer_gate'], 'read_only': True, 'tmpfs': ['/tmp:size=16m'],
         'cap_drop': ['ALL'], 'cap_add': ['NET_BIND_SERVICE'], 'security_opt': ['no-new-privileges:true'],
-        'mem_limit': '128m', 'memswap_limit': '128m', 'cpus': .10, 'pids_limit': 128,
+        'mem_limit': '128m', 'memswap_limit': '128m', 'cpus': EDGE_CPUS, 'cpu_shares': EDGE_CPU_SHARES, 'pids_limit': 128,
         'logging': {'driver':'json-file','options':{'max-size':'10m','max-file':'3'}},
         'healthcheck': {'test':['CMD','wget','-q','--spider','http://127.0.0.1:8081/health'], 'interval':'15s','timeout':'5s','retries':3}}},
         'networks': { 'staging_backend': {'external':True,'name':stage+'_backend'},
@@ -139,7 +142,7 @@ def prepare(directory, university_directory, staging_state, staging_origin, acme
         overlay['services'][name] = {'mem_limit':f'{memory}m','memswap_limit':f'{memory}m',
                                      'cpus':cpu,'cpu_shares':128,'pids_limit':256}
     for name in ('tools','migrate','backup-readiness'):
-        overlay['services'].setdefault(name,{}).update(mem_limit='512m',memswap_limit='512m',cpus=.25,pids_limit=256)
+        overlay['services'].setdefault(name,{}).update(mem_limit='512m',memswap_limit='512m',cpus=OPERATOR_CPUS,pids_limit=256)
     for name, value in [('compose.json',edge),('staging-overlay.json',overlay)]:
         (directory/name).write_text(json.dumps(value,indent=2)+'\n')
     files = ('compose.json','staging-overlay.json','config/Caddyfile','config/review-site.caddy','config/start.sh')
