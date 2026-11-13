@@ -70,6 +70,18 @@ failure is retained and cannot establish acceptance or disprove the proposed tar
 Repeat with other local CPU work idle and use the native exact-source CI evidence. Keep failed
 evidence rather than presenting only successful runs.
 
+An idle-host repeat still missed cold p95: two simultaneous reviewers across five restarts measured
+p50/p95/p99 **1.762/2.730/2.730 s**. Single-client cold p50/p95/p99 were 1.822/1.991/1.991 s;
+warm reviewer p50/p95/p99 were .0043/.0107/.0200 s at 92.59 RPS. This keeps local contention acceptance
+open; do not attribute the earlier failure solely to graph work or claim the weight guarantees a pass.
+
+Proxy benchmarking runs on a separate native runner in parallel with image production, so its
+acceptance is independent of application-image build timing.
+
+The first follow-up CI transport run exposed a connection-close race during USR1 listener reload.
+The rehearsal now polls for the expected response within the original 15-second transition window,
+retrying a transient connection close only during reload/rollback. Load errors/timeouts remain failures.
+
 The selected configuration then runs five cold restarts with two simultaneous reviewers and two
 0.4-CPU busy competitors (1920 shares each) pinned to the same two CPUs, 60 seconds of contended
 mixed load, and 180 seconds of uncontented soak. `--benchmark-selected` repeats only this selection.
@@ -98,9 +110,26 @@ slow and worker startup did not complete within the rehearsal timeout. The local
 mode explicitly records its CPU floor/health-timeout adjustments and never certifies capacity.
 Native CI is required; do not label an emulation failure as a production capacity result.
 
+## Native AMD64 CI observation
+
+On initial follow-up SHA `42bdd06`, the independent AMD64 runner measured cold p95 at 7.321 s
+(0.1 CPU), 2.992 s (0.25), 1.482 s (0.5) and 0.804 s (1.0). The 1.0-CPU configuration's warm
+reviewer p50/p95/p99 were .0429/.0446/.0474 s at 69.85 RPS, mean .0421 CPU cores, peak 18.91 MiB,
+zero errors/timeouts/OOM. Contended cold p50/p95/p99 were .7951/.8054/.8054 s. The complete transport
+matrix/contention/soak passed. Faster AMD64 hardware lets 0.5 CPU pass the simple cold phase;
+1.0 CPU is proposed for cold-burst margin and is the allocation exercised by the contended and
+application acceptance tests. This is not a claim that 1.0 is optimal on the unmeasured VPS.
+
+The same SHA's full-stack attempt stopped before startup because the fresh load runner did not
+have the pinned infrastructure images. CI now explicitly pulls all four pinned AMD64 infrastructure
+images before starting the two private projects; application images still come only from that run's
+exact-source archive. This setup failure is not a full-stack performance result. Exact final-SHA
+CI must pass again after the rehearsal fixes.
+
 ## Operator acceptance and release boundary
 
-The CI workflow retains `shared-proxy-load-<SHA>` and creates `docversity-linux-amd64-<SHA>` only from
+The independent proxy CI job retains `shared-proxy-benchmark-<SHA>`; the image-dependent application
+job retains `shared-proxy-load-<SHA>` and creates `docversity-linux-amd64-<SHA>` only from
 that source; the load job downloads/checks its SHA256SUMS, verifies all four loaded image IDs, then
 uses those exact IDs. Never reuse PR #34's earlier image archive for a later source commit.
 CI results and immutable artifact links belong in the follow-up PR and final handover.

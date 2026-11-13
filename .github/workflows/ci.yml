@@ -179,8 +179,27 @@ jobs:
           docker compose -p docversity14a -f deploy/compose.yml stop
           docker compose -p docversity14a-restore -f deploy/compose.yml stop
 
+  coexist-proxy-load:
+    name: Shared proxy two-CPU benchmark and soak
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: CPU candidates, cold/warm tails, two-CPU contention and soak
+        run: python3 deploy/coexist/runtime_regression.py --benchmark
+      - name: Retain proxy benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: shared-proxy-benchmark-${{ github.event.pull_request.head.sha || github.sha }}
+          path: test-results/coexist-benchmark.json
+          if-no-files-found: ignore
+          retention-days: 7
+
   coexist-load:
-    name: Shared proxy two-CPU load and full-stack rollback
+    name: Two-environment application load and rollback
     needs: staging
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -200,8 +219,15 @@ jobs:
         run: |
           sha256sum -c SHA256SUMS
           docker load --input images.tar.gz
-      - name: CPU candidates, cold/warm tails, two-CPU contention and soak
-        run: python3 deploy/coexist/runtime_regression.py --benchmark
+      - name: Fetch only pinned AMD64 test infrastructure
+        run: |
+          python3 - <<'PYTHON'
+          import subprocess, sys
+          sys.path.insert(0, 'deploy/university')
+          import clean
+          for image in clean.PINS.values():
+              subprocess.run(['docker', 'pull', '--platform=linux/amd64', image], check=True)
+          PYTHON
       - name: Fresh two-environment application load, isolation and rollback
         if: ${{ !cancelled() && steps.release.outcome == 'success' }}
         run: python3 deploy/coexist/full_stack.py --images .local/coexist-release/images.json

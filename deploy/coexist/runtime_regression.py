@@ -103,8 +103,8 @@ def main(probe_cpu=None,benchmark=False,selected_only=False,probe_shares=None,pr
         def command(*args):return run('docker','compose','-p',project,'-f',str(compose),*args)
         def identity(service):return command('ps','--all','--quiet',service).stdout.strip()
         context=ssl.create_default_context()
-        def request(host='review.example.invalid',path='/',auth=None,host_header=None):
-            with socket.create_connection(('127.0.0.1',port),timeout=30) as raw:
+        def request(host='review.example.invalid',path='/',auth=None,host_header=None,timeout=30):
+            with socket.create_connection(('127.0.0.1',port),timeout=timeout) as raw:
                 with context.wrap_socket(raw,server_hostname=host) as tls:
                     headers=f'GET {path} HTTP/1.1\r\nHost: {host_header or host}\r\nConnection: close\r\n'
                     if auth:headers+='Authorization: '+auth+'\r\n'
@@ -121,6 +121,15 @@ def main(probe_cpu=None,benchmark=False,selected_only=False,probe_shares=None,pr
                 except (OSError,ssl.SSLError,RuntimeError):pass
                 time.sleep(.2)
             raise AssertionError('Synthetic HTTPS did not become protected and ready')
+        def wait_reload(expected):
+            # A graceful listener replacement can close a connection accepted by the old listener.
+            deadline=time.monotonic()+15
+            while time.monotonic()<deadline:
+                try:
+                    if request('university.example.invalid','/reload-probe',timeout=2)==(200,expected):return
+                except (OSError,http.client.HTTPException):pass
+                time.sleep(.2)
+            raise AssertionError('Reload did not serve the expected configuration within 15 seconds')
         def check_gate():
             for path in ('/','/health','/api/v1/auth/me','/student/login','/download/private'):
                 assert request(path=path)[0]==401
@@ -182,13 +191,10 @@ def main(probe_cpu=None,benchmark=False,selected_only=False,probe_shares=None,pr
             report['checks'].append('staging maintenance preserves university and edge')
             site.chmod(0o600);site.write_text(policy.replace('    reverse_proxy uniweb-', '    respond /reload-probe "reloaded"\n    reverse_proxy uniweb-'));site.chmod(0o444)
             command('kill','-s','USR1','edge')
-            deadline=time.monotonic()+15
-            while time.monotonic()<deadline and request('university.example.invalid','/reload-probe')!=(200,'reloaded'):time.sleep(.2)
-            assert request('university.example.invalid','/reload-probe')==(200,'reloaded')
+            wait_reload('reloaded')
             assert identity('edge')==edge_id
             site.chmod(0o600);site.write_text(policy);site.chmod(0o444)
-            command('kill','-s','USR1','edge');time.sleep(.5)
-            assert request('university.example.invalid','/reload-probe')==(200,'university')
+            command('kill','-s','USR1','edge');wait_reload('university');check_gate()
             report['checks'].append('admin-off USR1 reload and graceful configuration rollback')
             command('stop','edge')
             original=gate.read_text();gate.chmod(0o600);gate.write_text('(reviewer_gate) {\n}\n');gate.chmod(0o444)
