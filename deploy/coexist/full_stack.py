@@ -123,7 +123,9 @@ def load(clients,commands):
     def restarts():
         return {label+'/'+name:int(run('docker','inspect','--format','{{.RestartCount}}',command('ps','--quiet',name).stdout.strip()).stdout)
                 for label,command,web in commands for name in (*services,web)}
-    initial_restarts=restarts();before=resources();start=time.monotonic();deadline=start+THRESHOLDS['phase_seconds']
+    initial_restarts=restarts()
+    assert not any(initial_restarts.values()),'A synthetic service restarted during startup'
+    before=resources();start=time.monotonic();deadline=start+THRESHOLDS['phase_seconds']
     def actor(label,client,paths):
         nonlocal errors,timeouts
         i=0

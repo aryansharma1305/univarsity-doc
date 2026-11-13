@@ -67,11 +67,19 @@ try {
       maxRetriesPerRequest: 0,
       connectTimeout: 2000,
     });
-    wrongRedis.on('error', () => {});
+    // connect() reports only 'Connection is closed'; Redis emits the specific AUTH refusal first.
+    let authenticationError;
+    wrongRedis.on('error', (error) => {
+      if (/WRONGPASS|invalid username-password/i.test(error.message)) authenticationError = error;
+    });
     try {
       await denied(async () => {
-        await wrongRedis.connect();
-        await wrongRedis.ping();
+        try {
+          await wrongRedis.connect();
+          await wrongRedis.ping();
+        } catch (error) {
+          throw authenticationError ?? error;
+        }
       }, /WRONGPASS|invalid username-password/i);
     } finally {
       wrongRedis.disconnect();

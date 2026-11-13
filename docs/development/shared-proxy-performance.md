@@ -126,6 +126,33 @@ images before starting the two private projects; application images still come o
 exact-source archive. This setup failure is not a full-stack performance result. Exact final-SHA
 CI must pass again after the rehearsal fixes.
 
+The next exact-source native run, `9a97abb`, used a slower AMD64 runner and also passed the complete
+transport suite. Its engine had 4 CPUs/15.6 GiB; server processes were pinned to CPUs 0,1 with the
+same individual caps. Host/client/daemon memory and CPU remain outside the simulated server budget.
+
+| CPU  | Cold p50 / p95 / p99 s   | Warm reviewer p50 / p95 / p99 s | HTTPS RPS | Mean edge cores / peak MiB |
+| ---- | ------------------------ | ------------------------------- | --------- | -------------------------- |
+| 0.1  | 10.704 / 10.794 / 10.794 | .0440 / .0465 / .0653           | 69.00     | .0842 / 19.23              |
+| 0.25 | 4.199 / 4.201 / 4.201    | .0441 / .0462 / .0473           | 69.20     | .0771 / 19.08              |
+| 0.5  | 2.063 / 2.089 / 2.089    | .0441 / .0459 / .0472           | 69.29     | .0758 / 18.80              |
+| 1.0  | 1.085 / 1.091 / 1.091    | .0430 / .0440 / .0446           | 69.77     | .0756 / 18.81              |
+
+Only 1.0 CPU passed cold acceptance on that runner. Contended cold p50/p95/p99 were
+1.2146/1.2150/1.2150 s. The 60-second contended phase and 180-second soak both passed: reviewer
+warm p95/p99 .0460/.0481 s and .0441/.0448 s respectively, 69.41/69.78 RPS, zero errors/timeouts/OOM,
+mean edge .0757/.0745 cores and peak 19.21/19.25 MiB. This runner variation and the failed ARM trials
+are why actual Hostinger acceptance remains mandatory. Application results and final-SHA CI links
+are retained in the PR/handover, not inferred from this transport result.
+
+The `9a97abb` native application run completed both environments' migrations/startup, secure-cookie,
+activation, CSRF/RBAC and foreign-session checks, then stopped at the Redis foreign-credential probe.
+ioredis emitted `WRONGPASS` but rejected its connection promise with a generic close error. A minimal
+isolated Redis regression reproduced that exact distinction (old check false; specific AUTH-event
+check true). The fixture now retains only the specific emitted AUTH error for the rejection assertion;
+a plain disconnect/timeout or successful PING still cannot pass. No application/Redis authentication
+setting changed. Startup automatic restarts are now rejected before load, in addition to the existing
+zero-restart check during load. Full-stack load/rollback remain pending the final rerun.
+
 ## Operator acceptance and release boundary
 
 The independent proxy CI job retains `shared-proxy-benchmark-<SHA>`; the image-dependent application
