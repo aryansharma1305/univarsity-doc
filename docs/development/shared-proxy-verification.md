@@ -1,6 +1,6 @@
 # Shared-proxy and launch-preparation verification
 
-Final local review: 13 November 2026. Branch `feature/shared-proxy-coexistence`, based on merged main
+PR #34 historical local review: 13 November 2026. Branch `feature/shared-proxy-coexistence`, based on merged main
 `1b260b991faafdfc472ce9628382211ac5b52237` (PR #33 simplified homepage). Latest main was checked again
 before PR preparation. The code knowledge graph was refreshed with `graphify update .` in scratch
 and its three generated outputs copied back without hand-editing. The tool reported its existing
@@ -89,8 +89,9 @@ key-custody test or independent data restore occurred here. CI's synthetic stagi
 from real disaster-recovery acceptance. SSH/key/console access, patch/reboot recovery, secret rotation,
 MFA/recovery decisions, log redaction and alert delivery still require operator/university acceptance.
 
-**Not ready for Hostinger deployment yet.** Review and exact-head CI are required, and the proposed
-CPU allocation must be tuned/rehearsed against agreed full-stack latency and load goals before any
+**Not ready for Hostinger deployment yet.** PR #34 was merged as `cadc644`; the subsequent performance
+fix and its new exact-source CI/load results are recorded in [performance evidence](shared-proxy-performance.md).
+Review and target-host acceptance against agreed full-stack latency/load goals remain required before any
 resource update. Keep the bcrypt work factor and throttles. Do not interpret a memory-ceiling sum or
 successful synthetic transport smoke as capacity certification.
 

@@ -168,11 +168,18 @@ class SharedEdgeTests(unittest.TestCase):
             (self.uni/'compose.json').write_text(json.dumps(config))
             with self.assertRaises(ValueError):self.prepare()
 
-    def test_resource_budget_and_no_unbounded_swap(self):
+    def test_memory_budget_cpu_burst_caps_and_no_unbounded_swap(self):
         steady=sum(m for m,c in edge.STAGING_LIMITS.values())+sum(m for m,c in clean.UNIVERSITY_LIMITS.values())+128
-        cpu=sum(c for m,c in edge.STAGING_LIMITS.values())+sum(c for m,c in clean.UNIVERSITY_LIMITS.values())+.1
         self.assertEqual(steady,5696)
-        self.assertLessEqual(cpu,1.71)
+        # Burst caps intentionally oversubscribe CPU. Only measured load can accept host headroom.
+        for memory,cpu in (*edge.STAGING_LIMITS.values(),*clean.UNIVERSITY_LIMITS.values()):
+            self.assertGreater(cpu,0)
+            self.assertLessEqual(cpu,.75)
+        self.assertEqual(edge.EDGE_CPUS,.75)
+        self.assertLessEqual(edge.OPERATOR_CPUS,.10)
+        self.assertGreaterEqual(edge.STAGING_SHARES['web'],512)
+        app_shares=6*512+sum(edge.STAGING_SHARES.get(role,128) for role in edge.STAGING_LIMITS)
+        self.assertGreater(edge.EDGE_CPU_SHARES,app_shares)
         self.assertLess(steady+1536+512,7.8*1024)
 
     def test_container_startup_refuses_invalid_gate_before_caddy_exec(self):
