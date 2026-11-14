@@ -1,3 +1,4 @@
+import { studentIssuedDocumentsSchema } from '@docversity/validation';
 import {
   type AuthUser,
   authUserSchema,
@@ -245,4 +246,10 @@ export const getStudentCertificateEligibility = cache(
     studentGet('/api/v1/student/certificate-eligibility', (body) =>
       studentCertificateEligibilityV1Schema.safeParse(body),
     ),
+);
+
+export const getStudentIssuedDocuments = cache(() =>
+  studentGet('/api/v1/student/official-documents', (body) =>
+    studentIssuedDocumentsSchema.safeParse(body),
+  ),
 );

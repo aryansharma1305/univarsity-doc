@@ -41,8 +41,9 @@ export function StudentResults({ results }: { results: StudentResultsPage | null
                 <p className="text-xs font-semibold text-brand">{result.label}</p>
                 <h3 className="mt-2 font-heading text-lg font-semibold">{result.examination}</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Period {result.periodNumber} · Attempt {result.attemptNumber} · Sample GPA{' '}
-                  {result.sgpa ?? 'withheld'}
+                  Period {result.periodNumber} · Attempt {result.attemptNumber} ·{' '}
+                  {result.usage === 'OFFICIAL' ? 'GPA' : 'Sample GPA'}{' '}
+                  {result.sgpa ?? (result.usage === 'OFFICIAL' ? 'Not supplied' : 'withheld')}
                 </p>
                 <ul className="mt-4 space-y-3">
                   {result.subjects.map((subject) => (
@@ -54,14 +55,18 @@ export function StudentResults({ results }: { results: StudentResultsPage | null
                         {subject.code} — {subject.name}
                       </span>
                       <span>
-                        {subject.totalMarks ?? 'Absent'} / {subject.maxMarks} ·{' '}
-                        {subject.grade ?? 'Withheld'}
+                        {subject.totalMarks ?? 'Not supplied'} /{' '}
+                        {subject.maxMarks ?? 'Not supplied'} ·{' '}
+                        {subject.grade ??
+                          (result.usage === 'OFFICIAL' ? 'Not supplied' : 'Withheld')}
                       </span>
                     </li>
                   ))}
                 </ul>
                 <p className="mt-4 text-xs text-muted-foreground">
-                  Synthetic preview only. This is not an official academic result or marksheet.
+                  {result.usage === 'OFFICIAL'
+                    ? `Published university result · ${result.outcome ?? 'Status unavailable'}`
+                    : 'Synthetic preview only. This is not an official academic result or marksheet.'}
                 </p>
               </article>
             ))}

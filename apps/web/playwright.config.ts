@@ -54,6 +54,8 @@ export default defineConfig({
       url: `http://127.0.0.1:${API_PORT}/health`,
       env: {
         E2E_BASE_DATABASE_URL: baseDatabaseUrl,
+        // Only this disposable synthetic E2E database enables the official code path.
+        OFFICIAL_VERIFICATION_ENABLED: 'true',
         DATABASE_URL: e2eDatabaseUrl,
         API_PORT: String(API_PORT),
         API_HOST: '127.0.0.1',

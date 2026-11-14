@@ -36,7 +36,7 @@ it.each(publicVerificationServices)(
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.headers['set-cookie']).toBeUndefined();
     for (const body of [
-      { ...input, contractVersion: 2 },
+      { ...input, contractVersion: 3 },
       { ...input, reference: 'https://evil.invalid/private' },
       { ...input, reference: 'x'.repeat(129) },
       { ...input, reference: ['SYN'] },

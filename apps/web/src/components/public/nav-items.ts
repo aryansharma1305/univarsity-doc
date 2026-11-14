@@ -15,10 +15,10 @@ export const PUBLIC_SECTIONS = [
 
 export const PUBLIC_NAV = [
   { href: '/', label: 'Home', available: true },
-  { href: '/results', label: 'Results', available: false },
-  { href: '/verify/registration', label: 'Registration Verification', available: false },
-  { href: '/verify/certificate', label: 'Certificate Verification', available: false },
-  { href: '/verify/qr', label: 'Scan QR', available: false },
+  { href: '/results', label: 'Results', available: true },
+  { href: '/verify/registration', label: 'Registration Verification', available: true },
+  { href: '/verify/certificate', label: 'Certificate Verification', available: true },
+  { href: '/verify/qr', label: 'Scan QR', available: true },
   { href: '/help', label: 'Help', available: true },
 ] as const;
 

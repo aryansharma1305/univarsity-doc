@@ -1,3 +1,4 @@
+import { VerificationPoliciesService } from '../public-verification/verification-policies.service.js';
 import { createHash } from 'node:crypto';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@docversity/database';
@@ -46,6 +47,7 @@ export const RESULT_REVIEW_POLICY = {
 @Injectable()
 export class ResultReviewService {
   constructor(
+    private readonly policies: VerificationPoliciesService,
     private readonly prisma: PrismaService,
     private readonly drafts: DraftResultsService,
     private readonly audit: AuditService,
@@ -354,8 +356,14 @@ export class ResultReviewService {
     );
   }
   async transition(id: string, action: Action, body: ReviewAction, actor: string) {
-    if (action !== 'SUBMIT' && !this.policy().approvalEnabled)
-      throw conflict(this.policy().approvalBlockers.join(' '));
+    if (action !== 'SUBMIT' && !this.policy().approvalEnabled) {
+      const source = await this.prisma.client.result.findUnique({
+        where: { id },
+        include: { studentRegistration: true },
+      });
+      if (!source || !(await this.policies.current('result', source.studentRegistration.programId)))
+        throw conflict(this.policy().approvalBlockers.join(' '));
+    }
     const requestDigest = hash({ id, action, body, actor });
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -398,6 +406,16 @@ export class ResultReviewService {
                 );
             }
             if (action !== 'SUBMIT') {
+              const attestation = await tx.auditLog.findFirst({
+                where: {
+                  entityType: 'Result',
+                  entityId: id,
+                  action: AUDIT_ACTIONS.officialResultPublished,
+                  metadata: { path: ['action'], equals: 'ATTEST' },
+                },
+                orderBy: { createdAt: 'desc' },
+              });
+              if (attestation?.actorUserId === actor) throw Errors.forbidden();
               const authors = await tx.auditLog.findMany({
                 where: {
                   entityType: 'ResultItem',
