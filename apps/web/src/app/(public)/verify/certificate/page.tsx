@@ -1,13 +1,10 @@
 import type { Metadata } from 'next';
-import { ComingSoon } from '@/components/public/coming-soon';
-
-export const metadata: Metadata = { title: 'Certificate Verification' };
-
-export default function CertificateVerificationPage() {
-  return (
-    <ComingSoon
-      title="Certificate Verification"
-      description="Certificate verification is not available yet. It will be added together with certificate issuance."
-    />
-  );
+import { VerificationScreen } from '@/features/public-verification/verification-screen';
+export const metadata: Metadata = {
+  title: 'Verify Certificate',
+  robots: { index: false, follow: false },
+  referrer: 'no-referrer',
+};
+export default function Page() {
+  return <VerificationScreen service="certificate" />;
 }

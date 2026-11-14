@@ -58,6 +58,7 @@ const trustProxySchema = z
 export const apiEnvSchema = z
   .object({
     NODE_ENV: nodeEnvSchema,
+    OFFICIAL_VERIFICATION_ENABLED: envBoolean.default(false),
     LOG_LEVEL: logLevelSchema,
     API_HOST: z.string().min(1).default('127.0.0.1'),
     API_PORT: port.default(4000),

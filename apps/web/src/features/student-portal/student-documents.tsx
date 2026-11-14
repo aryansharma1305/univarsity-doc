@@ -1,3 +1,6 @@
+import { IssuedDocuments } from './issued-documents';
+import type { studentIssuedDocumentsSchema } from '@docversity/validation';
+import type { z } from 'zod';
 import {
   ClockIcon,
   DownloadIcon,
@@ -121,9 +124,11 @@ function DocumentCard({ document }: { document: StudentDocument }) {
 }
 
 export function StudentDocuments({
+  issued,
   documents,
   courseSamples = null,
 }: {
+  issued?: z.infer<typeof studentIssuedDocumentsSchema> | null;
   documents: StudentDocument[] | null;
   courseSamples?: StudentRegistrationEligibilityV1[] | null;
 }) {
@@ -133,6 +138,7 @@ export function StudentDocuments({
         title="My Documents"
         description="Certificates and records the university has published to you. You can view and download them; only the university can add or change documents."
       />
+      <IssuedDocuments documents={issued ?? null} />
       <StudentCertificateSamples courseSamples={courseSamples} />
       {documents === null ? (
         <PortalCard title="Documents" icon={FileTextIcon}>
@@ -140,7 +146,7 @@ export function StudentDocuments({
             Your documents could not be loaded right now. Refresh the page to try again.
           </p>
         </PortalCard>
-      ) : documents.length === 0 ? (
+      ) : documents.length === 0 && !issued?.length ? (
         <PortalCard title="Documents" icon={FileTextIcon}>
           <PortalEmptyState
             icon={FileTextIcon}
@@ -148,13 +154,13 @@ export function StudentDocuments({
             description="When the university publishes a certificate or record to your account, it will appear here. Contact the registrar’s office if you expect a document."
           />
         </PortalCard>
-      ) : (
+      ) : documents.length > 0 ? (
         <div className="grid gap-4 xl:grid-cols-2">
           {documents.map((document) => (
             <DocumentCard key={document.id} document={document} />
           ))}
         </div>
-      )}
+      ) : null}
     </>
   );
 }
