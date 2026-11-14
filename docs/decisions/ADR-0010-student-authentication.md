@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-09
+- **Amended:** 2026-11-14 — inactive-registration activation/recovery withholding.
 
 ## Context
 

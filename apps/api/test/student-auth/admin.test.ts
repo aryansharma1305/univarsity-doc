@@ -1,6 +1,10 @@
 import type { INestApplication } from '@nestjs/common';
-import { issuedActivationCodesSchema, studentAccountListSchema } from '@docversity/validation';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  issuedActivationCodesSchema,
+  studentAccountListSchema,
+  type IssuedActivationCodes,
+} from '@docversity/validation';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   browser,
   createTestApp,
@@ -155,5 +159,57 @@ describe('student account administration', () => {
         })
       ).status,
     ).toBe(404);
+  });
+
+  it('withholds a code when a concurrent suspension owns the registration lock first', async () => {
+    const db = testDb();
+    const registration = await newRegistration('CONCURRENT');
+    let issuance: Promise<IssuedActivationCodes> | undefined;
+    await db.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM student_registrations WHERE id=${registration.registrationId}::uuid FOR UPDATE`;
+        const [owner] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+        if (!owner) throw new Error('Missing lock owner');
+        issuance = registrar
+          .post('student-accounts/activation-codes', {
+            registrationIds: [registration.registrationId],
+          })
+          .expect(200)
+          .then((response) => issuedActivationCodesSchema.parse(response.body));
+        // Wait for a real database lock conflict, not a timing-based sleep or service mock.
+        await vi.waitFor(
+          async () => {
+            const [blocked] = await db.$queryRaw<{ waiting: boolean }[]>`
+              SELECT EXISTS (
+                SELECT 1 FROM pg_stat_activity a
+                WHERE a.datname=current_database()
+                  AND ${owner.pid}::int = ANY(pg_blocking_pids(a.pid))
+              ) AS waiting`;
+            expect(blocked?.waiting).toBe(true);
+          },
+          { timeout: 10_000, interval: 20 },
+        );
+        await tx.studentRegistration.update({
+          where: { id: registration.registrationId },
+          data: { status: 'SUSPENDED' },
+        });
+      },
+      { timeout: 15_000 },
+    );
+    if (!issuance) throw new Error('Missing concurrent issuance');
+    const result = await issuance;
+    expect(result.issued.length).toBe(0);
+    expect(result.skipped).toEqual([
+      {
+        registrationId: registration.registrationId,
+        registrationNumber: registration.registrationNumber,
+        reason: 'The registration is suspended.',
+      },
+    ]);
+    expect(
+      await db.studentActivationCode.count({
+        where: { studentRegistrationId: registration.registrationId },
+      }),
+    ).toBe(0);
   });
 });
