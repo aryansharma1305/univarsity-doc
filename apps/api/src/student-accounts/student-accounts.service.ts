@@ -148,7 +148,7 @@ export class StudentAccountsService {
   /**
    * Issues a NEW single-use code per registration (any previous open code is revoked). For a student
    * who already has an account the code works as a recovery code (it sets a new password). Skipped:
-   * revoked registrations and disabled accounts. The plain codes are returned once and never stored.
+   * suspended/revoked registrations and disabled accounts. Plain codes are returned once, never stored.
    */
   async issueCodes(
     input: IssueActivationCodes,
@@ -190,11 +190,13 @@ export class StudentAccountsService {
     const expiresAt = new Date(Date.now() + this.config.STUDENT_ACTIVATION_CODE_TTL_DAYS * DAY_MS);
     const eligible = registrations.filter((registration) => {
       const reason =
-        registration.status === 'REVOKED'
-          ? 'The registration is revoked.'
-          : registration.student.account?.status === 'DISABLED'
-            ? 'The student account is disabled.'
-            : null;
+        registration.status === 'SUSPENDED'
+          ? 'The registration is suspended.'
+          : registration.status === 'REVOKED'
+            ? 'The registration is revoked.'
+            : registration.student.account?.status === 'DISABLED'
+              ? 'The student account is disabled.'
+              : null;
       if (reason)
         result.skipped.push({
           registrationId: registration.id,

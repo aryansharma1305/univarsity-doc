@@ -250,7 +250,38 @@ describe('student account activation', () => {
     );
   });
 
-  it.each(['expiry', 'disabled account', 'revoked registration'] as const)(
+  it('rejects a correct unused code when the registration is suspended after issuance', async () => {
+    const registration = await newRegistration();
+    const code = await issueCode(registrar, registration.registrationId);
+    await testDb().studentRegistration.update({
+      where: { id: registration.registrationId },
+      data: { status: 'SUSPENDED' },
+    });
+    const response = await activate(browser(app), {
+      registrationNumber: registration.registrationNumber,
+      activationCode: code,
+    });
+    expect(response.status).toBe(400);
+    expect(errorOf(response).code).toBe(GENERIC);
+    expect(cookieNamesOf(response)).not.toContain('dv_student');
+    expect(
+      await testDb().studentAccount.count({ where: { studentId: registration.studentId } }),
+    ).toBe(0);
+    expect(
+      (
+        await testDb().studentActivationCode.findFirstOrThrow({
+          where: { studentRegistrationId: registration.registrationId },
+        })
+      ).usedAt,
+    ).toBeNull();
+  });
+
+  it.each([
+    'expiry',
+    'disabled account',
+    'revoked registration',
+    'suspended registration',
+  ] as const)(
     'rejects recovery when %s changes during password hashing without consuming the code',
     async (change) => {
       const student = await activatedStudent(app, registrar);
@@ -282,7 +313,7 @@ describe('student account activation', () => {
           } else {
             await testDb().studentRegistration.update({
               where: { id: student.registrationId },
-              data: { status: 'REVOKED' },
+              data: { status: change === 'suspended registration' ? 'SUSPENDED' : 'REVOKED' },
             });
           }
           return hash;
@@ -311,6 +342,15 @@ describe('student account activation', () => {
             where: { action: 'STUDENT_ACCOUNT_ACTIVATED', entityId: before.id },
           }),
         ).toBe(1);
+        const denied = await testDb().auditLog.findFirstOrThrow({
+          where: {
+            action: 'STUDENT_ACTIVATION_FAILED',
+            entityId: student.registrationId,
+          },
+        });
+        expect(denied.metadata).toMatchObject({ reason: 'activation_state_changed' });
+        expect(JSON.stringify(denied.metadata)).not.toContain(student.registrationNumber);
+        expect(JSON.stringify(denied.metadata)).not.toContain(code);
       } finally {
         hashing.mockRestore();
       }

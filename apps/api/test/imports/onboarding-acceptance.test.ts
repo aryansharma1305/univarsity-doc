@@ -1,6 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { buildWorkbook, registration2025Sheet } from '@docversity/imports/testing';
-import { studentMeSchema } from '@docversity/validation';
+import { issuedActivationCodesSchema, studentMeSchema } from '@docversity/validation';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { browser, createTestApp, realConfig, staff, testDb } from '../helpers.js';
 import { images, studentRequestOf, submitRequest } from '../student-profile/support.js';
@@ -152,19 +152,31 @@ describe('synthetic 58-registration onboarding acceptance', () => {
     const active = registrations[0];
     const suspended = registrations[57];
     if (!active || !suspended) throw new Error('Missing imported synthetic registrations');
-    // Registration SUSPENDED currently permits portal access; this is not university policy approval.
-    for (const registration of [active, suspended]) {
-      const code = await issueCode(registrar, registration.id);
-      const agent = browser(app);
-      expectStatus(
-        await activate(agent, {
-          registrationNumber: registration.registrationNumber,
-          activationCode: code,
-        }),
-        200,
-      );
-      expectStatus(await studentLogin(browser(app), registration.registrationNumber), 200);
-    }
+    // An import-wide request must withhold all three inactive students' credentials.
+    const issuance = issuedActivationCodesSchema.parse(
+      (
+        await registrar
+          .post('student-accounts/activation-codes', { importJobId: created.id })
+          .expect(200)
+      ).body,
+    );
+    expect(issuance.issued).toHaveLength(55);
+    expect(issuance.skipped.map((row) => row.registrationId).sort()).toEqual(
+      registrations
+        .filter((row) => row.status === 'SUSPENDED')
+        .map((row) => row.id)
+        .sort(),
+    );
+    expect(issuance.skipped.every((row) => /suspended/i.test(row.reason))).toBe(true);
+    expectStatus(await studentLogin(browser(app), suspended.registrationNumber), 401);
+    const code = await issueCode(registrar, active.id);
+    expectStatus(
+      await activate(browser(app), {
+        registrationNumber: active.registrationNumber,
+        activationCode: code,
+      }),
+      200,
+    );
     const studentAgent = browser(app);
     expectStatus(await studentLogin(studentAgent, active.registrationNumber), 200);
     const submitted = await submitRequest(
