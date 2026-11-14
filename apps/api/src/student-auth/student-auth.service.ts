@@ -124,6 +124,7 @@ export class StudentAuthService {
     const account = registration.student.account;
     if (
       open.expiresAt.getTime() <= Date.now() ||
+      registration.status === 'SUSPENDED' ||
       registration.status === 'REVOKED' ||
       account?.status === 'DISABLED'
     ) {
@@ -167,7 +168,12 @@ export class StudentAuthService {
             },
           });
           const currentAccount = current?.student.account;
-          if (!current || current.status === 'REVOKED' || currentAccount?.status === 'DISABLED') {
+          if (
+            !current ||
+            current.status === 'SUSPENDED' ||
+            current.status === 'REVOKED' ||
+            currentAccount?.status === 'DISABLED'
+          ) {
             throw activationFailed();
           }
           // Consume the code exactly once (compare-and-set).
@@ -214,9 +220,19 @@ export class StudentAuthService {
         },
         { isolationLevel: 'Serializable' },
       )
-      .catch((error: unknown) => {
-        if (['P2002', 'P2025', 'P2034'].includes(prismaErrorCode(error) ?? ''))
+      .catch(async (error: unknown) => {
+        if (
+          (error instanceof AppError && error.code === ERROR_CODES.studentActivationFailed) ||
+          ['P2002', 'P2025', 'P2034'].includes(prismaErrorCode(error) ?? '')
+        ) {
+          await this.auditFailure(
+            registration.id,
+            'activation_state_changed',
+            registrationHash,
+            ipHash,
+          );
           throw activationFailed();
+        }
         throw error;
       });
 

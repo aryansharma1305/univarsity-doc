@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Prisma } from '@docversity/database';
+import { Prisma } from '@docversity/database';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   type IssueActivationCodes,
@@ -148,7 +148,7 @@ export class StudentAccountsService {
   /**
    * Issues a NEW single-use code per registration (any previous open code is revoked). For a student
    * who already has an account the code works as a recovery code (it sets a new password). Skipped:
-   * revoked registrations and disabled accounts. The plain codes are returned once and never stored.
+   * suspended/revoked registrations and disabled accounts. Plain codes are returned once, never stored.
    */
   async issueCodes(
     input: IssueActivationCodes,
@@ -176,36 +176,41 @@ export class StudentAccountsService {
         },
       ]);
     }
-    const registrations = await this.prisma.client.studentRegistration.findMany({
-      where: { id: { in: ids } },
-      include: {
-        program: { select: { code: true } },
-        student: { select: { fullName: true, account: { select: { status: true } } } },
-      },
-      orderBy: { registrationNumberNormalized: 'asc' },
-    });
-    if (input.registrationIds && registrations.length !== ids.length) throw Errors.notFound();
-
     const result: IssuedActivationCodes = { issued: [], skipped: [] };
     const expiresAt = new Date(Date.now() + this.config.STUDENT_ACTIVATION_CODE_TTL_DAYS * DAY_MS);
-    const eligible = registrations.filter((registration) => {
-      const reason =
-        registration.status === 'REVOKED'
-          ? 'The registration is revoked.'
-          : registration.student.account?.status === 'DISABLED'
-            ? 'The student account is disabled.'
-            : null;
-      if (reason)
-        result.skipped.push({
-          registrationId: registration.id,
-          registrationNumber: registration.registrationNumber,
-          reason,
-        });
-      return reason === null;
-    });
-
     await this.prisma.client.$transaction(
       async (tx) => {
+        // Serialize issuance with registration status changes, then read current eligibility.
+        if (ids.length > 0) {
+          await tx.$queryRaw`SELECT id FROM student_registrations WHERE id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`;
+        }
+        const registrations = await tx.studentRegistration.findMany({
+          where: { id: { in: ids } },
+          include: {
+            program: { select: { code: true } },
+            student: { select: { fullName: true, account: { select: { status: true } } } },
+          },
+          orderBy: { registrationNumberNormalized: 'asc' },
+        });
+        if (input.registrationIds && registrations.length !== ids.length) throw Errors.notFound();
+
+        const eligible = registrations.filter((registration) => {
+          const reason =
+            registration.status === 'SUSPENDED'
+              ? 'The registration is suspended.'
+              : registration.status === 'REVOKED'
+                ? 'The registration is revoked.'
+                : registration.student.account?.status === 'DISABLED'
+                  ? 'The student account is disabled.'
+                  : null;
+          if (reason)
+            result.skipped.push({
+              registrationId: registration.id,
+              registrationNumber: registration.registrationNumber,
+              reason,
+            });
+          return reason === null;
+        });
         const now = new Date();
         await tx.studentActivationCode.updateMany({
           where: {

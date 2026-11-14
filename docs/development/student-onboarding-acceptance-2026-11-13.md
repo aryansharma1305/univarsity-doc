@@ -187,9 +187,9 @@ execute it. The release/infrastructure workstream owns environment readiness and
     through the normal workflow. Once profile data changes, blank DOB cells must not clear official
     values. Investigate all unexpected differences.
 12. Only after reconciliation and separate distribution approval, select approved registration IDs in
-    `/admin/student-accounts`. Do not bulk-issue by import UUID while inactive access is unresolved:
-    that operation includes SUSPENDED registrations. Withhold codes for the three inactive rows until
-    the policy is approved; revoke any mistakenly issued codes. Distribute each code privately after
+    `/admin/student-accounts`. Bulk issuance by import UUID skips SUSPENDED and REVOKED registrations and disabled accounts.
+    Withhold codes for the three inactive rows; any exception requires a separately approved workflow.
+    Revoke any mistakenly issued codes. Distribute each code privately after
     identity checks. Never export/distribute the full cohort code sheet as a group.
 
 ### Counter accounting
@@ -267,8 +267,10 @@ copy names, registration values, photos, credentials or codes into the public ha
 - Student activation needs registration + one-time code + student-selected strong password; DOB is
   unnecessary. Codes are hashed, expire, are consumed once, and can be revoked/reissued. Reissue for
   an existing account is **password recovery** and invalidates its old sessions. Issue only deliberately.
-- Code issuance/activation refuse REVOKED registrations and DISABLED accounts. SUSPENDED academic
-  status permits issuance, activation and login today. Login is gated by the student's account status,
+- Code issuance/activation refuse SUSPENDED or REVOKED registrations and DISABLED accounts.
+  A code issued before suspension cannot activate or recover an account, including a status change
+  during password hashing. Refused transaction-time attempts are audited with keyed identifiers.
+  Existing login is still gated by the student's account status,
   not academic registration status; do not promise that changing academic status revokes a login.
   LOCKED/DISABLED account controls terminate sessions; account policy and academic status are separate.
 - Staff/student sessions and CSRF are separate. Students cannot reach staff APIs or another student's
@@ -308,8 +310,8 @@ reference. Do not capture passwords, codes or session cookies in screenshots/tra
       password activates without DOB/photo. Login/logout works. Only own registrations/profile/photos
       are visible. Submit synthetic DOB/photo; pending data is not official; see approval/rejection result.
       Staff URLs and another student's request/photo must be denied.
-- [ ] **Inactive/access decision:** mentor acknowledges current SUSPENDED access behavior and signs
-      the chosen distribution/account policy before any real code is issued. Check lock/disable ends
+- [ ] **Inactive/access decision:** verify SUSPENDED registrations receive no code and cannot redeem
+      an earlier code. Approve distribution and existing-account access policy separately. Check lock/disable ends
       existing student sessions. Verify the two private identifier warnings outside screenshots/logs.
 - [ ] **Handover:** sign mapping, checksum, preview and commit approvals separately. Record outstanding
       findings, reviewer and date; no real-data acceptance is implied by a synthetic test pass.

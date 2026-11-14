@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-09
+- **Amended:** 2026-11-14 — inactive-registration activation/recovery withholding.
 
 ## Context
 
@@ -20,6 +21,9 @@ may ever obtain a staff capability.
    number + code + new password). Codes are random, short-lived, stored only as keyed hashes, revoked
    after repeated wrong guesses, and answer every failure identically.
 3. **Recovery uses the same proof:** a new code resets the password of an existing account.
+   SUSPENDED and REVOKED registrations cannot receive or redeem activation/recovery codes;
+   DISABLED accounts cannot recover. Eligibility is checked again after password hashing before
+   credential writes. Existing login/account-status policy is separate and unchanged.
 4. **Ownership is derived from the session** on every student request; student endpoints take no
    student or registration identifiers.
 

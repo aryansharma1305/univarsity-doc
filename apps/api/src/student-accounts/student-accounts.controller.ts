@@ -70,7 +70,7 @@ export class StudentAccountsController {
   @ApiOperation({
     summary: 'Issue single-use activation codes',
     description:
-      'For the given registrations, or every registration of an import. Previous open codes are revoked. The plain codes are in this response ONLY — they are stored as keyed hashes.',
+      'For the given registrations, or every registration of an import. Suspended/revoked registrations and disabled accounts are skipped. Previous open codes are revoked. The plain codes are in this response ONLY — they are stored as keyed hashes.',
   })
   @ApiBody({ schema: openApiRequestSchema(issueActivationCodesSchema) })
   @ApiOkResponse({ standardSchema: issuedActivationCodesSchema })
