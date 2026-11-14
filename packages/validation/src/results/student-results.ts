@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { officialPublishedResultSchema } from '../public-verification/official.js';
 import { syntheticPublishedResultSchema } from '../release-workflows.js';
 
 export const studentResultsQuerySchema = z
@@ -11,8 +12,10 @@ export const studentResultsQuerySchema = z
 /** No marks contract is exposed until authoritative publication/release provenance exists. */
 export const studentResultsPageSchema = z
   .object({
-    publicationAvailable: z.literal(false),
-    data: z.array(syntheticPublishedResultSchema).max(100),
+    publicationAvailable: z.boolean(),
+    data: z
+      .array(z.union([syntheticPublishedResultSchema, officialPublishedResultSchema]))
+      .max(100),
     meta: z
       .object({
         page: z.number().int().min(1).max(100_000),

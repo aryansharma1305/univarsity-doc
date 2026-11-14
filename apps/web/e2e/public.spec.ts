@@ -138,28 +138,15 @@ test('student sign-in, activation and direct staff sign-in retain existing route
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
 });
 
-test('all verification destinations retain honest placeholders without verification forms', async ({
+test('all verification destinations offer a real lookup with no Coming Soon claims', async ({
   page,
 }) => {
-  for (const [label, path, title] of [
-    ['Verify Admission Letter', '/verify/admission-letter', 'Admission Letter Verification'],
-    ['Verify Certificate', '/verify/certificate', 'Certificate Verification'],
-    ['Verify Registration', '/verify/registration', 'Registration Verification'],
-    ['Check Result', '/results', 'Check Results'],
-  ] as const) {
-    await page.goto('/');
-    await page
-      .getByRole('navigation', { name: 'Main', exact: true })
-      .getByRole('link', { name: label, exact: true })
-      .click();
-    await expect(page).toHaveURL(path);
-    await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
-    await expect(page.getByTestId('not-available')).toContainText('Not available yet');
-    await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
+  for (const [label, path] of NAVIGATION.slice(0, 4)) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1, name: label })).toBeVisible();
+    await expect(page.locator('main form')).toHaveCount(1);
+    await expect(page.getByTestId('not-available')).toHaveCount(0);
   }
-  await page.goto('/verify/qr');
-  await expect(page.getByRole('heading', { level: 1, name: 'Scan QR' })).toBeVisible();
-  await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
 });
 
 test('small-screen text and navigation remain readable at 200 percent text scale', async ({

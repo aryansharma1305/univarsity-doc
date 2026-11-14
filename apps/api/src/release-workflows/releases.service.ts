@@ -1,3 +1,4 @@
+import { OfficialResultsService } from '../public-verification/official-results.service.js';
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@docversity/database';
 import { z } from 'zod';
@@ -38,6 +39,7 @@ const calculation = z.object({
 @Injectable()
 export class ReleasesService {
   constructor(
+    private readonly official: OfficialResultsService,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly policy: WorkflowPolicyService,
@@ -287,6 +289,18 @@ export class ReleasesService {
     });
   }
   async list(studentId: string, q: StudentResultsQuery) {
+    const official = await this.official.list(studentId);
+    if (official.length)
+      return studentResultsPageSchema.parse({
+        publicationAvailable: true,
+        data: official.slice((q.page - 1) * q.pageSize, q.page * q.pageSize),
+        meta: {
+          page: q.page,
+          pageSize: q.pageSize,
+          total: official.length,
+          totalPages: Math.ceil(official.length / q.pageSize),
+        },
+      });
     if (!this.policy.enabled())
       return studentResultsPageSchema.parse({
         publicationAvailable: false,
@@ -309,6 +323,8 @@ export class ReleasesService {
     });
   }
   async get(studentId: string, id: string) {
+    const official = await this.official.list(studentId, { id });
+    if (official[0]) return official[0];
     if (!this.policy.enabled()) throw Errors.notFound();
     const r = (await this.visible(studentId, id))[0];
     if (!r) throw Errors.notFound();

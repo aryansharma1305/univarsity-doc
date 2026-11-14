@@ -1,3 +1,4 @@
+import { PublicVerificationModule } from '../public-verification/public-verification.module.js';
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import { ReExamsModule } from '../re-exams/re-exams.module.js';
@@ -13,7 +14,7 @@ import {
   SandboxCallbackController,
 } from './workflows.controller.js';
 @Module({
-  imports: [ReExamsModule],
+  imports: [ReExamsModule, PublicVerificationModule],
   controllers: [WorkflowsController, StudentWorkflowsController, SandboxCallbackController],
   providers: [
     WorkflowPolicyService,

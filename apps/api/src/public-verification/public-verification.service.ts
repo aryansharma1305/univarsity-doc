@@ -15,7 +15,7 @@ export function verificationUnavailable() {
   return new AppError(
     HttpStatus.SERVICE_UNAVAILABLE,
     'PUBLIC_VERIFICATION_UNAVAILABLE',
-    'Public verification is temporarily unavailable. No record has been checked.',
+    'Public verification is temporarily unavailable. The check could not be completed.',
   );
 }
 
