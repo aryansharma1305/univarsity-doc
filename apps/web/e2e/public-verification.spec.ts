@@ -16,9 +16,9 @@ test('/verify redirects to the one homepage and drops unsolicited reference quer
   await page.goto('/verify?reference=SYNTHETIC-UNSOLICITED-REFERENCE');
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.getByRole('heading', { level: 1, name: 'Verify. Trust. Confirm.' }),
+    page.getByRole('heading', { level: 1, name: 'Verify Admission Letter' }),
   ).toBeVisible();
-  await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Enter admission letter number' })).toBeVisible();
   await expect(page.getByText('SYNTHETIC-UNSOLICITED-REFERENCE')).toHaveCount(0);
 });
 
@@ -54,7 +54,7 @@ test('all four real API contracts remain fail-closed, no-store and strictly vali
   }
 });
 
-test('without JavaScript the homepage discloses unavailability and preserves direct portal links', async ({
+test('without JavaScript the homepage discloses unavailability and keeps references out of URLs', async ({
   browser,
 }, testInfo) => {
   const context = await browser.newContext({
@@ -66,20 +66,17 @@ test('without JavaScript the homepage discloses unavailability and preserves dir
     const page = await context.newPage();
     await page.goto('/');
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Verify. Trust. Confirm.' }),
+      page.getByRole('heading', { level: 1, name: 'Verify Admission Letter' }),
     ).toBeVisible();
-    await expect(
-      page.getByText(/public verification of results and certificates on its way/),
-    ).toBeVisible();
-    await expect(page.getByRole('tab')).toHaveCount(0);
-    await expect(page.locator('main section')).toHaveCount(1);
-    await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
-    await expect(
-      page.getByRole('link', { name: 'Sign in to the student portal', exact: true }),
-    ).toHaveAttribute('href', '/student/login');
-    await expect(
-      page.getByRole('link', { name: 'Activate your account', exact: true }),
-    ).toHaveAttribute('href', '/student/register');
+    await expect(page.getByRole('status')).toContainText('Coming in a later phase');
+    const input = page.getByRole('textbox', { name: 'Enter admission letter number' });
+    await input.fill('SYNTHETIC-LOCAL-ONLY');
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
+    await expect(page).toHaveURL((url) => url.pathname === '/' && url.search === '');
+    await expect(page.getByRole('link', { name: 'Student Sign in', exact: true })).toBeVisible();
+    await expect(page.getByRole('status')).toContainText(
+      'Public verification is not available yet',
+    );
     await expectNoHorizontalOverflow(page);
   } finally {
     await context.close();

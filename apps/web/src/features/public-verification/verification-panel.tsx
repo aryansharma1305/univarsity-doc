@@ -1,103 +1,84 @@
 'use client';
 
-import { useState } from 'react';
-import { MotionConfig, motion, useReducedMotion } from 'motion/react';
-import {
-  ClipboardListIcon,
-  IdCardIcon,
-  GraduationCapIcon,
-  MailIcon,
-  LockKeyholeIcon,
-  type LucideIcon,
-} from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@docversity/ui/components/tabs';
-import {
-  publicVerificationServices,
-  publicVerificationServiceSchema,
-  type PublicVerificationService,
-} from '@docversity/validation';
-import styles from './verification-home.module.css';
+import { useId, useState, type SyntheticEvent } from 'react';
+import { ArrowRightIcon } from 'lucide-react';
+import type { PublicVerificationService } from '@docversity/validation';
+import { Button } from '@docversity/ui/components/button';
+import { Input } from '@docversity/ui/components/input';
+import styles from './verification-panel.module.css';
 
-const SERVICES: Record<
-  PublicVerificationService,
-  { title: string; description: string; icon: LucideIcon; message: string }
-> = {
-  result: {
-    title: 'Result Checking',
-    description: 'Academic results',
-    icon: ClipboardListIcon,
-    message:
-      'This service will check university-authorized, published results once public disclosure is approved. No results are checked here yet; unpublished marks and student records remain private.',
-  },
-  registration: {
-    title: 'Registration Verification',
-    description: 'University registrations',
-    icon: IdCardIcon,
-    message:
-      'This service will check registration records approved by the university for public disclosure. No registration is checked here yet; internal student profiles remain private.',
+const SERVICES = {
+  'admission-letter': {
+    title: 'Verify Admission Letter',
+    placeholder: 'Enter admission letter number',
   },
   certificate: {
-    title: 'Certificate Verification',
-    description: 'Academic certificates',
-    icon: GraduationCapIcon,
-    message:
-      'This service will check authorized, issued certificates once public verification is approved. No certificate is checked here yet. SAMPLE PDFs and course eligibility are not proof of issuance.',
+    title: 'Verify Certificate',
+    placeholder: 'Enter the code printed on the certificate',
   },
-  'admission-letter': {
-    title: 'Admission Letter Verification',
-    description: 'Admission letters',
-    icon: MailIcon,
-    message:
-      'This service will check authorized admission letters once issuance provenance and public disclosure are approved. No admission letter is checked here yet; admission records remain private.',
+  registration: {
+    title: 'Verify Registration',
+    placeholder: 'Enter registration number',
   },
-};
+  result: {
+    title: 'Check Result',
+    placeholder: 'Enter result code or registration number',
+  },
+} satisfies Record<PublicVerificationService, { title: string; placeholder: string }>;
 
-/** No identifiers, submissions or activation switch while public verification is unavailable. */
-export function VerificationPanel() {
-  const [service, setService] = useState<PublicVerificationService>('result');
-  const reduced = useReducedMotion();
+/** Public lookup is unavailable: keep references local until an approved lookup exists. */
+export function VerificationPanel({ service }: { service: PublicVerificationService }) {
+  const id = useId();
+  const [submitted, setSubmitted] = useState(false);
+  const { title, placeholder } = SERVICES[service];
+
+  function onSubmit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (event.currentTarget.reportValidity()) setSubmitted(true);
+  }
+
   return (
-    <MotionConfig reducedMotion="user">
-      <Tabs
-        value={service}
-        onValueChange={(value) => {
-          const parsed = publicVerificationServiceSchema.safeParse(value);
-          if (parsed.success) setService(parsed.data);
-        }}
+    <section className={styles.section} aria-labelledby={`${id}-title`}>
+      <h1 id={`${id}-title`} className={styles.title}>
+        {title}
+      </h1>
+      <form className={styles.box} onSubmit={onSubmit}>
+        <label htmlFor={id} className="sr-only">
+          {placeholder}
+        </label>
+        <Input
+          id={id}
+          type="text"
+          placeholder={placeholder}
+          className={styles.input}
+          required
+          maxLength={128}
+          autoComplete="off"
+          spellCheck={false}
+          aria-describedby={`${id}-result`}
+          onChange={() => {
+            setSubmitted(false);
+          }}
+        />
+        <Button type="submit" className={styles.verify}>
+          Verify
+          <ArrowRightIcon aria-hidden="true" />
+        </Button>
+      </form>
+      <div
+        id={`${id}-result`}
+        className={styles.result}
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
       >
-        <TabsList
-          aria-label="Choose a verification service"
-          className={`${styles.serviceTabs} group-data-[orientation=horizontal]/tabs:h-auto`}
-        >
-          {publicVerificationServices.map((id) => {
-            const { title, description, icon: Icon } = SERVICES[id];
-            return (
-              <TabsTrigger key={id} value={id} aria-label={title} className={styles.serviceTab}>
-                <Icon className={styles.serviceIcon} aria-hidden="true" />
-                <span className={styles.serviceTitle}>{title}</span>
-                <span className={styles.serviceDescription}>{description}</span>
-                <span className={styles.serviceAvailability}>Not available yet</span>
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
-        {publicVerificationServices.map((id) => (
-          <TabsContent key={id} value={id} className={styles.panel}>
-            <motion.div
-              initial={reduced ? false : { opacity: 0.8, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: reduced ? 0 : 0.16, ease: 'easeOut' }}
-            >
-              <h2>{SERVICES[id].title}</h2>
-              <p className={styles.status} role="status" aria-live="polite" aria-atomic="true">
-                <LockKeyholeIcon aria-hidden="true" className="size-4" />
-                Not available yet
-              </p>
-              <p className={styles.explanation}>{SERVICES[id].message}</p>
-            </motion.div>
-          </TabsContent>
-        ))}
-      </Tabs>
-    </MotionConfig>
+        <p className={styles.resultTitle}>Coming in a later phase</p>
+        <p>
+          {submitted
+            ? 'Verification is not available yet. No record has been checked.'
+            : 'Public verification is not available yet.'}
+        </p>
+      </div>
+    </section>
   );
 }

@@ -1,13 +1,8 @@
 import type { Metadata } from 'next';
-import { ComingSoon } from '@/components/public/coming-soon';
+import { VerificationPanel } from '@/features/public-verification/verification-panel';
 
-export const metadata: Metadata = { title: 'Certificate Verification' };
+export const metadata: Metadata = { title: 'Verify Certificate' };
 
-export default function CertificateVerificationPage() {
-  return (
-    <ComingSoon
-      title="Certificate Verification"
-      description="Certificate verification is not available yet. It will be added together with certificate issuance."
-    />
-  );
+export default function VerificationPage() {
+  return <VerificationPanel service="certificate" />;
 }

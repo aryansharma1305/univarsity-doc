@@ -1,37 +1,6 @@
 import type { ReactNode } from 'react';
-import {
-  BookOpenCheckIcon,
-  FileTextIcon,
-  KeyRoundIcon,
-  LogInIcon,
-  MonitorPlayIcon,
-  TicketIcon,
-  UserRoundPenIcon,
-} from 'lucide-react';
+import { KeyRoundIcon, LogInIcon, TicketIcon } from 'lucide-react';
 import { AuthShell, type AuthHighlight } from '@/components/auth/auth-shell';
-
-const SIGN_IN_HIGHLIGHTS: readonly AuthHighlight[] = [
-  {
-    icon: UserRoundPenIcon,
-    title: 'Profile and corrections',
-    body: 'Your official record, and requests for staff to review.',
-  },
-  {
-    icon: BookOpenCheckIcon,
-    title: 'Course details',
-    body: 'The curriculum assigned to your registration.',
-  },
-  {
-    icon: FileTextIcon,
-    title: 'Published documents',
-    body: 'Certificates and marksheets staff have published to you.',
-  },
-  {
-    icon: MonitorPlayIcon,
-    title: 'Examinations and re-exams',
-    body: 'Examination app links and your re-exam applications.',
-  },
-];
 
 const ACTIVATION_STEPS: readonly AuthHighlight[] = [
   {
@@ -81,12 +50,10 @@ export function StudentAuthPage({
             Open your account <em>in three steps.</em>
           </>
         ) : (
-          <>
-            Welcome back. <em>Your records are waiting.</em>
-          </>
+          'Welcome to Verification Portal'
         )
       }
-      highlights={activation ? ACTIVATION_STEPS : SIGN_IN_HIGHLIGHTS}
+      highlights={activation ? ACTIVATION_STEPS : []}
     >
       {children}
     </AuthShell>
