@@ -61,10 +61,12 @@ sessions and CSRF controls. Draft, unapproved and legacy synthetic snapshots are
 v2 public checks. The owner-only document list/download is integrated with My Documents; staff
 sessions cannot substitute for a student session. PDF bytes are checked against their issued hash.
 
-University application eligibility, evidence, fee and review rules remain pending. The pre-existing
-certificate application policy is still test-only and is not converted into a live exemption.
-The issuance API can consume a duly reviewed request once those upstream rules are authorized.
-This dependency must be resolved before claiming end-to-end official certificate operations.
+University application eligibility, evidence, fee and review rules remain pending. The optional
+`application` block on an approved certificate policy configures program-scoped active-registration
+applications, explicit evidence/no-evidence and fee-exemption authority, permitted form fields and
+a separate review authority reference. Nothing is assumed or enabled by default. Existing request
+forms, review actions and history consume these approved rules; legacy synthetic definitions remain
+test-only. Digital verification of already issued records never requires payment activation.
 
 ## Result workflow
 
@@ -77,7 +79,7 @@ receipts are reused. A marks author or submitter cannot approve their work.
 subject outcomes, unchanged submission/approval snapshots and a current approved result policy.
 An immutable `ResultPublication` receipt authorizes the narrowly scoped database transition from
 APPROVED to PUBLISHED. Existing published-mark immutability remains in force. Withdrawal changes
-only availability and never rewrites marks. Correction requires the existing new-revision workflow.
+only availability and never rewrites marks. Corrections require a separately implemented and approved revision workflow; the schema supports revision history, but no correction API is claimed.
 
 Both student results and Check Result expose only owner-scoped approved publications. Period and
 examination selection filter published records; no published record is distinguished from service
@@ -100,8 +102,21 @@ A real database backup was streamed to a private directory outside Git, restored
 local PostgreSQL database, upgraded with the new migration and checked for Prisma drift. Backup
 size: 356,012 bytes; SHA-256: `16d81ece4ec9df04da5881156886917a297b71742077aac6f9258a0322d5b949`.
 This verifies a database recovery rehearsal, not object-storage backup custody or approval to deploy.
+An application-only downgrade after admission-letter enum values or official publication receipts exist is not claimed compatible. Preserve all records and receipts; validate the older runtime against populated synthetic state or use forward recovery. Never drop enum values or restore an older backup over newer records. With institutional activation disabled and no official writes, the clean-state rollout is a separate compatibility case.
+
 Live replacement/migration still requires explicit user authorization, reviewed green CI, immutable
 AMD64 images, a fresh final backup check and post-deployment acceptance. Do not build on the VPS.
+
+## Staff operation
+
+`/admin/official-records` provides permission-aware policy proposals, independent policy/template
+approval, registration selection, reviewed-application selection, approved PDF preparation,
+private staff PDF review, issuance, revocation and the verification audit. Lists validate strict
+queries and paginate. The existing result review page opens university decision/publication
+controls; recorded grades/outcomes are shown to reviewers. Policy withdrawal and request closure
+are locked against in-flight approval/issuance. The backend remains authoritative for every action.
+A policy’s optional application block is the complete configuration for the supported program-scoped
+active-registration, no-additional-evidence and approved fee-exemption workflow; no real policy is seeded.
 
 ## Verification and acceptance
 

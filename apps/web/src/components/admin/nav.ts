@@ -20,6 +20,7 @@ import {
 
 export interface AdminNavItem {
   href:
+    | '/admin/official-records'
     | '/admin/marksheet-templates'
     | '/admin/certificate-requests'
     | '/admin/certificate-templates'
@@ -49,6 +50,12 @@ export interface AdminNavItem {
  * Admin navigation. Only implemented workflows are listed; results currently expose preview imports.
  */
 export const ADMIN_NAV: readonly AdminNavItem[] = [
+  {
+    href: '/admin/official-records',
+    label: 'Official records',
+    icon: FileBadgeIcon,
+    permission: PERMISSIONS.certificatesRead,
+  },
   {
     href: '/admin/certificate-requests',
     label: 'Certificate Requests',

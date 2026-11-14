@@ -1,3 +1,5 @@
+import { OfficialAdminService } from './official-admin.service.js';
+import { VerificationAuditController } from './official-workflows.controller.js';
 import { VerificationPoliciesService } from './verification-policies.service.js';
 import { OfficialDocumentsService } from './official-documents.service.js';
 import { OfficialResultsService } from './official-results.service.js';
@@ -14,6 +16,7 @@ import { PublicVerificationGuard } from './public-verification.guard.js';
 import { PublicVerificationServiceHandler } from './public-verification.service.js';
 @Module({
   controllers: [
+    VerificationAuditController,
     PublicVerificationController,
     VerificationPoliciesController,
     OfficialDocumentsController,
@@ -21,6 +24,7 @@ import { PublicVerificationServiceHandler } from './public-verification.service.
     StudentOfficialDocumentsController,
   ],
   providers: [
+    OfficialAdminService,
     PublicVerificationGuard,
     PublicVerificationServiceHandler,
     VerificationPoliciesService,

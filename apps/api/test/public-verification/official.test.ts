@@ -23,7 +23,6 @@ import {
 import { activatedStudent, activate, issueCode, studentCsrf } from '../student-auth/support.js';
 import { staticPdf } from '../historical-documents/support.js';
 import { resultsFixture, contextFor } from '../result-imports/support.js';
-import { CertificatePoliciesService } from '../../src/certificate-requests/certificate-policies.service.js';
 import { RateLimiter } from '../../src/auth/rate-limiter.js';
 import { IdentifierHasher } from '../../src/auth/identifier-hasher.js';
 import { AuditService } from '../../src/audit/audit.service.js';
@@ -56,9 +55,24 @@ const definition = {
   identityFactor: 'AUTHENTICATED_OWNER',
   resultMode: 'REVIEWED_VALUES_ONLY',
 };
-async function policy(programId: string, service: string) {
+const APPLICATION_RULES = {
+  certificateType: 'TRANSCRIPT',
+  eligibilityReference: 'Synthetic active registration rule',
+  fields: { purposeRequired: true, remarksAllowed: false },
+  evidence: { requirement: 'NONE', authorityReference: 'Synthetic evidence approval' },
+  fee: { kind: 'APPROVED_EXEMPTION', authorityReference: 'Synthetic fee approval' },
+  actions: ['SUBMIT', 'RESPOND', 'CANCEL'],
+  reviewAuthorityReference: 'Synthetic review authority',
+};
+async function policy(programId: string, service: string, application?: Record<string, unknown>) {
   const p = (
-    await admin.post('verification-policies', { service, programId, definition }).expect(201)
+    await admin
+      .post('verification-policies', {
+        service,
+        programId,
+        definition: { ...definition, ...(application ? { application } : {}) },
+      })
+      .expect(201)
   ).body as { id: string };
   await second.post(`verification-policies/${p.id}/approve`).expect(200);
   return p.id;
@@ -89,6 +103,7 @@ async function prepare(type: 'ADMISSION_LETTER' | 'TRANSCRIPT' = 'ADMISSION_LETT
   const policyId = await policy(
     r.programId,
     type === 'ADMISSION_LETTER' ? 'admission-letter' : 'certificate',
+    type === 'TRANSCRIPT' ? APPLICATION_RULES : undefined,
   );
   const template = (
     await maker
@@ -103,29 +118,6 @@ async function prepare(type: 'ADMISSION_LETTER' | 'TRANSCRIPT' = 'ADMISSION_LETT
   await approver.post(`official-documents/templates/${template.id}/approve`).expect(200);
   let requestId: string | undefined;
   if (type === 'TRANSCRIPT') {
-    vi.spyOn(app.get(CertificatePoliciesService), 'definitions').mockReturnValue([
-      {
-        id: 'TEST-REQUEST-POLICY',
-        version: 1,
-        certificateType: 'TRANSCRIPT',
-        approved: true,
-        authorityReference: 'SYNTHETIC',
-        submissionEnabled: true,
-        eligibilityRule: 'SYNTHETIC_TEST_ONLY',
-        eligibilityReference: 'SYNTHETIC',
-        fields: { purposeRequired: true, remarksAllowed: false },
-        evidence: { requirement: 'NONE', authorityReference: 'SYNTHETIC' },
-        fee: { kind: 'APPROVED_EXEMPTION', authorityReference: 'SYNTHETIC' },
-        actions: ['SUBMIT', 'CANCEL'],
-      },
-    ]);
-    vi.spyOn(app.get(CertificatePoliciesService), 'reviewDefinition').mockReturnValue({
-      id: 'TEST-REVIEW',
-      approved: true,
-      authorityReference: 'SYNTHETIC',
-      certificateTypes: ['TRANSCRIPT'],
-      action: 'COMPLETE_REVIEW',
-    });
     const csrf = await studentCsrf(student.agent);
     const request = certificateRequestSchema.parse(
       (
@@ -561,4 +553,308 @@ it('serializes document issuance with a concurrent registration suspension', asy
   expect(
     (await testDb().certificate.findUniqueOrThrow({ where: { id: f.receipt.id } })).status,
   ).toBe('APPROVED');
+});
+
+it('uses approved program-scoped application and review rules without synthetic evaluator overrides', async () => {
+  const student = await activatedStudent(app, admin, 'REAL-POLICY-DESIGN');
+  const r = await testDb().studentRegistration.findUniqueOrThrow({
+    where: { id: student.registrationId },
+  });
+  const application = {
+    certificateType: 'TRANSCRIPT',
+    eligibilityReference: 'Synthetic active registration rule',
+    fields: { purposeRequired: true, remarksAllowed: false },
+    evidence: { requirement: 'NONE', authorityReference: 'Synthetic evidence approval' },
+    fee: { kind: 'APPROVED_EXEMPTION', authorityReference: 'Synthetic fee approval' },
+    actions: ['SUBMIT', 'RESPOND', 'CANCEL'],
+    reviewAuthorityReference: 'Synthetic review approval',
+  };
+  const policyId = await policy(r.programId, 'certificate', application);
+  const csrf = await studentCsrf(student.agent);
+  const created = await student.agent
+    .post('/api/v1/student/certificate-requests')
+    .set('X-CSRF-Token', csrf)
+    .send({
+      certificateType: 'TRANSCRIPT',
+      purpose: 'Synthetic official-rule design test',
+      submissionKey: randomUUID(),
+    })
+    .expect(201);
+  const request = certificateRequestSchema.parse(created.body);
+  expect(request.policyId).toBe(policyId);
+  await maker
+    .post(`certificate-requests/${request.id}/record-review`, {
+      version: 1,
+      privateNote: 'Synthetic authorized review',
+    })
+    .expect(200);
+  await maker
+    .post(`certificate-requests/${request.id}/complete-review`, { version: 2 })
+    .expect(200);
+  const other = await activatedStudent(app, admin, 'OTHER-POLICY');
+  const otherCsrf = await studentCsrf(other.agent);
+  await other.agent
+    .post('/api/v1/student/certificate-requests')
+    .set('X-CSRF-Token', otherCsrf)
+    .send({
+      certificateType: 'TRANSCRIPT',
+      purpose: 'Synthetic out-of-scope application',
+      submissionKey: randomUUID(),
+    })
+    .expect(409);
+  await second.post(`verification-policies/${policyId}/withdraw`).expect(200);
+  await student.agent
+    .post('/api/v1/student/certificate-requests')
+    .set('X-CSRF-Token', csrf)
+    .send({
+      certificateType: 'CHARACTER',
+      purpose: 'Synthetic unavailable application',
+      submissionKey: randomUUID(),
+    })
+    .expect(409);
+});
+async function blockedOn(table: 'certificate_requests' | 'verification_policies') {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const rows = await testDb().$queryRaw<
+      { waiting: boolean }[]
+    >`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE ${`%${table}%`}) AS waiting`;
+    if (rows[0]?.waiting) return true;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return false;
+}
+it('does not issue from a reviewed request closed concurrently', async () => {
+  const f = await prepare('TRANSCRIPT');
+  await approver.post(`official-documents/${f.receipt.id}/approve`).expect(200);
+  const requestId = f.metadata.requestId;
+  if (!requestId) throw new Error('Missing synthetic request');
+  let release: (() => void) | undefined, acquired: (() => void) | undefined;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const locked = new Promise<void>((resolve) => {
+    acquired = resolve;
+  });
+  const closing = testDb().$transaction(
+    async (tx) => {
+      await tx.certificateRequest.update({
+        where: { id: requestId },
+        data: {
+          status: 'CLOSED',
+          version: 4,
+          events: {
+            create: { version: 4, status: 'CLOSED', action: 'CLOSE', actorUserId: maker.user.id },
+          },
+        },
+      });
+      acquired?.();
+      await hold;
+    },
+    { timeout: 15000 },
+  );
+  await locked;
+  const issue = approver
+    .post(`official-documents/${f.receipt.id}/issue`)
+    .then((response) => response);
+  let waited = false;
+  try {
+    waited = await blockedOn('certificate_requests');
+  } finally {
+    release?.();
+    await closing;
+  }
+  const response = await issue;
+  expect(waited).toBe(true);
+  expect(response.status).toBe(409);
+  expect(
+    (await testDb().certificate.findUniqueOrThrow({ where: { id: f.receipt.id } })).status,
+  ).toBe('APPROVED');
+});
+it('does not approve results after a concurrent publication-authority withdrawal', async () => {
+  const examAdmin = await staff(app, ['EXAM_ADMIN']);
+  const f = await resultsFixture(admin, examAdmin, {
+    subjects: [
+      {
+        period: 1,
+        maxMarks: 100,
+        components: [
+          { name: 'Internal', maxMarks: 30 },
+          { name: 'External', maxMarks: 70 },
+        ],
+      },
+    ],
+  });
+  const exam = await f.examination(),
+    student = await f.student(),
+    policyId = await policy(f.program.id, 'result');
+  const ps = await testDb().programSubject.findFirstOrThrow({
+    where: { curriculumId: f.curriculum.id },
+  });
+  const draft = savedDraftSchema.parse(
+    (
+      await examAdmin
+        .post('draft-results', {
+          context: { ...contextFor(f, exam), periodNumber: exam.period.number },
+          registrationId: student.registrationId,
+          programSubjectId: ps.id,
+          reExamApplicationId: null,
+          expectedVersion: null,
+          marks: {
+            internalMarks: '20',
+            externalMarks: '60',
+            practicalMarks: null,
+            otherMarks: null,
+            totalMarks: '80',
+          },
+        })
+        .expect(201)
+    ).body,
+  );
+  const row = await testDb().result.findUniqueOrThrow({
+    where: { id: draft.resultId },
+    include: { items: true },
+  });
+  await second
+    .post(`official-results/${row.id}/attest`, {
+      policyId,
+      expectedVersion: 1,
+      authorityReference: 'Synthetic decision',
+      outcome: 'PASS',
+      totalMarks: '80',
+      maxMarks: '100',
+      sgpa: null,
+      cgpa: null,
+      subjects: row.items.map((i) => ({ id: i.id, status: 'PASS', grade: 'A' })),
+    })
+    .expect(200);
+  await examAdmin
+    .post(`result-review/${row.id}/submit`, {
+      requestId: randomUUID(),
+      expectedVersion: 2,
+      confirmed: true,
+    })
+    .expect(200);
+  let release: (() => void) | undefined, acquired: (() => void) | undefined;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const locked = new Promise<void>((resolve) => {
+    acquired = resolve;
+  });
+  const withdrawal = testDb().$transaction(
+    async (tx) => {
+      await tx.verificationPolicy.update({
+        where: { id: policyId },
+        data: { status: 'WITHDRAWN' },
+      });
+      acquired?.();
+      await hold;
+    },
+    { timeout: 15000 },
+  );
+  await locked;
+  const approve = admin
+    .post(`result-review/${row.id}/approve`, {
+      requestId: randomUUID(),
+      expectedVersion: 3,
+      confirmed: true,
+    })
+    .then((response) => response);
+  let waited = false;
+  try {
+    waited = await blockedOn('verification_policies');
+  } finally {
+    release?.();
+    await withdrawal;
+  }
+  const response = await approve;
+  expect(waited).toBe(true);
+  expect(response.status).toBe(409);
+  expect(
+    (await testDb().result.findUniqueOrThrow({ where: { id: row.id } })).publicationStatus,
+  ).toBe('UNDER_REVIEW');
+});
+it('retains independently approved application types and paginates staff authority records', async () => {
+  const student = await activatedStudent(app, admin, 'MULTI-TYPE');
+  const r = await testDb().studentRegistration.findUniqueOrThrow({
+    where: { id: student.registrationId },
+  });
+  const transcript = await policy(r.programId, 'certificate', APPLICATION_RULES);
+  const character = await policy(r.programId, 'certificate', {
+    ...APPLICATION_RULES,
+    certificateType: 'CHARACTER',
+  });
+  await policy(r.programId, 'certificate');
+  const catalogue = (await student.agent.get('/api/v1/student/certificate-services').expect(200))
+    .body as { data: { certificateType: string; available: boolean; policyId: string | null }[] };
+  expect(catalogue.data.find((p) => p.certificateType === 'TRANSCRIPT')).toMatchObject({
+    available: true,
+    policyId: transcript,
+  });
+  expect(catalogue.data.find((p) => p.certificateType === 'CHARACTER')).toMatchObject({
+    available: true,
+    policyId: character,
+  });
+  const one = await admin
+    .get(`verification-policies?programId=${r.programId}&pageSize=1&page=1`)
+    .expect(200);
+  const two = await admin
+    .get(`verification-policies?programId=${r.programId}&pageSize=1&page=2`)
+    .expect(200);
+  const first = one.body as { data: { id: string }[]; meta: { total: number; totalPages: number } };
+  const next = two.body as { data: { id: string }[] };
+  expect(first.meta).toMatchObject({ total: 3, totalPages: 3 });
+  expect(first.data[0]?.id).not.toBe(next.data[0]?.id);
+  await admin.get('verification-policies?unapprovedFilter=true').expect(400);
+  await http(app).get('/api/v1/verification-audit').expect(401);
+  await student.agent.get('/api/v1/verification-audit').expect(401);
+  await admin.get('verification-audit?pageSize=1').expect(200);
+});
+it('rejects a reviewed application from another program or a withdrawn application authority', async () => {
+  const f = await prepare('TRANSCRIPT');
+  const other = await activatedStudent(app, admin, 'SCOPE-B');
+  const r = await testDb().studentRegistration.findUniqueOrThrow({
+    where: { id: other.registrationId },
+  });
+  const number = `0000-B-${randomUUID().slice(0, 10)}`;
+  const alternate = await testDb().studentRegistration.create({
+    data: {
+      studentId: f.student.studentId,
+      programId: r.programId,
+      academicSessionId: r.academicSessionId,
+      registrationNumber: number,
+      registrationNumberNormalized: number.toUpperCase(),
+    },
+  });
+  const policyId = await policy(r.programId, 'certificate');
+  const template = (
+    await maker
+      .post('official-documents/templates', {
+        policyId,
+        programId: r.programId,
+        documentType: 'TRANSCRIPT',
+        name: uniqueCode('SCOPE-TEMPLATE'),
+      })
+      .expect(201)
+  ).body as { id: string };
+  await approver.post(`official-documents/templates/${template.id}/approve`).expect(200);
+  await maker.agent
+    .post('/api/v1/official-documents')
+    .set('X-CSRF-Token', maker.csrf)
+    .field(
+      'metadata',
+      JSON.stringify({
+        ...f.metadata,
+        registrationId: alternate.id,
+        policyId,
+        templateId: template.id,
+        certificateNumber: `OTHER-${randomUUID().slice(0, 12)}`,
+      }),
+    )
+    .attach('file', f.pdf, { filename: 'synthetic.pdf', contentType: 'application/pdf' })
+    .expect(409);
+  await second.post(`verification-policies/${f.policyId}/withdraw`).expect(200);
+  await approver.post(`official-documents/${f.receipt.id}/approve`).expect(403);
+  const viewer = await staff(app, ['VIEWER']);
+  await viewer.get(`official-documents/${f.receipt.id}/file`).expect(403);
 });

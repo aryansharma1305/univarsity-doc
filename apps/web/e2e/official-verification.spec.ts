@@ -1,4 +1,3 @@
-import { createPrismaClient } from '@docversity/database';
 import { expect, test } from '@playwright/test';
 import {
   capture,
@@ -138,11 +137,29 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
           discloseIssueDate: true,
           identityFactor: 'AUTHENTICATED_OWNER',
           resultMode: 'REVIEWED_VALUES_ONLY',
+          ...(service === 'certificate'
+            ? {
+                application: {
+                  certificateType: 'TRANSCRIPT',
+                  eligibilityReference: 'Synthetic active program registration',
+                  fields: { purposeRequired: true, remarksAllowed: false },
+                  evidence: { requirement: 'NONE', authorityReference: 'Synthetic evidence rule' },
+                  fee: {
+                    kind: 'APPROVED_EXEMPTION',
+                    authorityReference: 'Synthetic fee exemption',
+                  },
+                  actions: ['SUBMIT', 'RESPOND', 'CANCEL'],
+                  reviewAuthorityReference: 'Synthetic staff review authority',
+                },
+              }
+            : {}),
         },
       });
       await post(checker, `verification-policies/${policy.id}/approve`);
       policies[service] = policy.id;
     }
+    const admissionPolicy = policies['admission-letter'];
+    if (!admissionPolicy) throw new Error('Missing synthetic admission policy');
     const number = `0000${Date.now()}`;
     const student = await post(maker, 'students', {
       student: { fullName: 'Synthetic Verification Learner' },
@@ -158,39 +175,87 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     const pdf = Buffer.from(
       '%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF',
     );
-    const template = await post(maker, 'official-documents/templates', {
-      policyId: policies['admission-letter'],
-      programId: course.id,
-      documentType: 'ADMISSION_LETTER',
-      name: `Synthetic E2E Admission ${Date.now()}`,
-    });
-    await post(checker, `official-documents/templates/${template.id}/approve`);
+    const makerBrowser = await browser.newContext({ storageState: await maker.storageState() });
+    const checkerBrowser = await browser.newContext({ storageState: await checker.storageState() });
+    const makerPage = await makerBrowser.newPage();
+    const checkerPage = await checkerBrowser.newPage();
+    const templateName = `Synthetic E2E Admission ${Date.now()}`;
+    await makerPage.goto('/admin/official-records');
+    await makerPage.getByRole('tab', { name: 'Templates', exact: true }).click();
+    await makerPage.getByLabel('Template program', { exact: true }).selectOption(course.id);
+    await makerPage
+      .getByLabel('Template document type', { exact: true })
+      .selectOption('ADMISSION_LETTER');
+    await makerPage
+      .getByLabel('Approved template policy', { exact: true })
+      .selectOption(admissionPolicy);
+    await makerPage.getByLabel('University template name', { exact: true }).fill(templateName);
+    await makerPage.getByRole('button', { name: 'Prepare template version', exact: true }).click();
+    const makerTemplate = makerPage.getByRole('article').filter({ hasText: templateName });
+    await expect(
+      makerTemplate.getByRole('button', { name: 'Approve template', exact: true }),
+    ).toBeDisabled();
+    await checkerPage.goto('/admin/official-records');
+    await checkerPage.getByRole('tab', { name: 'Templates', exact: true }).click();
+    const checkerTemplate = checkerPage.getByRole('article').filter({ hasText: templateName });
+    await checkerTemplate.getByRole('button', { name: 'Approve template', exact: true }).click();
+    await expect(checkerTemplate).toContainText('ACTIVE');
+    await makerPage.getByRole('tab', { name: 'Documents', exact: true }).click();
+    await makerPage.getByLabel('Find registration', { exact: true }).fill(number);
+    await makerPage.getByRole('button', { name: 'Find student registration', exact: true }).click();
+    await makerPage.getByRole('button', { name: 'Use registration', exact: true }).click();
+    await makerPage
+      .getByLabel('Official document type', { exact: true })
+      .selectOption('ADMISSION_LETTER');
+    await makerPage
+      .getByLabel('Document approval policy', { exact: true })
+      .selectOption(admissionPolicy);
+    await makerPage
+      .getByLabel('Active official template', { exact: true })
+      .selectOption({ label: `${templateName} · v1` });
     const documentNumber = `ADMIT-${Date.now()}`;
-    const csrf = ((await (await maker.get('/api/v1/auth/csrf')).json()) as { csrfToken: string })
-      .csrfToken;
-    const upload = await maker.post('/api/v1/official-documents', {
-      headers: { 'X-CSRF-Token': csrf },
-      multipart: {
-        metadata: JSON.stringify({
-          registrationId,
-          policyId: policies['admission-letter'],
-          templateId: template.id,
-          documentType: 'ADMISSION_LETTER',
-          certificateNumber: documentNumber,
-          issueDate: '2026-11-01',
-          authorityReference: 'Synthetic E2E authority only',
-        }),
-        file: { name: 'synthetic.pdf', mimeType: 'application/pdf', buffer: pdf },
-      },
-    });
+    await makerPage.getByLabel('Official document number', { exact: true }).fill(documentNumber);
+    await makerPage.getByLabel('Approved issue date', { exact: true }).fill('2026-11-01');
+    await makerPage
+      .getByLabel('Issuance authority reference', { exact: true })
+      .fill('Synthetic E2E authority only');
+    await makerPage
+      .getByLabel('University-approved PDF', { exact: true })
+      .setInputFiles({ name: 'synthetic.pdf', mimeType: 'application/pdf', buffer: pdf });
+    const uploaded = makerPage.waitForResponse(
+      (r) => r.url().endsWith('/official-documents') && r.request().method() === 'POST',
+    );
+    await makerPage
+      .getByRole('button', { name: 'Prepare for independent approval', exact: true })
+      .click();
+    const upload = await uploaded;
     expect(upload.status(), await upload.text()).toBe(201);
     const document = (await upload.json()) as { id: string };
+    const makerDocument = makerPage.getByRole('article').filter({ hasText: documentNumber });
+    await expect(
+      makerDocument.getByRole('button', { name: 'Approve document', exact: true }),
+    ).toBeDisabled();
+    await expect(makerDocument).toContainText('Synthetic E2E authority only');
+    await makerPage.setViewportSize({ width: 390, height: 844 });
+    await expectNoHorizontalOverflow(makerPage);
+    await expectNoSeriousA11yViolations(makerPage);
+    await capture(makerPage, 'official-staff-document-mobile');
     await page.goto('/verify/admission-letter');
     await page.getByLabel('Admission letter number', { exact: true }).fill(documentNumber);
     await page.getByRole('button', { name: 'Verify record', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('NOT FOUND');
-    await post(checker, `official-documents/${document.id}/approve`);
-    const issued = await post(checker, `official-documents/${document.id}/issue`);
+    await checkerPage.getByRole('tab', { name: 'Documents', exact: true }).click();
+    const checkerDocument = checkerPage.getByRole('article').filter({ hasText: documentNumber });
+    await checkerDocument.getByRole('button', { name: 'Approve document', exact: true }).click();
+    const issuing = checkerPage.waitForResponse((r) =>
+      r.url().endsWith(`/official-documents/${document.id}/issue`),
+    );
+    await checkerDocument
+      .getByRole('button', { name: 'Issue approved document', exact: true })
+      .click();
+    const issuedResponse = await issuing;
+    expect(issuedResponse.status()).toBe(200);
+    const issued = (await issuedResponse.json()) as WorkflowResponse;
     const qr = new URL(issued.verificationUrl);
     await page.goto(qr.pathname + qr.hash);
     await page.getByRole('button', { name: 'Verify record', exact: true }).click();
@@ -200,114 +265,27 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await page.setViewportSize({ width: 390, height: 844 });
     await expectNoHorizontalOverflow(page);
     await capture(page, 'verification-admission-issued-mobile');
-    await post(checker, `official-documents/${document.id}/revoke`, {
-      reason: 'Synthetic E2E revocation',
-    });
+    await checkerDocument.getByRole('button', { name: 'Revoke document', exact: true }).click();
+    await checkerDocument
+      .getByLabel('Revocation reason', { exact: true })
+      .fill('Synthetic E2E revocation');
+    await checkerDocument.getByRole('button', { name: 'Confirm revocation', exact: true }).click();
+    await expect(checkerDocument).toContainText('REVOKED');
+    await checkerPage.getByRole('tab', { name: 'Policies', exact: true }).click();
+    const policyCard = checkerPage.getByRole('article').filter({ hasText: 'admission-letter' });
+    await policyCard.getByText('Review proposed rules', { exact: true }).click();
+    await expect(policyCard).toContainText('Public program');
+    await checkerPage.setViewportSize({ width: 390, height: 844 });
+    await expectNoHorizontalOverflow(checkerPage);
+    await expectNoSeriousA11yViolations(checkerPage);
+    await capture(checkerPage, 'official-staff-policy-mobile');
+    await checkerPage.getByRole('tab', { name: 'Audit', exact: true }).click();
+    await expect(
+      checkerPage.getByRole('heading', { name: 'Verification and issuance audit', exact: true }),
+    ).toBeVisible();
+    await expect(checkerPage.getByRole('article').first()).toBeVisible();
     await page.getByRole('button', { name: 'Verify record', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('REVOKED');
-    // Synthetic database fixture for an already reviewed certificate request. No live request policy is enabled.
-    const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
-    databaseUrl.pathname += '_e2e';
-    if (
-      !['localhost', '127.0.0.1', 'postgres'].includes(databaseUrl.hostname) ||
-      !databaseUrl.pathname.endsWith('_e2e')
-    )
-      throw new Error('Refusing non-E2E certificate fixture');
-    const db = createPrismaClient({ connectionString: databaseUrl.href });
-    let requestId: string;
-    try {
-      const actor = (await (await maker.get('/api/v1/auth/me')).json()) as { id: string };
-      const request = await db.certificateRequest.create({
-        data: {
-          reference: `E2E-REQUEST-${Date.now()}`,
-          studentId: student.id,
-          certificateType: 'TRANSCRIPT',
-          policyId: 'SYNTHETIC-E2E-REQUEST',
-          policyVersion: 1,
-          policySnapshot: { usage: 'SYNTHETIC_ONLY' },
-          purpose: 'Synthetic fixture',
-          submissionKey: crypto.randomUUID(),
-          events: {
-            create: {
-              version: 1,
-              status: 'SUBMITTED',
-              action: 'SUBMIT',
-              actorStudentId: student.id,
-            },
-          },
-        },
-      });
-      await db.certificateRequest.update({
-        where: { id: request.id },
-        data: {
-          status: 'UNDER_REVIEW',
-          version: 2,
-          events: {
-            create: {
-              version: 2,
-              status: 'UNDER_REVIEW',
-              action: 'RECORD_REVIEW',
-              privateNote: 'Synthetic review fixture only',
-              actorUserId: actor.id,
-            },
-          },
-        },
-      });
-      await db.certificateRequest.update({
-        where: { id: request.id },
-        data: {
-          status: 'REVIEW_COMPLETED',
-          version: 3,
-          events: {
-            create: {
-              version: 3,
-              status: 'REVIEW_COMPLETED',
-              action: 'COMPLETE_REVIEW',
-              actorUserId: actor.id,
-            },
-          },
-        },
-      });
-      requestId = request.id;
-    } finally {
-      await db.$disconnect();
-    }
-    const certTemplate = await post(maker, 'official-documents/templates', {
-      policyId: policies.certificate,
-      programId: course.id,
-      documentType: 'TRANSCRIPT',
-      name: `Synthetic E2E Transcript ${Date.now()}`,
-    });
-    await post(checker, `official-documents/templates/${certTemplate.id}/approve`);
-    const certNumber = `CERT-${Date.now()}`.padEnd(64, '1');
-    const certCsrf = (
-      (await (await maker.get('/api/v1/auth/csrf')).json()) as { csrfToken: string }
-    ).csrfToken;
-    const certUpload = await maker.post('/api/v1/official-documents', {
-      headers: { 'X-CSRF-Token': certCsrf },
-      multipart: {
-        metadata: JSON.stringify({
-          registrationId,
-          requestId,
-          policyId: policies.certificate,
-          templateId: certTemplate.id,
-          documentType: 'TRANSCRIPT',
-          certificateNumber: certNumber,
-          issueDate: '2026-11-01',
-          authorityReference: 'Synthetic E2E certificate authority',
-        }),
-        file: { name: 'synthetic.pdf', mimeType: 'application/pdf', buffer: pdf },
-      },
-    });
-    expect(certUpload.status(), await certUpload.text()).toBe(201);
-    const cert = (await certUpload.json()) as { id: string };
-    await post(checker, `official-documents/${cert.id}/approve`);
-    await post(checker, `official-documents/${cert.id}/issue`);
-    await page.goto('/verify/certificate');
-    await page.getByLabel('Certificate number', { exact: true }).fill(certNumber);
-    await page.getByRole('button', { name: 'Verify record', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('ISSUED');
-    await capture(page, 'verification-certificate-issued-mobile');
     // Activation uses the existing per-registration identity flow and random password.
     const activation = await post(maker, 'student-accounts/activation-codes', {
       registrationIds: [registrationId],
@@ -330,6 +308,73 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
         })
       ).status(),
     ).toBe(200);
+    // The real application/review pipeline uses an explicitly approved synthetic university policy.
+    const applicationCsrf = (
+      (await (await page.request.get('/api/v1/student-auth/csrf')).json()) as { csrfToken: string }
+    ).csrfToken;
+    const application = await page.request.post('/api/v1/student/certificate-requests', {
+      headers: { 'X-CSRF-Token': applicationCsrf },
+      data: {
+        certificateType: 'TRANSCRIPT',
+        purpose: 'Synthetic application',
+        submissionKey: crypto.randomUUID(),
+      },
+    });
+    expect(application.status(), await application.text()).toBe(201);
+    const requestId = ((await application.json()) as { id: string }).id;
+    await post(maker, `certificate-requests/${requestId}/record-review`, {
+      version: 1,
+      privateNote: 'Synthetic university staff review',
+    });
+    await post(maker, `certificate-requests/${requestId}/complete-review`, { version: 2 });
+    const certTemplate = await post(maker, 'official-documents/templates', {
+      policyId: policies.certificate,
+      programId: course.id,
+      documentType: 'TRANSCRIPT',
+      name: `Synthetic E2E Transcript ${Date.now()}`,
+    });
+    await post(checker, `official-documents/templates/${certTemplate.id}/approve`);
+    const certNumber = `CERT-${Date.now()}`.padEnd(64, '1');
+    await makerPage.goto(`/admin/official-records?requestId=${requestId}`);
+    await makerPage
+      .getByRole('button', { name: 'Find registration for this reviewed application', exact: true })
+      .click();
+    await makerPage.getByRole('button', { name: 'Use registration', exact: true }).click();
+    await makerPage
+      .getByLabel('Official document type', { exact: true })
+      .selectOption('TRANSCRIPT');
+    await makerPage
+      .getByLabel('Reviewed certificate application', { exact: true })
+      .selectOption(requestId);
+    await makerPage
+      .getByLabel('Active official template', { exact: true })
+      .selectOption(certTemplate.id);
+    await makerPage.getByLabel('Official document number', { exact: true }).fill(certNumber);
+    await makerPage.getByLabel('Approved issue date', { exact: true }).fill('2026-11-01');
+    await makerPage
+      .getByLabel('Issuance authority reference', { exact: true })
+      .fill('Synthetic E2E certificate authority');
+    await makerPage
+      .getByLabel('University-approved PDF', { exact: true })
+      .setInputFiles({ name: 'synthetic.pdf', mimeType: 'application/pdf', buffer: pdf });
+    const certUploading = makerPage.waitForResponse(
+      (r) => r.url().endsWith('/official-documents') && r.request().method() === 'POST',
+    );
+    await makerPage
+      .getByRole('button', { name: 'Prepare for independent approval', exact: true })
+      .click();
+    const certUpload = await certUploading;
+    expect(certUpload.status(), await certUpload.text()).toBe(201);
+    const cert = (await certUpload.json()) as { id: string };
+    await makerBrowser.close();
+    await checkerBrowser.close();
+    await post(checker, `official-documents/${cert.id}/approve`);
+    await post(checker, `official-documents/${cert.id}/issue`);
+    await page.goto('/verify/certificate');
+    await page.getByLabel('Certificate number', { exact: true }).fill(certNumber);
+    await page.getByRole('button', { name: 'Verify record', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('ISSUED');
+    await capture(page, 'verification-certificate-issued-mobile');
     await page.goto('/verify/registration');
     await page.getByLabel('Registration number', { exact: true }).fill(number);
     await page.getByRole('button', { name: 'Verify record', exact: true }).click();

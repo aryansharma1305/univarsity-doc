@@ -1,3 +1,5 @@
+import { PrismaService } from '../../src/database/prisma.service.js';
+import { VerificationPoliciesService } from '../../src/public-verification/verification-policies.service.js';
 import { randomUUID } from 'node:crypto';
 import { beforeAll, beforeEach, afterAll, afterEach, expect, it, vi } from 'vitest';
 import type { INestApplication } from '@nestjs/common';
@@ -118,7 +120,11 @@ it('exposes exactly five unavailable services and blocks unconfigured or incompl
   expect((await post(one, 'certificate-requests', body())).status).toBe(409);
 });
 it('never accepts a synthetic eligibility evaluator outside an isolated test configuration', () => {
-  const policy = new CertificatePoliciesService(realConfig({ NODE_ENV: 'production' }));
+  const policy = new CertificatePoliciesService(
+    realConfig({ NODE_ENV: 'production' }),
+    app.get(PrismaService),
+    app.get(VerificationPoliciesService),
+  );
   vi.spyOn(policy, 'definitions').mockReturnValue([fixture]);
   expect(policy.get('TRANSCRIPT')).toBeNull();
 });

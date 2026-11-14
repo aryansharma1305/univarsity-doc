@@ -132,6 +132,8 @@ export class ResultReviewService {
       const draft = this.drafts.present({ ...i, result: r });
       return {
         id: i.id,
+        grade: i.grade,
+        status: i.status,
         programSubjectId: i.programSubjectId,
         subjectCode: i.programSubject.subject.code,
         subjectName: i.programSubject.subject.name,
@@ -236,8 +238,24 @@ export class ResultReviewService {
           });
       }
     }
+    const attestation = r.calculationSnapshot as { usage?: string; policyId?: string } | null;
+    const publicationPolicyId =
+      attestation?.usage === 'OFFICIAL_ATTESTED' && typeof attestation.policyId === 'string'
+        ? attestation.policyId
+        : null;
+    const authority = await this.policies.current(
+      'result',
+      r.studentRegistration.programId,
+      tx,
+      publicationPolicyId ?? undefined,
+    );
     return {
       id: r.id,
+      outcome: r.outcome,
+      sgpa: r.sgpa?.toString() ?? null,
+      totalMarks: r.totalMarks?.toString() ?? null,
+      maxMarks: r.maxMarks?.toString() ?? null,
+      publicationPolicyId,
       version: r.version,
       status: r.publicationStatus,
       registrationId: r.studentRegistrationId,
@@ -254,7 +272,17 @@ export class ResultReviewService {
       revisionNumber: r.revisionNumber,
       subjects,
       issues,
-      policy: this.policy(),
+      policy: authority
+        ? {
+            ...this.policy(),
+            approvalEnabled: true,
+            approvalBlockers: [],
+            publicationEnabled: !!publicationPolicyId,
+            publicationBlockers: publicationPolicyId
+              ? []
+              : ['Record the university-supplied decision before publication.'],
+          }
+        : this.policy(),
       history: r.reviewEvents.map((e) => ({
         id: e.id,
         actorUserId: e.actorUserId,
@@ -356,14 +384,6 @@ export class ResultReviewService {
     );
   }
   async transition(id: string, action: Action, body: ReviewAction, actor: string) {
-    if (action !== 'SUBMIT' && !this.policy().approvalEnabled) {
-      const source = await this.prisma.client.result.findUnique({
-        where: { id },
-        include: { studentRegistration: true },
-      });
-      if (!source || !(await this.policies.current('result', source.studentRegistration.programId)))
-        throw conflict(this.policy().approvalBlockers.join(' '));
-    }
     const requestDigest = hash({ id, action, body, actor });
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -383,6 +403,12 @@ export class ResultReviewService {
             }
             const r = await tx.result.findUnique({ where: { id }, include });
             if (!r) throw Errors.notFound();
+            if (
+              action !== 'SUBMIT' &&
+              !this.policy().approvalEnabled &&
+              !(await this.policies.current('result', r.studentRegistration.programId, tx))
+            )
+              throw conflict(this.policy().approvalBlockers.join(' '));
             if (r.version !== body.expectedVersion || r.publishedAt)
               throw conflict('Result changed or is locked. Reload before acting.');
             const expected =

@@ -1,4 +1,7 @@
-import { verificationPolicyRecordSchema } from '@docversity/validation';
+import {
+  certificateApplicationPolicySchema,
+  type CertificateApplicationPolicy,
+} from '@docversity/validation';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@docversity/database';
 import { AUDIT_ACTIONS } from '@docversity/types';
@@ -41,18 +44,49 @@ export class VerificationPoliciesService {
       await tx.$queryRaw`SELECT id FROM verification_policies WHERE service=${service} AND program_id=${programId}::uuid AND status='APPROVED' FOR SHARE`;
     const p = await tx.verificationPolicy.findFirst({
       where: { ...(id ? { id } : {}), service, programId, status: 'APPROVED' },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
     if (!p?.approvedById || p.approvedById === p.proposedById || !p.approvedAt) return null;
     const definition = this.allowed(p.definition);
     return definition ? { ...p, definition } : null;
   }
-  async list() {
-    const rows = await this.prisma.client.verificationPolicy.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 100,
+  async application(
+    type: string,
+    programId: string,
+    tx: Prisma.TransactionClient = this.prisma.client,
+    id?: string,
+  ): Promise<CertificateApplicationPolicy | null> {
+    const candidates = await tx.verificationPolicy.findMany({
+      where: {
+        ...(id ? { id } : {}),
+        service: 'certificate',
+        programId,
+        status: 'APPROVED',
+        definition: { path: ['application', 'certificateType'], equals: type },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    return rows.map((p) => verificationPolicyRecordSchema.parse(p));
+    for (const candidate of candidates) {
+      const p = await this.current('certificate', programId, tx, candidate.id),
+        a = p?.definition.application;
+      if (p && a?.certificateType === type)
+        return certificateApplicationPolicySchema.parse({
+          id: p.id,
+          version: 1,
+          certificateType: type,
+          authorityReference: p.definition.authorizationReference,
+          approved: true,
+          submissionEnabled: true,
+          eligibilityRule: 'ACTIVE_PROGRAM_REGISTRATION',
+          programIds: [programId],
+          eligibilityReference: a.eligibilityReference,
+          fields: a.fields,
+          evidence: a.evidence,
+          fee: a.fee,
+          actions: a.actions,
+        });
+    }
+    return null;
   }
   async propose(body: z.infer<typeof proposeVerificationPolicySchema>, actor: string) {
     // A draft is evidence for review, never authority to disclose a record.

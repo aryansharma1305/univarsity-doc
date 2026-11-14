@@ -59,24 +59,32 @@ export class CertificateRequestsService {
         { headers: { 'Retry-After': String(r.retryAfterSeconds) } },
       );
   }
-  catalogue() {
+  async catalogue(studentId: string) {
     return certificateServiceListSchema.parse({
-      data: types.map(([certificateType, title, description]) => {
-        const p = this.policies.get(certificateType);
-        return {
-          certificateType,
-          title,
-          description,
-          available: !!p,
-          reason: p
-            ? 'Applications are available under the configured policy.'
-            : 'Not available for applications yet. Approved eligibility, evidence and fee policies are pending.',
-          purposeRequired: p?.fields.purposeRequired ?? false,
-          remarksAllowed: p?.fields.remarksAllowed ?? false,
-          policyId: p?.id ?? null,
-          policyVersion: p?.version ?? null,
-        };
-      }),
+      data: await Promise.all(
+        types.map(async ([certificateType, title, description]) => {
+          const p = await this.policies.authorized(
+            certificateType,
+            studentId,
+            undefined,
+            undefined,
+            true,
+          );
+          return {
+            certificateType,
+            title,
+            description,
+            available: !!p,
+            reason: p
+              ? 'Applications are available under the configured policy.'
+              : 'Not available for applications yet. Approved eligibility, evidence and fee policies are pending.',
+            purposeRequired: p?.fields.purposeRequired ?? false,
+            remarksAllowed: p?.fields.remarksAllowed ?? false,
+            policyId: p?.id ?? null,
+            policyVersion: p?.version ?? null,
+          };
+        }),
+      ),
       corrections: {
         available: false,
         reason:
@@ -84,8 +92,8 @@ export class CertificateRequestsService {
       },
     });
   }
-  private output(r: Row, staff: boolean) {
-    const p = this.policies.get(r.certificateType);
+  private async output(r: Row, staff: boolean) {
+    const p = await this.policies.authorized(r.certificateType, r.studentId, undefined, r.policyId);
     const policyCurrent = p?.id === r.policyId && p.version === r.policyVersion;
     const canRespond =
       policyCurrent && p.actions.includes('RESPOND') && r.status === 'INFORMATION_REQUESTED';
@@ -97,7 +105,10 @@ export class CertificateRequestsService {
         ? 'Provide the information requested below.'
         : 'Information requested. Follow-up policy is currently unavailable.',
       INFORMATION_PROVIDED: 'Your response is waiting for staff review.',
-      REVIEW_COMPLETED: 'Staff review completed. Rector approval and issuance are not available.',
+      REVIEW_COMPLETED:
+        p?.eligibilityRule === 'ACTIVE_PROGRAM_REGISTRATION'
+          ? 'Staff review completed. Await separate document approval and issuance.'
+          : 'Staff review completed. Rector approval and issuance are not available.',
       CANCELLED: 'This application has been cancelled.',
       CLOSED: 'This application is closed.',
     };
@@ -121,7 +132,7 @@ export class CertificateRequestsService {
       canReview: staff && active.includes(r.status),
       canCompleteReview:
         staff &&
-        this.policies.canComplete(r.certificateType) &&
+        (await this.policies.authorizedReview(r)) &&
         ['UNDER_REVIEW', 'INFORMATION_PROVIDED'].includes(r.status),
       ...(staff && r.student
         ? {
@@ -197,7 +208,7 @@ export class CertificateRequestsService {
       ].map((s) => [s, groups.find((g) => g.status === s)?._count ?? 0]),
     );
     return certificateRequestListSchema.parse({
-      data: rows.map((r) => this.output(r, !studentId)),
+      data: await Promise.all(rows.map((r) => this.output(r, !studentId))),
       meta: {
         page: q.page,
         pageSize: q.pageSize,
@@ -217,7 +228,13 @@ export class CertificateRequestsService {
   }
   async submit(studentId: string, body: SubmitCertificateRequest) {
     await this.throttle(studentId);
-    const policy = this.policies.get(body.certificateType);
+    const policy = await this.policies.authorized(
+      body.certificateType,
+      studentId,
+      undefined,
+      undefined,
+      true,
+    );
     if (!policy)
       throw conflict('Certificate applications are not available under an approved policy.');
     if (policy.fields.purposeRequired && !body.purpose.trim())
@@ -243,6 +260,15 @@ export class CertificateRequestsService {
     if (old) return old;
     try {
       const id = await this.prisma.client.$transaction(async (tx) => {
+        const current = await this.policies.authorized(
+          body.certificateType,
+          studentId,
+          tx,
+          policy.id,
+          true,
+        );
+        if (current?.id !== policy.id || current.version !== policy.version)
+          throw conflict('The application authority changed. Refresh before trying again.');
         const r = await tx.certificateRequest.create({
           data: {
             studentId,
@@ -300,6 +326,7 @@ export class CertificateRequestsService {
     const student = 'studentId' in actor;
     await this.throttle(student ? actor.studentId : actor.userId);
     await this.prisma.client.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM certificate_requests WHERE id=${id}::uuid FOR UPDATE`;
       const r = await tx.certificateRequest.findFirst({
         where: { id, ...(student ? { studentId: actor.studentId } : {}) },
       });
@@ -307,7 +334,7 @@ export class CertificateRequestsService {
       if (r.version !== body.version)
         throw conflict('This application changed. Refresh before trying again.');
       if (student) {
-        const p = this.policies.get(r.certificateType);
+        const p = await this.policies.authorized(r.certificateType, r.studentId, tx, r.policyId);
         if (
           p?.id !== r.policyId ||
           p.version !== r.policyVersion ||
@@ -341,7 +368,7 @@ export class CertificateRequestsService {
       else if (
         action === 'COMPLETE_REVIEW' &&
         !student &&
-        this.policies.canComplete(r.certificateType) &&
+        (await this.policies.authorizedReview(r, tx)) &&
         ['UNDER_REVIEW', 'INFORMATION_PROVIDED'].includes(r.status)
       )
         target = 'REVIEW_COMPLETED';

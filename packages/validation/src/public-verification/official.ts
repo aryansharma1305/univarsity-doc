@@ -1,3 +1,5 @@
+import { listQuerySchema, optionalFilter, paginatedSchema } from '../academic/common.js';
+import { certificateApplicationPolicySchema } from '../certificate-requests/schemas.js';
 import { z } from 'zod';
 import { publicVerificationServiceSchema } from './schemas.js';
 const text = (n: number) =>
@@ -7,9 +9,24 @@ const text = (n: number) =>
     .min(1)
     .max(n)
     .regex(/^[^\p{Cc}<>]+$/u);
+export const approvedCertificateApplicationSchema = certificateApplicationPolicySchema
+  .pick({
+    certificateType: true,
+    eligibilityReference: true,
+    fields: true,
+    evidence: true,
+    fee: true,
+    actions: true,
+  })
+  .extend({
+    certificateType: z.enum(['PROVISIONAL', 'TRANSCRIPT', 'CHARACTER']),
+    reviewAuthorityReference: text(200),
+  })
+  .strict();
 export const verificationPolicyDefinitionSchema = z
   .object({
     usage: z.enum(['SYNTHETIC_ONLY', 'OFFICIAL']),
+    application: approvedCertificateApplicationSchema.optional(),
     institutionName: text(200),
     authorizationReference: text(200),
     discloseProgram: z.boolean(),
@@ -148,7 +165,7 @@ export type OfficialVerificationResponse = z.infer<typeof officialVerificationRe
 export type PrepareOfficialDocument = z.infer<typeof prepareOfficialDocumentSchema>;
 const markValue = z
   .string()
-  .regex(/^\d{1,5}(\.\d{1,3})?$/)
+  .regex(/^\d{1,5}(\.\d{1,2})?$/)
   .nullable();
 export const attestOfficialResultSchema = z
   .object({
@@ -180,26 +197,6 @@ export const attestOfficialResultSchema = z
       .max(200),
   })
   .strict();
-export const verificationPolicyRecordSchema = z.object({
-  id: z.uuid(),
-  service: z.string(),
-  programId: z.uuid(),
-  definition: verificationPolicyDefinitionSchema,
-  status: z.string(),
-  proposedById: z.uuid(),
-  approvedById: z.uuid().nullable(),
-  approvedAt: z.date().nullable(),
-  createdAt: z.date(),
-});
-export const officialDocumentListSchema = z.array(
-  z.object({
-    id: z.uuid(),
-    status: z.string(),
-    certificateNumber: z.string().nullable(),
-    documentType: z.string(),
-    studentRegistrationId: z.uuid(),
-  }),
-);
 export const prepareOfficialTemplateSchema = z
   .object({
     policyId: z.uuid(),
@@ -214,5 +211,103 @@ export const studentIssuedDocumentsSchema = z.array(
     documentType: z.string(),
     certificateNumber: z.string(),
     issueDate: z.string(),
+  }),
+);
+
+export const emptyOfficialCommandSchema = z.object({}).strict().default({});
+export const officialActionReceiptSchema = z
+  .object({
+    id: z.uuid(),
+    status: z.string().optional(),
+    version: z.number().int().positive().optional(),
+  })
+  .strict();
+export const verificationPolicyResponseSchema = z
+  .object({
+    id: z.uuid(),
+    service: publicVerificationServiceSchema,
+    programId: z.uuid(),
+    definition: verificationPolicyDefinitionSchema,
+    status: z.enum(['DRAFT', 'APPROVED', 'WITHDRAWN']),
+    proposedById: z.uuid(),
+    approvedById: z.uuid().nullable(),
+    approvedAt: z.iso.datetime().nullable(),
+    createdAt: z.iso.datetime(),
+  })
+  .strict();
+export const officialDocumentUploadSchema = z
+  .object({
+    metadata: z.string().max(10000),
+    file: z
+      .file()
+      .mime('application/pdf')
+      .max(10 * 1024 * 1024),
+  })
+  .strict();
+export const officialPolicyQuerySchema = listQuerySchema(['createdAt'], 'createdAt', {
+  programId: optionalFilter(z.uuid()),
+  service: optionalFilter(publicVerificationServiceSchema),
+  status: optionalFilter(z.enum(['DRAFT', 'APPROVED', 'WITHDRAWN'])),
+});
+export const officialDocumentQuerySchema = listQuerySchema(['createdAt'], 'createdAt', {
+  programId: optionalFilter(z.uuid()),
+  documentType: optionalFilter(prepareOfficialDocumentSchema.shape.documentType),
+  status: optionalFilter(
+    z.enum([
+      'DRAFT',
+      'PENDING_APPROVAL',
+      'APPROVED',
+      'ISSUED',
+      'REVOKED',
+      'CANCELLED',
+      'SUPERSEDED',
+    ]),
+  ),
+});
+export const officialTemplateQuerySchema = listQuerySchema(['createdAt'], 'createdAt', {
+  programId: optionalFilter(z.uuid()),
+  documentType: optionalFilter(prepareOfficialDocumentSchema.shape.documentType),
+  status: optionalFilter(z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED'])),
+});
+export const verificationAuditQuerySchema = listQuerySchema(['createdAt'], 'createdAt', {
+  search: z.never().optional(),
+  entityId: optionalFilter(z.uuid()),
+});
+export const officialPolicyListSchema = paginatedSchema(
+  verificationPolicyResponseSchema.extend({ approvalAvailable: z.boolean() }),
+);
+export const officialStaffDocumentSchema = z.object({
+  id: z.uuid(),
+  certificateNumber: z.string().nullable(),
+  documentType: z.string(),
+  status: z.string(),
+  registrationNumber: z.string(),
+  program: z.string(),
+  institution: z.string(),
+  authorityReference: z.string(),
+  issueDate: z.string().nullable(),
+  generatedByUserId: z.uuid().nullable(),
+});
+export const officialStaffDocumentListSchema = paginatedSchema(officialStaffDocumentSchema);
+export const officialTemplateListSchema = paginatedSchema(
+  z.object({
+    id: z.uuid(),
+    name: z.string(),
+    documentType: z.string(),
+    version: z.number(),
+    status: z.string(),
+    programIds: z.array(z.uuid()),
+    generatedByUserId: z.uuid().nullable(),
+  }),
+);
+export const verificationAuditListSchema = paginatedSchema(
+  z.object({
+    id: z.uuid(),
+    action: z.string(),
+    entityType: z.string(),
+    entityId: z.uuid().nullable(),
+    actor: z.string().nullable(),
+    createdAt: z.iso.datetime(),
+    metadata: z.record(z.string(), z.unknown()).nullable(),
   }),
 );

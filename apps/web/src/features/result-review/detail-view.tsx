@@ -130,6 +130,12 @@ export function ResultReviewDetailView({ id }: { id: string }) {
                   </div>
                 ))}
               </dl>
+              {(Boolean(s.grade) || Boolean(s.status)) && (
+                <p className="mt-4 text-sm">
+                  Recorded grade: {s.grade ?? 'Not supplied'} · Recorded status:{' '}
+                  {s.status ?? 'Not supplied'}
+                </p>
+              )}
             </article>
           ))}
         </div>
@@ -146,8 +152,9 @@ export function ResultReviewDetailView({ id }: { id: string }) {
           </ul>
         ) : (
           <p className="mt-2 text-sm">
-            Marks and eligible subject assignments are complete for this examination attempt. No
-            grading outcome has been calculated.
+            {r.outcome
+              ? 'University-supplied decisions have been recorded; no grading outcome was inferred.'
+              : 'Marks and eligible subject assignments are complete for this examination attempt. No grading outcome has been calculated.'}
           </p>
         )}
       </section>
@@ -255,17 +262,37 @@ export function ResultReviewDetailView({ id }: { id: string }) {
         className="mt-6 rounded-lg border bg-muted/30 p-5"
       >
         <h2 id="publication-heading" className="font-semibold">
-          Publication configuration required
+          {r.policy.approvalEnabled
+            ? 'Official decision and release'
+            : 'Publication configuration required'}
         </h2>
-        <p className="mt-2 text-sm">
-          Publication is disabled. These marks remain unavailable to students, including after
-          approval.
-        </p>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm">
-          {r.policy.publicationBlockers.map((b) => (
-            <li key={b}>{b}</li>
-          ))}
-        </ul>
+        {r.policy.approvalEnabled ? (
+          <>
+            <p className="mt-2 text-sm">
+              Recorded outcome: {r.outcome ?? 'Not supplied'} · GPA: {r.sgpa ?? 'Not supplied'}.
+              Publication requires an independently approved version.
+            </p>
+            <Button asChild variant="outline" className="mt-4">
+              <Link href={`/admin/official-records?resultId=${r.id}`}>
+                {r.status === 'DRAFT'
+                  ? 'Record university decision'
+                  : 'Manage approved publication'}
+              </Link>
+            </Button>
+          </>
+        ) : (
+          <>
+            <p className="mt-2 text-sm">
+              Publication is disabled. These marks remain unavailable to students, including after
+              approval.
+            </p>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm">
+              {r.policy.publicationBlockers.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
       {selectedVersion && (
         <section aria-label="Saved marks version" className="mt-6 rounded-lg border bg-card p-5">

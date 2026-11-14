@@ -1,10 +1,12 @@
+import type { Prisma, DatabaseModels } from '@docversity/database';
+import { canonicalJson, certificateApplicationPolicySchema } from '@docversity/validation';
 import {
   prepareOfficialTemplateSchema,
   studentIssuedDocumentsSchema,
 } from '@docversity/validation';
-import { officialDocumentListSchema, officialDocumentReceiptSchema } from '@docversity/validation';
+import { officialDocumentReceiptSchema } from '@docversity/validation';
 import type { z } from 'zod';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
@@ -35,6 +37,30 @@ export class OfficialDocumentsService {
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(API_CONFIG) private readonly config: ApiConfig,
   ) {}
+  private async requestAuthority(
+    tx: Prisma.TransactionClient,
+    request: Pick<
+      DatabaseModels.CertificateRequestModel,
+      'certificateType' | 'policyId' | 'policyVersion' | 'policySnapshot'
+    >,
+    programId: string,
+    policyId: string,
+  ) {
+    if (request.policyId !== policyId) throw conflict();
+    const source = certificateApplicationPolicySchema.safeParse(request.policySnapshot);
+    const current = await this.policies.application(
+      request.certificateType,
+      programId,
+      tx,
+      policyId,
+    );
+    if (
+      !source.success ||
+      request.policyVersion !== current?.version ||
+      canonicalJson(source.data) !== canonicalJson(current)
+    )
+      throw conflict();
+  }
   async prepareTemplate(
     body: z.infer<typeof prepareOfficialTemplateSchema>,
     actor: string,
@@ -163,20 +189,6 @@ export class OfficialDocumentsService {
     }
     return studentIssuedDocumentsSchema.parse(visible);
   }
-  async list(): Promise<z.infer<typeof officialDocumentListSchema>> {
-    return this.prisma.client.certificate.findMany({
-      where: { sourceSnapshot: { path: ['usage'], equals: 'OFFICIAL' } },
-      select: {
-        id: true,
-        status: true,
-        certificateNumber: true,
-        documentType: true,
-        studentRegistrationId: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-  }
   async prepare(
     body: PrepareOfficialDocument,
     bytes: Buffer,
@@ -185,100 +197,107 @@ export class OfficialDocumentsService {
     if (bytes.length > 10 * 1024 * 1024 || sniffContentType(bytes) !== 'application/pdf')
       throw Errors.validation([{ path: 'file', message: 'Upload a static PDF up to 10 MB.' }]);
     assertStaticPdf(bytes);
-    const id = randomUUID(),
-      key = `official-documents/${id}.pdf`,
-      pdfHash = sha(bytes);
-    // Storage write precedes SQL; failed authority leaves an unreferenced private object, never a credential.
-    await this.storage.putObject(key, bytes, { contentType: 'application/pdf' });
+    const pdfHash = sha(bytes);
+    let id: string | undefined, key: string | undefined;
     try {
-      return await this.prisma.client.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM student_registrations WHERE id=${body.registrationId}::uuid FOR SHARE`;
-        const r = await tx.studentRegistration.findUnique({
-          where: { id: body.registrationId },
-          include: { program: true },
-        });
-        if (!r || !['ACTIVE', 'COMPLETED'].includes(r.status)) throw Errors.notFound();
-        const service =
-          body.documentType === 'ADMISSION_LETTER' ? 'admission-letter' : 'certificate';
-        const policy = await this.policies.current(service, r.programId, tx, body.policyId);
-        if (!policy) throw Errors.forbidden();
-        const template = await tx.certificateTemplate.findFirst({
-          where: { id: body.templateId, documentType: body.documentType, status: 'ACTIVE' },
-        });
-        const mapping = await tx.programDocumentTemplate.findFirst({
-          where: {
-            programId: r.programId,
-            certificateTemplateId: body.templateId,
-            documentType: body.documentType,
-          },
-        });
-        if (!template || !mapping) throw conflict();
-        let requestVersion: number | null = null;
-        if (body.documentType !== 'ADMISSION_LETTER') {
-          if (!body.requestId) throw conflict();
-          await tx.$queryRaw`SELECT id FROM certificate_requests WHERE id=${body.requestId}::uuid FOR UPDATE`;
-          const request = await tx.certificateRequest.findUnique({ where: { id: body.requestId } });
-          if (
-            request?.studentId !== r.studentId ||
-            request.certificateType !== body.documentType ||
-            request.status !== 'REVIEW_COMPLETED'
-          )
-            throw conflict();
-          requestVersion = request.version;
-          if (
-            await tx.certificate.findFirst({
-              where: {
-                sourceSnapshot: { path: ['requestId'], equals: body.requestId },
-                status: { in: ['PENDING_APPROVAL', 'APPROVED', 'ISSUED'] },
-              },
-            })
-          )
-            throw conflict();
-        } else if (body.requestId) throw conflict();
-        const snapshot = officialDocumentSnapshotSchema.parse({
-          usage: 'OFFICIAL',
-          policyId: policy.id,
-          templateId: template.id,
-          registrationId: r.id,
-          institutionName: policy.definition.institutionName,
-          programName: r.program.name,
-          authorityReference: body.authorityReference,
-          requestId: body.requestId ?? null,
-          requestVersion,
-        });
-        const c = await tx.certificate.create({
-          data: {
-            id,
-            studentRegistrationId: r.id,
-            programId: r.programId,
-            documentType: body.documentType,
-            certificateTemplateId: template.id,
-            certificateNumber: body.certificateNumber,
-            issueDate: new Date(body.issueDate),
-            status: 'PENDING_APPROVAL',
-            sourceSnapshot: snapshot,
-            pdfStorageKey: key,
-            pdfHash,
-            generatedByUserId: actor,
-          },
-        });
-        await this.audit.writeAuditEvent(
-          {
-            actorUserId: actor,
-            action: AUDIT_ACTIONS.officialDocumentChanged,
-            entityType: 'Certificate',
-            entityId: id,
-            metadata: { action: 'PREPARE', policyId: policy.id },
-          },
-          tx,
-        );
-        return { id: c.id, status: c.status, certificateNumber: c.certificateNumber };
-      });
+      return await this.prisma.client.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM student_registrations WHERE id=${body.registrationId}::uuid FOR SHARE`;
+          const r = await tx.studentRegistration.findUnique({
+            where: { id: body.registrationId },
+            include: { program: true },
+          });
+          if (!r || !['ACTIVE', 'COMPLETED'].includes(r.status)) throw Errors.notFound();
+          const service =
+            body.documentType === 'ADMISSION_LETTER' ? 'admission-letter' : 'certificate';
+          const policy = await this.policies.current(service, r.programId, tx, body.policyId);
+          if (!policy) throw Errors.forbidden();
+          const template = await tx.certificateTemplate.findFirst({
+            where: { id: body.templateId, documentType: body.documentType, status: 'ACTIVE' },
+          });
+          const mapping = await tx.programDocumentTemplate.findFirst({
+            where: {
+              programId: r.programId,
+              certificateTemplateId: body.templateId,
+              documentType: body.documentType,
+            },
+          });
+          if (!template || !mapping) throw conflict();
+          let requestVersion: number | null = null;
+          if (body.documentType !== 'ADMISSION_LETTER') {
+            if (!body.requestId) throw conflict();
+            await tx.$queryRaw`SELECT id FROM certificate_requests WHERE id=${body.requestId}::uuid FOR UPDATE`;
+            const request = await tx.certificateRequest.findUnique({
+              where: { id: body.requestId },
+            });
+            if (
+              request?.studentId !== r.studentId ||
+              request.certificateType !== body.documentType ||
+              request.status !== 'REVIEW_COMPLETED'
+            )
+              throw conflict();
+            await this.requestAuthority(tx, request, r.programId, policy.id);
+            requestVersion = request.version;
+            if (
+              await tx.certificate.findFirst({
+                where: {
+                  sourceSnapshot: { path: ['requestId'], equals: body.requestId },
+                  status: { in: ['PENDING_APPROVAL', 'APPROVED', 'ISSUED'] },
+                },
+              })
+            )
+              throw conflict();
+          } else if (body.requestId) throw conflict();
+          const snapshot = officialDocumentSnapshotSchema.parse({
+            usage: 'OFFICIAL',
+            policyId: policy.id,
+            templateId: template.id,
+            registrationId: r.id,
+            institutionName: policy.definition.institutionName,
+            programName: r.program.name,
+            authorityReference: body.authorityReference,
+            requestId: body.requestId ?? null,
+            requestVersion,
+          });
+          const c = await tx.certificate.create({
+            data: {
+              studentRegistrationId: r.id,
+              programId: r.programId,
+              documentType: body.documentType,
+              certificateTemplateId: template.id,
+              certificateNumber: body.certificateNumber,
+              issueDate: new Date(body.issueDate),
+              status: 'PENDING_APPROVAL',
+              sourceSnapshot: snapshot,
+              pdfHash,
+              generatedByUserId: actor,
+            },
+          });
+          id = c.id;
+          key = `official-documents/${c.id}.pdf`;
+          await this.storage.putObject(key, bytes, { contentType: 'application/pdf' });
+          await tx.certificate.update({ where: { id: c.id }, data: { pdfStorageKey: key } });
+          await this.audit.writeAuditEvent(
+            {
+              actorUserId: actor,
+              action: AUDIT_ACTIONS.officialDocumentChanged,
+              entityType: 'Certificate',
+              entityId: c.id,
+              metadata: { action: 'PREPARE', policyId: policy.id },
+            },
+            tx,
+          );
+          return { id: c.id, status: c.status, certificateNumber: c.certificateNumber };
+        },
+        { timeout: 20000 },
+      );
     } catch (error) {
       // An ambiguous SQL commit must never delete a referenced document.
       try {
-        if (!(await this.prisma.client.certificate.findUnique({ where: { id } })))
-          await this.storage.deleteObject(key);
+        if (id && key) {
+          const current = await this.prisma.client.certificate.findUnique({ where: { id } });
+          if (current?.pdfStorageKey !== key) await this.storage.deleteObject(key);
+        }
       } catch {
         /* Private orphan cleanup can be retried safely. */
       }
@@ -340,6 +359,7 @@ export class OfficialDocumentsService {
           )
             throw Errors.forbidden();
           if (snapshot.data.requestId) {
+            await tx.$queryRaw`SELECT id FROM certificate_requests WHERE id=${snapshot.data.requestId}::uuid FOR SHARE`;
             const request = await tx.certificateRequest.findUnique({
               where: { id: snapshot.data.requestId },
             });
@@ -350,6 +370,7 @@ export class OfficialDocumentsService {
               request.certificateType !== c.documentType
             )
               throw conflict();
+            await this.requestAuthority(tx, request, c.programId, policy.id);
           }
           if (action === 'APPROVE' && c.status === 'PENDING_APPROVAL')
             await tx.certificate.update({
