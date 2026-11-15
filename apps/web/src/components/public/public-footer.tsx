@@ -1,7 +1,10 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
 import { Wordmark } from '@/components/brand/wordmark';
-import { PUBLIC_ACCESS, PUBLIC_SECTIONS } from './nav-items';
+import { PUBLIC_ACCESS, PUBLIC_SECTIONS, PUBLIC_HEADER_NAV } from './nav-items';
 
 const COLUMNS = [
   { title: 'Explore', links: PUBLIC_SECTIONS },
@@ -31,6 +34,9 @@ const LEGAL = [
 ] as const;
 
 export function PublicFooter() {
+  const pathname = usePathname();
+  if (PUBLIC_HEADER_NAV.some((item) => item.href !== '/student/login' && item.href === pathname))
+    return null;
   return (
     <footer className="mt-auto bg-navy-950 text-white">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 lg:grid-cols-[1.2fr_2fr] lg:px-8">

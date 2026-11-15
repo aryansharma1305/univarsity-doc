@@ -34,7 +34,7 @@ export function AuthShell({
   title: string;
   description: string;
   unavailable: boolean;
-  /** Large line in the brand panel (plain text, never a heading). */
+  /** Main statement in the brand panel. */
   statement: ReactNode;
   highlights: readonly AuthHighlight[];
   children: ReactNode;
@@ -72,35 +72,51 @@ export function AuthShell({
             src={crest}
             alt=""
             priority
-            sizes="(max-width: 1023px) 96px, 220px"
+            sizes={
+              audience === 'student'
+                ? '(max-width: 1023px) 170px, 280px'
+                : '(max-width: 1023px) 96px, 220px'
+            }
             className={styles.crest}
           />
         </AuthAmbient>
 
-        <div className={styles.brandTop}>
-          <Link href="/" className={styles.homeLink} aria-label="Docversity home">
-            <Wordmark inverted />
-          </Link>
-        </div>
+        {audience !== 'student' && (
+          <div className={styles.brandTop}>
+            <Link href="/" className={styles.homeLink} aria-label="Docversity home">
+              <Wordmark inverted />
+            </Link>
+          </div>
+        )}
 
         <div className={styles.story}>
-          <p className={styles.statement}>{statement}</p>
-          <ul className={styles.highlights}>
-            {highlights.map((item) => (
-              <li key={item.title} className={styles.highlight} data-step={item.step}>
-                <span className={styles.highlightIcon} aria-hidden="true">
-                  <item.icon />
-                </span>
-                <span>
-                  <span className={styles.highlightTitle}>{item.title}</span>
-                  <span className={styles.highlightBody}>{item.body}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          {audience === 'student' ? (
+            <h2 className={styles.statement}>{statement}</h2>
+          ) : (
+            <p className={styles.statement}>{statement}</p>
+          )}
+          {highlights.length > 0 && (
+            <ul className={styles.highlights}>
+              {highlights.map((item) => (
+                <li key={item.title} className={styles.highlight} data-step={item.step}>
+                  <span className={styles.highlightIcon} aria-hidden="true">
+                    <item.icon />
+                  </span>
+                  <span>
+                    <span className={styles.highlightTitle}>{item.title}</span>
+                    <span className={styles.highlightBody}>{item.body}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
-        <p className={styles.brandFoot}>Docversity · Academic Verification &amp; Records Portal</p>
+        {audience !== 'student' && (
+          <p className={styles.brandFoot}>
+            Docversity · Academic Verification &amp; Records Portal
+          </p>
+        )}
       </aside>
 
       <main id="main" className={styles.formSide}>

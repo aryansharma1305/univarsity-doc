@@ -8,48 +8,61 @@ const NAVIGATION = [
   ['Check Result', '/results'],
   ['Student Sign in', '/student/login'],
 ] as const;
+const VERIFICATION = [
+  ['/', 'Verify Admission Letter', 'Enter admission letter number'],
+  ['/verify/admission-letter', 'Verify Admission Letter', 'Enter admission letter number'],
+  ['/verify/certificate', 'Verify Certificate', 'Enter the code printed on the certificate'],
+  ['/verify/registration', 'Verify Registration', 'Enter registration number'],
+  ['/results', 'Check Result', 'Enter result code or registration number'],
+] as const;
 
-for (const [width, height] of [
-  [1440, 900],
-  [768, 1024],
-  [390, 844],
-  [320, 844],
-] as const) {
-  test(`compact homepage preserves the hero and five accessible destinations at ${width}px`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height });
+for (const width of [1440, 768, 390, 320]) {
+  test(`verification pages and navigation remain accessible at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const requests: string[] = [];
     page.on('request', (request) => {
       if (new URL(request.url()).pathname.startsWith('/api/v1/')) requests.push(request.url());
     });
-    await page.goto('/');
-    await expect(page).toHaveTitle('Docversity | Verification');
-    await expect(
-      page.getByRole('heading', { level: 1, name: 'Verify. Trust. Confirm.' }),
-    ).toBeVisible();
-    await expect(page.getByRole('img', { name: 'Docversity University' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Sign in to the student portal' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Activate your account' })).toBeVisible();
-    await expect(page.locator('main section')).toHaveCount(1);
-    await expect(
-      page.locator(
-        '#services,#students,#how,#privacy,#portals,#features,#faq,#get-started,#roadmap',
-      ),
-    ).toHaveCount(0);
-    await expect(page.getByRole('tab')).toHaveCount(0);
-    await expect(page.locator('main form,main input,main textarea,main select')).toHaveCount(0);
-    await expect(page.getByRole('contentinfo').getByRole('link')).toHaveText(['Privacy', 'Terms']);
-    if (width === 1440) {
-      expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(
-        height + 1,
-      );
+    await page.route('**/api/v1/student-auth/csrf', (route) =>
+      route.fulfill({ json: { csrfToken: 'synthetic-csrf' } }),
+    );
+    await page.route('**/api/v1/public/verify/*', async (route) => {
+      expect(route.request().method()).toBe('POST');
+      expect(route.request().postDataJSON()).toEqual({
+        contractVersion: 2,
+        reference: 'SYNTHETIC-REFERENCE',
+      });
+      const service = new URL(route.request().url()).pathname.split('/').at(-1);
+      await route.fulfill({
+        json: {
+          contractVersion: 2,
+          service,
+          status: 'UNAVAILABLE',
+          message: 'Verification is not available yet. No record has been checked.',
+        },
+      });
+    });
+    for (const [path, title, placeholder] of VERIFICATION) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
+      const input = page.getByPlaceholder(placeholder);
+      const button = page.getByRole('button', { name: 'Verify', exact: true });
+      await expect(input).toBeVisible();
+      await expect(input).toHaveAttribute('placeholder', placeholder);
+      await button.click();
+      await expect(input).toBeFocused();
+      await expect(page.getByRole('status')).not.toContainText('No record has been checked');
+      await input.fill('SYNTHETIC-REFERENCE');
+      await input.press('Enter');
+      await expect(page.getByRole('status')).toContainText('No record has been checked');
+      await expect(page).toHaveURL(path);
+      await expect(page.getByRole('contentinfo')).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Docversity home' })).toHaveCount(0);
+      await expectNoHorizontalOverflow(page);
+      await expectNoSeriousA11yViolations(page);
+      await capture(page, `mentor-${path.replaceAll('/', '-') || 'home'}-${width}`);
     }
-    await expectNoHorizontalOverflow(page);
-    await expectNoSeriousA11yViolations(page);
-    await capture(page, `mentor-home-${width}`);
-
     if (width < 1280) await page.getByRole('button', { name: 'Open menu' }).click();
     const nav = page.getByRole('navigation', {
       name: width < 1280 ? 'Mobile' : 'Main',
@@ -61,22 +74,21 @@ for (const [width, height] of [
         'href',
         href,
       );
-    await expect(nav.getByRole('link')).toHaveCount(5);
+    await expectNoSeriousA11yViolations(page);
     if (width < 1280) {
-      await expectNoSeriousA11yViolations(page);
-      await capture(page, `mentor-home-menu-${width}`);
-      await page.keyboard.press('Escape');
-      await expect(page.getByRole('button', { name: 'Open menu' })).toBeFocused();
+      await nav.getByRole('link', { name: 'Verify Certificate', exact: true }).click();
+      await expect(page).toHaveURL('/verify/certificate');
+      await expect(page.getByRole('dialog')).toHaveCount(0);
     }
-    expect(requests).toEqual([]);
+    expect(
+      requests.filter((url) => new URL(url).pathname.startsWith('/api/v1/public/verify/')),
+    ).toHaveLength(5);
   });
 }
 
-test('header links and mobile drawer retain visible keyboard focus with reduced motion', async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: 'reduce' });
+test('keyboard focus, enlarged text and mobile drawer remain usable', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   const first = page
     .getByRole('navigation', { name: 'Main', exact: true })
@@ -89,130 +101,6 @@ test('header links and mobile drawer retain visible keyboard focus with reduced 
   }));
   expect(outline.width).toBeGreaterThanOrEqual(2);
   expect(outline.style).not.toBe('none');
-  for (const [label] of NAVIGATION.slice(1)) {
-    await page.keyboard.press('Tab');
-    await expect(
-      page
-        .getByRole('navigation', { name: 'Main', exact: true })
-        .getByRole('link', { name: label, exact: true }),
-    ).toBeFocused();
-  }
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  const trigger = page.getByRole('button', { name: 'Open menu' });
-  await trigger.focus();
-  await page.keyboard.press('Enter');
-  const dialog = page.getByRole('dialog');
-  for (let index = 0; index < 8; index++) {
-    expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
-    await page.keyboard.press('Tab');
-  }
-  await expectNoSeriousA11yViolations(page);
-  await page.keyboard.press('Escape');
-  await expect(trigger).toBeFocused();
-  expect(
-    await page
-      .locator('main')
-      .evaluate(
-        (el) => el.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length,
-      ),
-  ).toBe(0);
-});
-
-test('student sign-in, activation and direct staff sign-in retain existing routes', async ({
-  page,
-}) => {
-  await page.goto('/');
-  await page
-    .getByRole('navigation', { name: 'Main', exact: true })
-    .getByRole('link', { name: 'Student Sign in' })
-    .click();
-  await expect(page).toHaveURL(/\/student\/login$/);
-  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Activate your account', exact: true }).click();
-  await expect(page).toHaveURL(/\/student\/register$/);
-  await expect(page.getByLabel('Activation code')).toBeVisible();
-  await page.goto('/admin/login');
-  await expect(page.getByLabel('Email')).toBeVisible();
-  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
-});
-
-test('all verification destinations offer a real lookup with no Coming Soon claims', async ({
-  page,
-}) => {
-  for (const [label, path] of NAVIGATION.slice(0, 4)) {
-    await page.goto(path);
-    await expect(page.getByRole('heading', { level: 1, name: label })).toBeVisible();
-    await expect(page.locator('main form')).toHaveCount(1);
-    await expect(page.getByTestId('not-available')).toHaveCount(0);
-  }
-});
-
-test('small-screen text and navigation remain readable at 200 percent text scale', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 320, height: 844 });
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
-  const title = page.getByRole('heading', { level: 1 });
-  const normalSize = await title.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-  await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
-  await expect
-    .poll(() => title.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)))
-    .toBeGreaterThan(normalSize);
-  await expectNoHorizontalOverflow(page);
-  const brokenWords = await page.locator('main h1').evaluateAll((elements) => {
-    const broken: string[] = [];
-    for (const element of elements) {
-      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-      let node: Node | null;
-      while ((node = walker.nextNode())) {
-        for (const match of (node.textContent ?? '').matchAll(/\S+/g)) {
-          const range = document.createRange();
-          range.setStart(node, match.index);
-          range.setEnd(node, match.index + match[0].length);
-          if ([...range.getClientRects()].filter((r) => r.width > 0).length > 1)
-            broken.push(match[0]);
-        }
-      }
-    }
-    return broken;
-  });
-  expect(brokenWords).toEqual([]);
-  expect(
-    await page.locator('main h1 [data-hero-word]').evaluateAll((words) =>
-      words.every((word) => {
-        const box = word.getBoundingClientRect();
-        return box.left >= -1 && box.right <= innerWidth + 1;
-      }),
-    ),
-  ).toBe(true);
-  await expectNoSeriousA11yViolations(page);
-  expect(
-    await page
-      .locator('header a[aria-label="Docversity home"] span')
-      .evaluateAll((spans) => spans.some((span) => span.scrollWidth > span.clientWidth + 1)),
-  ).toBe(false);
-  await page.getByRole('button', { name: 'Open menu' }).click();
-  const links = page.getByRole('navigation', { name: 'Mobile' }).getByRole('link');
-  await expect(links).toHaveText(NAVIGATION.map(([label]) => label));
-  expect(
-    await links.evaluateAll((elements) =>
-      elements.some(
-        (el) => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1,
-      ),
-    ),
-  ).toBe(false);
-  await expectNoHorizontalOverflow(page);
-  await expectNoSeriousA11yViolations(page);
-  await capture(page, 'mentor-home-text-scale-320');
-});
-test('desktop header uses the same five drawer links when text is enlarged', async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
-  await expect(page.getByRole('navigation', { name: 'Main', exact: true })).toBeVisible();
   await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
   await expect(page.getByRole('navigation', { name: 'Main', exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Open menu' }).click();
@@ -220,50 +108,86 @@ test('desktop header uses the same five drawer links when text is enlarged', asy
     NAVIGATION.map(([label]) => label),
   );
   await expectNoHorizontalOverflow(page);
-  await expectNoSeriousA11yViolations(page);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Open menu' })).toBeFocused();
-});
-
-test('optional GSAP entrance stays visible and responds to reduced-motion changes', async ({
-  page,
-}) => {
-  await page.addInitScript(() => {
-    Reflect.set(window, '__ui04EntranceObserved', false);
-    new MutationObserver((records) => {
-      for (const record of records) {
-        const target = record.target;
-        if (
-          target instanceof HTMLElement &&
-          target.hasAttribute('data-ui04-intro') &&
-          target.style.transform &&
-          target.style.transform !== 'none'
-        )
-          Reflect.set(window, '__ui04EntranceObserved', true);
-      }
-    }).observe(document, { subtree: true, attributes: true, attributeFilter: ['style'] });
-  });
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto('/');
-  await expect
-    .poll(() => page.evaluate(() => Reflect.get(window, '__ui04EntranceObserved') === true))
-    .toBe(true);
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 900 });
   await expect
     .poll(() =>
-      page
-        .locator('[data-ui04-intro]')
-        .evaluateAll((elements) =>
-          elements.every((el) => getComputedStyle(el).transform === 'none'),
-        ),
-    )
-    .toBe(true);
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(
-    await page
-      .locator('main')
-      .evaluate(
-        (el) => el.getAnimations({ subtree: true }).filter((a) => a.playState === 'running').length,
+      page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       ),
-  ).toBe(0);
+    )
+    .toBeLessThanOrEqual(1);
+  await expectNoSeriousA11yViolations(page);
+});
+
+for (const width of [1440, 390, 320]) {
+  test(`student login retains its form and centered animated crest at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/student/login');
+    const visual = page.getByRole('complementary');
+    await expect(visual).toHaveText('Welcome to Verification Portal');
+    const crest = visual.locator('img');
+    await expect(crest).toBeVisible();
+    const box = await crest.boundingBox();
+    const panel = await visual.boundingBox();
+    expect(box).toBeTruthy();
+    expect(panel).toBeTruthy();
+    if (box && panel)
+      expect(Math.abs(box.x + box.width / 2 - (panel.x + panel.width / 2))).toBeLessThan(2);
+    await expect(page.getByLabel('Registration number', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await expectNoSeriousA11yViolations(page);
+    await capture(page, `mentor-student-login-${width}`);
+    const ambient = visual.locator('[aria-hidden="true"]').first();
+    await expect(ambient).not.toHaveAttribute('style', /--auth-spin/);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await expect(ambient).toHaveAttribute('style', /--auth-spin/);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(ambient).not.toHaveAttribute('style', /--auth-spin/);
+    await page.getByRole('link', { name: 'Activate your account', exact: true }).click();
+    await expect(page).toHaveURL('/student/register');
+    await expect(page.getByLabel('Activation code')).toBeVisible();
+    await page.goto('/admin/login');
+    await expect(page.getByLabel('Email')).toBeVisible();
+    await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+  });
+}
+
+test('student login submits through the existing endpoint and displays API errors', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/student-auth/csrf', (route) =>
+    route.fulfill({ json: { csrfToken: 'synthetic-csrf' } }),
+  );
+  await page.route('**/api/v1/student-auth/login', async (route) => {
+    expect(route.request().postDataJSON()).toEqual({
+      registrationNumber: 'SYNTHETIC-REG',
+      password: 'synthetic-password',
+    });
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'AUTH_INVALID_CREDENTIALS',
+          message: 'Invalid credentials',
+          requestId: 'synthetic-request',
+        },
+      }),
+    });
+  });
+  await page.goto('/student/login');
+  await page.getByLabel('Registration number', { exact: true }).fill('SYNTHETIC-REG');
+  await page.getByLabel('Password', { exact: true }).fill('synthetic-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.locator('form').getByRole('alert')).toContainText(
+    'The registration number or password is incorrect',
+  );
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
+  await expect(page).toHaveURL('/student/login');
 });

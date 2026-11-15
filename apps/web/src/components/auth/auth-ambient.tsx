@@ -21,7 +21,7 @@ export function AuthAmbient({
   useEffect(() => {
     const element = ref.current;
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (!element || preference.matches) return;
+    if (!element) return;
     let frame = 0;
     let last = performance.now();
     let angle = 0;

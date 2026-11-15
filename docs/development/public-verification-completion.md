@@ -3,7 +3,7 @@
 Implementation follows the provisional design policy supplied on 14 November 2026. The university
 has not approved its legal issuing name, public fields, issuance authorities or official records.
 No approval is fabricated. No policy, document, result, account or registration is seeded by this
-migration. The existing homepage and its exact five header destinations are preserved.
+migration. The mentor refinement simplifies the public entry while preserving its exact five header destinations.
 
 ## Authority and privacy
 
@@ -136,3 +136,17 @@ profile approval and staff/student isolation suites remain required regression c
 
 Synthetic passes do not make any row fully operational on Hostinger. The exact CI/image evidence
 and final test counts belong in the PR/release handover; live acceptance remains explicitly pending.
+
+## Mentor frontend integration
+
+The combined candidate uses `VerificationPanel` for the four public routes and the admission-letter
+homepage entry. It retains the approved single rounded input, gold Verify button, exact per-service
+placeholders, minimal header and centered animated student sign-in crest. All forms use the existing
+strict v2 API; the API's current policy and student ownership checks remain authoritative. The former
+`VerificationScreen` implementation is consolidated into that shared panel.
+
+QR fragments are removed before submission, never sent as query parameters, and superseded responses
+cannot overwrite a newer QR check. Result period filters continue using the server's period contract
+and remain recoverable for authorized empty lookups; examination selection and printing remain private
+to the authenticated owner. Initial, unavailable and authentication-required states do not reveal
+result filters or academic data. See the [integration handoff](mentor-public-verification-integration.md).

@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
-import { VerificationScreen } from '@/features/public-verification/verification-screen';
+import { VerificationPanel } from '@/features/public-verification/verification-panel';
+
 export const metadata: Metadata = {
   title: 'Check Result',
   robots: { index: false, follow: false },
   referrer: 'no-referrer',
 };
-export default function Page() {
-  return <VerificationScreen service="result" />;
+
+export default function VerificationPage() {
+  return <VerificationPanel service="result" />;
 }

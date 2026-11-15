@@ -28,7 +28,7 @@ for (const [service, path, label] of services) {
     );
     await page
       .getByRole('button', {
-        name: service === 'result' ? 'Check result' : 'Verify record',
+        name: 'Verify',
         exact: true,
       })
       .click();
@@ -51,12 +51,12 @@ test('secure QR fragment is removed and submitted without putting credentials in
   const urls: string[] = [];
   page.on('request', (r) => urls.push(r.url()));
   await page.goto(`/verify/certificate#token=${token}`);
-  await expect(page.getByLabel('Secure QR token (optional)')).toHaveValue(token);
+  await expect(page.getByLabel('Certificate number', { exact: true })).toHaveValue(token);
   await expect(page).toHaveURL(/\/verify\/certificate$/);
   const response = page.waitForResponse(
     (r) => r.url().endsWith('/public/verify/certificate') && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Verify record', exact: true }).click();
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
   const r = await response;
   expect(r.request().postDataJSON()).toEqual({ contractVersion: 2, token });
   expect(urls.some((url) => url.includes(token))).toBe(false);
@@ -67,14 +67,12 @@ test('existing activated student session works for registration and results with
   const student = fixtures().profileStudents[0];
   if (!student) throw new Error('Missing synthetic student');
   await studentSignIn(page, student);
-  for (const [service, path] of services.filter(
-    ([id]) => id === 'registration' || id === 'result',
-  )) {
+  for (const [, path] of services.filter(([id]) => id === 'registration' || id === 'result')) {
     await page.goto(path);
     await page.getByLabel('Registration number', { exact: true }).fill(student.registrationNumber);
     await page
       .getByRole('button', {
-        name: service === 'result' ? 'Check result' : 'Verify record',
+        name: 'Verify',
         exact: true,
       })
       .click();
@@ -242,7 +240,7 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await capture(makerPage, 'official-staff-document-mobile');
     await page.goto('/verify/admission-letter');
     await page.getByLabel('Admission letter number', { exact: true }).fill(documentNumber);
-    await page.getByRole('button', { name: 'Verify record', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('NOT FOUND');
     await checkerPage.getByRole('tab', { name: 'Documents', exact: true }).click();
     const checkerDocument = checkerPage.getByRole('article').filter({ hasText: documentNumber });
@@ -258,7 +256,7 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     const issued = (await issuedResponse.json()) as WorkflowResponse;
     const qr = new URL(issued.verificationUrl);
     await page.goto(qr.pathname + qr.hash);
-    await page.getByRole('button', { name: 'Verify record', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('VALID');
     await expect(page.getByRole('status')).toContainText('Synthetic Test University');
     await expect(page.locator('main')).not.toContainText('Synthetic Verification Learner');
@@ -284,7 +282,7 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
       checkerPage.getByRole('heading', { name: 'Verification and issuance audit', exact: true }),
     ).toBeVisible();
     await expect(checkerPage.getByRole('article').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Verify record', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('REVOKED');
     // Activation uses the existing per-registration identity flow and random password.
     const activation = await post(maker, 'student-accounts/activation-codes', {
@@ -372,15 +370,15 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await post(checker, `official-documents/${cert.id}/issue`);
     await page.goto('/verify/certificate');
     await page.getByLabel('Certificate number', { exact: true }).fill(certNumber);
-    await page.getByRole('button', { name: 'Verify record', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('ISSUED');
     await capture(page, 'verification-certificate-issued-mobile');
     await page.goto('/verify/registration');
     await page.getByLabel('Registration number', { exact: true }).fill(number);
-    await page.getByRole('button', { name: 'Verify record', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('ACTIVE');
     await page.getByLabel('Registration number', { exact: true }).fill(number.slice(1));
-    await page.getByRole('button', { name: 'Verify record', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('INVALID');
     const curriculum = await post(maker, `programs/${course.id}/curricula`, {
       versionCode: `PV-${Date.now()}`,
@@ -442,8 +440,15 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     });
     await page.goto('/results');
     await page.getByLabel('Registration number', { exact: true }).fill(number);
-    await page.getByRole('button', { name: 'Check result', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('UNPUBLISHED');
+    await page.getByLabel('Semester / academic year').selectOption('2');
+    await expect(page.getByRole('status')).toContainText('UNPUBLISHED');
+    await expect(page.getByLabel('Semester / academic year')).toHaveValue('2');
+    await page.getByLabel('Semester / academic year').selectOption('');
+    await expect(page.getByRole('status')).toContainText('UNPUBLISHED');
+    await expect(page.getByLabel('Semester / academic year')).toHaveValue('');
+
     const review = (await (await maker.get(`/api/v1/result-review/${draft.resultId}`)).json()) as {
       subjects: { id: string }[];
     };
@@ -476,7 +481,7 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
       policyId: policies.result,
       expectedVersion: 4,
     });
-    await page.getByRole('button', { name: 'Check result', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('table')).toContainText('80 / 100');
     await expect(page.getByRole('table')).toContainText('PASS');
     await expect(page.getByRole('button', { name: 'Print published results' })).toBeVisible();
@@ -497,7 +502,7 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await capture(page, 'verification-student-documents-mobile');
     await page.goto('/results');
     await page.getByLabel('Registration number', { exact: true }).fill(number);
-    await page.getByRole('button', { name: 'Check result', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('table')).toBeVisible();
     const ownDownload = await page.request.get(
       `/api/v1/student/official-documents/${cert.id}/download`,
@@ -522,7 +527,7 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
       reason: 'Synthetic E2E revoked certificate',
     });
     await post(checker, `official-results/${draft.resultId}/withdraw`);
-    await page.getByRole('button', { name: 'Check result', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('UNPUBLISHED');
   } finally {
     await maker.dispose();
