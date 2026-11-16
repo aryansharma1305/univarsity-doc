@@ -1,5 +1,9 @@
 /** Audit action names written to `audit_logs.action`. Add new actions here, never inline strings. */
 export const AUDIT_ACTIONS = {
+  verificationPolicyChanged: 'VERIFICATION_POLICY_CHANGED',
+  officialDocumentChanged: 'OFFICIAL_DOCUMENT_CHANGED',
+  officialResultPublished: 'OFFICIAL_RESULT_PUBLISHED',
+  publicVerificationChecked: 'PUBLIC_VERIFICATION_CHECKED',
   razorpayWebhookReceived: 'RAZORPAY_WEBHOOK_RECEIVED',
   razorpayPaymentReconciled: 'RAZORPAY_PAYMENT_RECONCILED',
   syntheticWorkflowChanged: 'SYNTHETIC_WORKFLOW_CHANGED',

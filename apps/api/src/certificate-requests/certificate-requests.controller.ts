@@ -38,8 +38,8 @@ export class StudentCertificateRequestsController {
   constructor(private readonly service: CertificateRequestsService) {}
   @ApiOkResponse({ standardSchema: certificateServiceListSchema })
   @Get('certificate-services')
-  catalogue() {
-    return this.service.catalogue();
+  catalogue(@CurrentStudent() student: StudentContext) {
+    return this.service.catalogue(student.studentId);
   }
   @ApiOkResponse({ standardSchema: certificateRequestListSchema })
   @Get('certificate-requests')

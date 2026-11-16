@@ -603,8 +603,9 @@ function RequestDetailView({
           )}
         </dl>
         <p className="mt-5 text-sm text-muted-foreground">
-          Payment verification, Rector approval and official issuance are not available in this
-          workflow.
+          Staff review does not issue a certificate. Official documents require a separate approved
+          issuance policy and independent approval. Payment verification and Rector approval remain
+          unavailable.
         </p>
         <div className="mt-5 flex flex-wrap gap-3">
           {student && r.canRespond && (
@@ -636,6 +637,14 @@ function RequestDetailView({
               action="complete-review"
               label="Complete staff review"
             />
+          )}
+          {!student && r.status === 'REVIEW_COMPLETED' && (
+            <Link
+              href={`/admin/official-records?requestId=${r.id}`}
+              className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-medium text-brand"
+            >
+              Prepare official document
+            </Link>
           )}
           {!student && canReview && ['REVIEW_COMPLETED', 'CANCELLED'].includes(r.status) && (
             <RequestAction r={r} student={false} action="close" label="Close application" />

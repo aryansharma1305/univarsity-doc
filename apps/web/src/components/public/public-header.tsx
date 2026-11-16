@@ -14,7 +14,6 @@ import {
 } from '@docversity/ui/components/sheet';
 import { cn } from '@docversity/ui';
 import { useEffect, useState } from 'react';
-import { Wordmark } from '@/components/brand/wordmark';
 import { PUBLIC_HEADER_NAV } from './nav-items';
 
 export function PublicHeader({ variant = 'default' }: { variant?: 'default' | 'landing' }) {
@@ -49,18 +48,10 @@ export function PublicHeader({ variant = 'default' }: { variant?: 'default' | 'l
     >
       <div
         className={cn(
-          'mx-auto flex min-h-18 items-center justify-between gap-4 py-2',
+          'mx-auto flex min-h-18 items-center justify-end gap-4 py-2 @min-[80rem]:justify-center',
           landing ? 'w-[92%] max-w-[1180px]' : 'max-w-7xl px-4 lg:px-8',
         )}
       >
-        <Link
-          href="/"
-          className="min-w-0 rounded-md [&>span>span]:min-w-0 [&_svg]:size-[32px]"
-          aria-label="Docversity home"
-        >
-          <Wordmark inverted={landing} adaptive={!landing} />
-        </Link>
-
         <nav aria-label="Main" className="hidden items-center gap-1 @min-[80rem]:flex">
           {PUBLIC_HEADER_NAV.map((item) => (
             <Link
@@ -70,10 +61,11 @@ export function PublicHeader({ variant = 'default' }: { variant?: 'default' | 'l
               aria-current={pathname === item.href ? 'page' : undefined}
               className={cn(
                 'inline-flex min-h-11 items-center rounded-full px-3 text-sm font-medium whitespace-nowrap',
-                'motion-safe:transition-colors',
+                'motion-safe:transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600',
                 landing
                   ? 'text-white/80 hover:bg-white/10 hover:text-white'
                   : 'text-lp-ink-soft hover:bg-lp-ink/5 hover:text-lp-ink',
+                pathname === item.href && 'underline underline-offset-4',
                 item.href === '/student/login' &&
                   (landing
                     ? 'ml-2 border border-[#ffc928]/60 px-4 text-white hover:bg-[#ffc928] hover:text-navy-950'
@@ -134,6 +126,22 @@ export function PublicHeader({ variant = 'default' }: { variant?: 'default' | 'l
           </SheetContent>
         </Sheet>
       </div>
+      <noscript>
+        <nav
+          aria-label="Public navigation"
+          className="flex flex-wrap justify-center gap-2 px-4 pb-4 @min-[80rem]:hidden"
+        >
+          {PUBLIC_HEADER_NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="inline-flex min-h-11 items-center rounded px-3 text-sm underline underline-offset-4"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      </noscript>
     </header>
   );
 }

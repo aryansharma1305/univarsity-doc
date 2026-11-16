@@ -14,10 +14,9 @@ describe('student results release boundary contract', () => {
     for (const q of [{ page: 0 }, { pageSize: 101 }, { page: 100001 }, { studentId: 'foreign' }])
       expect(studentResultsQuerySchema.safeParse(q).success).toBe(false);
   });
-  it('accepts only an empty, publication-disabled response until provenance is approved', () => {
+  it('accepts bounded publication responses while rejecting untyped marks and private fields', () => {
     expect(studentResultsPageSchema.parse(empty)).toEqual(empty);
     for (const fields of [
-      { publicationAvailable: true },
       { data: [{ internalMarks: '75' }] },
       { total: 1 },
       { reviewNotes: 'private' },

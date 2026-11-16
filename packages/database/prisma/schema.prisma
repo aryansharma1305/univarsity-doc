@@ -176,6 +176,7 @@ enum ResultItemStatus {
 }
 
 enum DocumentType {
+  ADMISSION_LETTER
   PROVISIONAL
   TRANSCRIPT
   CHARACTER
@@ -362,6 +363,8 @@ model Department {
 }
 
 model Program {
+  verificationPolicies VerificationPolicy[]
+
   id                String             @id @default(uuid(7)) @db.Uuid
   code              String             @unique @db.VarChar(32)
   name              String             @db.VarChar(200)
@@ -676,6 +679,8 @@ model Examination {
 /// - PUBLISHED rows are frozen: only PUBLISHED → SUPERSEDED/WITHHELD transitions are allowed; nothing
 ///   else changes and the row cannot be deleted. SUPERSEDED rows are fully frozen.
 model Result {
+  officialPublication ResultPublication?
+
   syntheticReleases     SyntheticRelease[]
   id                    String                  @id @default(uuid(7)) @db.Uuid
   studentRegistrationId String                  @map("student_registration_id") @db.Uuid
@@ -1415,6 +1420,10 @@ model ExternalExamApplication {
 }
 
 model User {
+  verificationPoliciesProposed VerificationPolicy[] @relation("VerificationPolicyProposer")
+  verificationPoliciesApproved VerificationPolicy[] @relation("VerificationPolicyApprover")
+  officialPublications         ResultPublication[]
+
   razorpayReconciliations    RazorpayReconciliation[]
   retotalingEvents           RetotalingEvent[]
   preparedSyntheticReleases  SyntheticRelease[]       @relation("SyntheticReleasePreparer")
@@ -1585,6 +1594,8 @@ model ResultDraftBatch {
 
 /// Append-only state transition receipt and immutable marks version; contains no student names.
 model ResultReviewEvent {
+  officialPublications ResultPublication[]
+
   syntheticReleases SyntheticRelease[]
   id                String                  @id @db.Uuid
   resultId          String                  @map("result_id") @db.Uuid
@@ -1847,4 +1858,43 @@ model RazorpayReconciliation {
   actor               User                   @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@map("razorpay_reconciliations")
+}
+
+/// Versioned university disclosure authority. No policy is seeded or enabled by migration.
+model VerificationPolicy {
+  program      Program             @relation(fields: [programId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  proposedBy   User                @relation("VerificationPolicyProposer", fields: [proposedById], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  approvedBy   User?               @relation("VerificationPolicyApprover", fields: [approvedById], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  publications ResultPublication[]
+
+  id           String    @id @default(uuid(7)) @db.Uuid
+  service      String    @db.VarChar(32)
+  programId    String    @map("program_id") @db.Uuid
+  definition   Json
+  status       String    @default("DRAFT") @db.VarChar(16)
+  proposedById String    @map("proposed_by_id") @db.Uuid
+  approvedById String?   @map("approved_by_id") @db.Uuid
+  approvedAt   DateTime? @map("approved_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([service, programId, status])
+  @@map("verification_policies")
+}
+
+/// Immutable authority for exposing one officially reviewed result to its owner.
+model ResultPublication {
+  result        Result             @relation(fields: [resultId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  policy        VerificationPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  approvalEvent ResultReviewEvent  @relation(fields: [approvalEventId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  publishedBy   User               @relation(fields: [publishedById], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  id              String   @id @default(uuid(7)) @db.Uuid
+  resultId        String   @unique @map("result_id") @db.Uuid
+  policyId        String   @map("policy_id") @db.Uuid
+  approvalEventId String   @map("approval_event_id") @db.Uuid
+  publishedById   String   @map("published_by_id") @db.Uuid
+  snapshotDigest  String   @map("snapshot_digest") @db.Char(64)
+  publishedAt     DateTime @default(now()) @map("published_at") @db.Timestamptz(3)
+
+  @@map("result_publications")
 }
