@@ -27,6 +27,18 @@ export class OfficialResultsService {
     private readonly audit: AuditService,
     private readonly policies: VerificationPoliciesService,
   ) {}
+  async attestingActor(id: string, version: number, tx: Prisma.TransactionClient) {
+    // Result versions serialize attestations; transaction timestamps do not establish their order.
+    const rows = await tx.$queryRaw<{ actorUserId: string | null }[]>`
+      SELECT actor_user_id AS "actorUserId" FROM audit_logs
+      WHERE entity_type = 'Result' AND entity_id = ${id}
+        AND action = ${AUDIT_ACTIONS.officialResultPublished}
+        AND metadata->>'action' = 'ATTEST'
+        AND jsonb_typeof(metadata->'version') = 'number'
+        AND (metadata->>'version')::numeric <= ${version}
+      ORDER BY (metadata->>'version')::numeric DESC, id DESC LIMIT 1`;
+    return rows[0]?.actorUserId ?? null;
+  }
   async attest(id: string, body: z.infer<typeof attestOfficialResultSchema>, actor: string) {
     return this.prisma.client.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM results WHERE id=${id}::uuid FOR UPDATE`;
@@ -119,24 +131,16 @@ export class OfficialResultsService {
         (e) => e.action === 'APPROVE' && e.resultVersion === r.version && e.toStatus === 'APPROVED',
       );
       const submitted = r.reviewEvents.find((e) => e.action === 'SUBMIT');
-      const attestation = await tx.auditLog.findFirst({
-        where: {
-          entityType: 'Result',
-          entityId: id,
-          action: AUDIT_ACTIONS.officialResultPublished,
-          metadata: { path: ['action'], equals: 'ATTEST' },
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      const attester = await this.attestingActor(id, r.version, tx);
       const current = await tx.$queryRaw<
         { snapshot: unknown }[]
       >`SELECT docversity_result_review_snapshot(${id}::uuid) AS snapshot`;
       if (
         !approval ||
         !submitted ||
-        !attestation?.actorUserId ||
+        !attester ||
         approval.actorUserId === submitted.actorUserId ||
-        approval.actorUserId === attestation.actorUserId ||
+        approval.actorUserId === attester ||
         digest(approval.snapshot) !== digest(submitted.snapshot) ||
         digest(approval.snapshot) !== digest(current[0]?.snapshot)
       )

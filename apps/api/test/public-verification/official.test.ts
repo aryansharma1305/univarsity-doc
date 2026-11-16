@@ -2,6 +2,7 @@ import { DraftResultsService } from '../../src/results/draft-results.service.js'
 import { OfficialResultsService } from '../../src/public-verification/official-results.service.js';
 import { ResultReviewService } from '../../src/results/result-review.service.js';
 import type { ObjectStorage } from '@docversity/storage';
+import { AUDIT_ACTIONS } from '@docversity/types';
 import { OBJECT_STORAGE } from '../../src/storage/storage.module.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
@@ -396,10 +397,49 @@ it('publishes only attested, independently reviewed results and isolates student
   await admin
     .post(`official-results/${row.id}/publish`, { policyId, expectedVersion: row.version })
     .expect(409);
-  await second
+  // The final approver attested an earlier version, so timestamp ordering would block publication.
+  const earlierAttester = admin;
+  const audit = app.get(AuditService);
+  const writeAudit = audit.writeAuditEvent.bind(audit);
+  // Transaction timestamps can disagree with the serialized result-version order.
+  const clock = vi.spyOn(audit, 'writeAuditEvent').mockImplementation(async (event, tx) => {
+    if (
+      event.action === AUDIT_ACTIONS.officialResultPublished &&
+      event.entityId === row.id &&
+      event.metadata?.action === 'ATTEST'
+    ) {
+      await (tx ?? testDb()).auditLog.create({
+        data: {
+          actorUserId: earlierAttester.user.id,
+          action: event.action,
+          entityType: 'Result',
+          entityId: row.id,
+          metadata: { action: 'ATTEST', policyId, version: row.version + 1 },
+          createdAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+      return;
+    }
+    await writeAudit(event, tx);
+  });
+  await earlierAttester
     .post(`official-results/${row.id}/attest`, {
       policyId,
       expectedVersion: row.version,
+      authorityReference: 'Synthetic earlier examination decision',
+      outcome: 'WITHHELD',
+      totalMarks: null,
+      maxMarks: null,
+      sgpa: null,
+      cgpa: null,
+      subjects: row.items.map((i) => ({ id: i.id, status: 'WITHHELD', grade: null })),
+    })
+    .expect(200);
+  clock.mockRestore();
+  await second
+    .post(`official-results/${row.id}/attest`, {
+      policyId,
+      expectedVersion: row.version + 1,
       authorityReference: 'Synthetic recorded examination decision',
       outcome: 'PASS',
       totalMarks: '80',
@@ -410,6 +450,15 @@ it('publishes only attested, independently reviewed results and isolates student
     })
     .expect(200);
   const updated = await testDb().result.findUniqueOrThrow({ where: { id: row.id } });
+  const latestByTimestamp = await testDb().auditLog.findFirstOrThrow({
+    where: {
+      entityId: row.id,
+      action: AUDIT_ACTIONS.officialResultPublished,
+      metadata: { path: ['action'], equals: 'ATTEST' },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  expect(latestByTimestamp.actorUserId).toBe(earlierAttester.user.id);
   await examAdmin
     .post(`result-review/${row.id}/submit`, {
       requestId: randomUUID(),
@@ -673,7 +722,7 @@ it('does not issue from a reviewed request closed concurrently', async () => {
     (await testDb().certificate.findUniqueOrThrow({ where: { id: f.receipt.id } })).status,
   ).toBe('APPROVED');
 });
-it('does not approve results after a concurrent publication-authority withdrawal', async () => {
+it('rejects withdrawn attestation authority despite a replacement policy and allows correction', async () => {
   const examAdmin = await staff(app, ['EXAM_ADMIN']);
   const f = await resultsFixture(admin, examAdmin, {
     subjects: [
@@ -690,6 +739,7 @@ it('does not approve results after a concurrent publication-authority withdrawal
   const exam = await f.examination(),
     student = await f.student(),
     policyId = await policy(f.program.id, 'result');
+  await policy(f.program.id, 'result');
   const ps = await testDb().programSubject.findFirstOrThrow({
     where: { curriculumId: f.curriculum.id },
   });
@@ -776,6 +826,14 @@ it('does not approve results after a concurrent publication-authority withdrawal
   expect(
     (await testDb().result.findUniqueOrThrow({ where: { id: row.id } })).publicationStatus,
   ).toBe('UNDER_REVIEW');
+  await admin
+    .post(`result-review/${row.id}/return`, {
+      requestId: randomUUID(),
+      expectedVersion: 3,
+      confirmed: true,
+      reason: 'Synthetic re-attestation under the replacement authority',
+    })
+    .expect(200);
 });
 it('retains independently approved application types and paginates staff authority records', async () => {
   const student = await activatedStudent(app, admin, 'MULTI-TYPE');

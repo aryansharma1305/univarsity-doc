@@ -1,4 +1,5 @@
 import { VerificationPoliciesService } from '../public-verification/verification-policies.service.js';
+import { OfficialResultsService } from '../public-verification/official-results.service.js';
 import { createHash } from 'node:crypto';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@docversity/database';
@@ -48,6 +49,7 @@ export const RESULT_REVIEW_POLICY = {
 export class ResultReviewService {
   constructor(
     private readonly policies: VerificationPoliciesService,
+    private readonly officialResults: OfficialResultsService,
     private readonly prisma: PrismaService,
     private readonly drafts: DraftResultsService,
     private readonly audit: AuditService,
@@ -426,22 +428,16 @@ export class ResultReviewService {
             const snapshot = await this.snapshot(tx, id);
             if (action === 'SUBMIT' || action === 'APPROVE') {
               const current = await this.present(r, tx);
+              if (action === 'APPROVE' && !current.policy.approvalEnabled)
+                throw conflict('Current review authority is required before approval.');
               if (current.issues.length)
                 throw Errors.validation(
                   current.issues.map((i) => ({ path: i.field ?? 'result', message: i.message })),
                 );
             }
             if (action !== 'SUBMIT') {
-              const attestation = await tx.auditLog.findFirst({
-                where: {
-                  entityType: 'Result',
-                  entityId: id,
-                  action: AUDIT_ACTIONS.officialResultPublished,
-                  metadata: { path: ['action'], equals: 'ATTEST' },
-                },
-                orderBy: { createdAt: 'desc' },
-              });
-              if (attestation?.actorUserId === actor) throw Errors.forbidden();
+              const attester = await this.officialResults.attestingActor(id, r.version, tx);
+              if (attester === actor) throw Errors.forbidden();
               const authors = await tx.auditLog.findMany({
                 where: {
                   entityType: 'ResultItem',

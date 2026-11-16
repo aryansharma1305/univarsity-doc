@@ -74,6 +74,10 @@ test-only. Digital verification of already issued records never requires payment
 a DRAFT result under current program authority. It does not invent a grading algorithm. Existing
 draft validation, provenance auditing, submission, independent review and immutable review
 receipts are reused. A marks author or submitter cannot approve their work.
+Approval requires the exact attestation policy to remain approved; a replacement policy does not
+authorize an earlier attestation. Review and publication identify the attester by the immutable
+attested result version, because transaction timestamps can disagree with version order. Returning
+a result for correction remains possible under current replacement authority.
 
 `official-results/:id/publish` requires the exact approved version, official attestation, complete
 subject outcomes, unchanged submission/approval snapshots and a current approved result policy.
