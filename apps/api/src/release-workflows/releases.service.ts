@@ -289,18 +289,8 @@ export class ReleasesService {
     });
   }
   async list(studentId: string, q: StudentResultsQuery) {
-    const official = await this.official.list(studentId);
-    if (official.length)
-      return studentResultsPageSchema.parse({
-        publicationAvailable: true,
-        data: official.slice((q.page - 1) * q.pageSize, q.page * q.pageSize),
-        meta: {
-          page: q.page,
-          pageSize: q.pageSize,
-          total: official.length,
-          totalPages: Math.ceil(official.length / q.pageSize),
-        },
-      });
+    const official = await this.official.page(studentId, q);
+    if (official.publicationAvailable) return studentResultsPageSchema.parse(official);
     if (!this.policy.enabled())
       return studentResultsPageSchema.parse({
         publicationAvailable: false,

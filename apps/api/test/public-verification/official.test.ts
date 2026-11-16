@@ -1,3 +1,6 @@
+import { DraftResultsService } from '../../src/results/draft-results.service.js';
+import { OfficialResultsService } from '../../src/public-verification/official-results.service.js';
+import { ResultReviewService } from '../../src/results/result-review.service.js';
 import type { ObjectStorage } from '@docversity/storage';
 import { OBJECT_STORAGE } from '../../src/storage/storage.module.js';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -858,3 +861,150 @@ it('rejects a reviewed application from another program or a withdrawn applicati
   const viewer = await staff(app, ['VIEWER']);
   await viewer.get(`official-documents/${f.receipt.id}/file`).expect(403);
 });
+
+it('paginates 0, 1, 100, 101 and 250 eligible official results in the database', async () => {
+  const examAdmin = await staff(app, ['EXAM_ADMIN']);
+  const f = await resultsFixture(admin, examAdmin, {
+    subjects: [
+      {
+        period: 1,
+        maxMarks: 100,
+        components: [
+          { name: 'Internal', maxMarks: 30 },
+          { name: 'External', maxMarks: 70 },
+        ],
+      },
+    ],
+  });
+  const student = await f.student();
+  const ps = await testDb().programSubject.findFirstOrThrow({
+    where: { curriculumId: f.curriculum.id },
+  });
+  const policyId = await policy(f.program.id, 'result');
+  const official = app.get(OfficialResultsService),
+    review = app.get(ResultReviewService);
+  const agent = browser(app),
+    code = await issueCode(admin, student.registrationId);
+  expect(
+    (
+      await activate(agent, {
+        registrationNumber: student.registrationNumber,
+        activationCode: code,
+      })
+    ).status,
+  ).toBe(200);
+  const page = async (number: number, total: number) => {
+    const response = studentResultsPageSchema.parse(
+      (await agent.get(`/api/v1/student/results?page=${number}&pageSize=50`).expect(200)).body,
+    );
+    expect(response.publicationAvailable).toBe(total > 0);
+    expect(response.meta).toEqual({
+      page: number,
+      pageSize: 50,
+      total,
+      totalPages: Math.ceil(total / 50),
+    });
+    return response.data;
+  };
+  const publish = async (registrationId = student.registrationId, authority = policyId) => {
+    const exam = await f.examination();
+    const saved = await app.get(DraftResultsService).save(
+      {
+        context: { ...contextFor(f, exam), periodNumber: exam.period.number },
+        registrationId,
+        programSubjectId: ps.id,
+        reExamApplicationId: null,
+        expectedVersion: null,
+        marks: {
+          internalMarks: '20',
+          externalMarks: '60',
+          practicalMarks: null,
+          otherMarks: null,
+          totalMarks: '80',
+        },
+      },
+      examAdmin.user.id,
+    );
+    const draft = await testDb().result.findUniqueOrThrow({
+      where: { id: saved.resultId },
+      include: { items: true },
+    });
+    await official.attest(
+      draft.id,
+      {
+        policyId: authority,
+        expectedVersion: 1,
+        authorityReference: 'Synthetic pagination fixture',
+        outcome: 'PASS',
+        totalMarks: '80',
+        maxMarks: '100',
+        sgpa: null,
+        cgpa: null,
+        subjects: draft.items.map((item) => ({ id: item.id, status: 'PASS', grade: 'A' })),
+      },
+      second.user.id,
+    );
+    await review.transition(
+      draft.id,
+      'SUBMIT',
+      { requestId: randomUUID(), expectedVersion: 2, confirmed: true },
+      examAdmin.user.id,
+    );
+    await review.transition(
+      draft.id,
+      'APPROVE',
+      { requestId: randomUUID(), expectedVersion: 3, confirmed: true },
+      admin.user.id,
+    );
+    await official.publish(draft.id, { policyId: authority, expectedVersion: 4 }, admin.user.id);
+    return draft.id;
+  };
+  expect(await page(1, 0)).toEqual([]);
+  // One older publication and a group of equal timestamps exercise both sort keys.
+  const recent = new Date();
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(recent.getTime() - 60_000);
+  try {
+    const oldest = await publish();
+    vi.setSystemTime(recent);
+    const newer: string[] = [];
+    const ordered = () => [...newer].sort().concat(oldest);
+    for (let count = 1; count <= 250; count++) {
+      if (count > 1) newer.push(await publish());
+      if ([1, 100, 101, 250].includes(count)) {
+        const expected = ordered();
+        const seen = [];
+        for (let number = 1; number <= Math.ceil(count / 50); number++)
+          seen.push(...(await page(number, count)));
+        expect(seen.map((row) => row.id)).toEqual(expected);
+        expect(await page(Math.ceil(count / 50) + 1, count)).toEqual([]);
+        expect((await page(1, count)).map((row) => row.id)).toEqual(expected.slice(0, 50));
+      }
+    }
+    const other = await f.student();
+    await publish(other.registrationId);
+    const withdrawn = await publish();
+    await official.withdraw(withdrawn, admin.user.id);
+    const withdrawnPolicy = await policy(f.program.id, 'result');
+    await publish(student.registrationId, withdrawnPolicy);
+    await admin.post(`verification-policies/${withdrawnPolicy}/withdraw`).expect(200);
+    const exam = await f.examination();
+    await testDb().result.create({
+      data: { studentRegistrationId: student.registrationId, examinationId: exam.id },
+    });
+    expect((await page(5, 250)).map((row) => row.id)).toEqual(ordered().slice(200));
+    const csrf = await studentCsrf(agent);
+    const checked = officialVerificationResponseSchema.parse(
+      (
+        await agent
+          .post('/api/v1/public/verify/result')
+          .set('X-CSRF-Token', csrf)
+          .send({ contractVersion: 2, reference: student.registrationNumber })
+          .expect(200)
+      ).body,
+    );
+    expect(checked.results?.map((row) => row.id)).toEqual(ordered().slice(0, 100));
+  } finally {
+    vi.useRealTimers();
+  }
+}, 180_000);

@@ -3,7 +3,7 @@ import {
   type CertificateApplicationPolicy,
 } from '@docversity/validation';
 import { Inject, Injectable } from '@nestjs/common';
-import type { Prisma } from '@docversity/database';
+import type { DatabaseModels, Prisma } from '@docversity/database';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   verificationPolicyDefinitionSchema,
@@ -34,6 +34,16 @@ export class VerificationPoliciesService {
       return null;
     return p.data;
   }
+  approvedDefinition(policy: DatabaseModels.VerificationPolicyModel) {
+    if (
+      policy.status !== 'APPROVED' ||
+      !policy.approvedById ||
+      policy.approvedById === policy.proposedById ||
+      !policy.approvedAt
+    )
+      return null;
+    return this.allowed(policy.definition);
+  }
   async current(
     service: PublicVerificationService,
     programId: string,
@@ -46,8 +56,8 @@ export class VerificationPoliciesService {
       where: { ...(id ? { id } : {}), service, programId, status: 'APPROVED' },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    if (!p?.approvedById || p.approvedById === p.proposedById || !p.approvedAt) return null;
-    const definition = this.allowed(p.definition);
+    if (!p) return null;
+    const definition = this.approvedDefinition(p);
     return definition ? { ...p, definition } : null;
   }
   async application(

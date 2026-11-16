@@ -337,3 +337,40 @@ it('keeps result filters usable when an authorized period lookup has no publicat
   });
   expect(screen.getByLabelText('Examination')).toBeInTheDocument();
 });
+
+it('rejects malformed references locally with an accessible correction message', async () => {
+  render(<VerificationPanel service="certificate" />);
+  const input = screen.getByLabelText('Certificate number');
+  fireEvent.change(input, { target: { value: 'ABC DEF' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+  const error = await screen.findByRole('alert');
+  expect(error).toHaveTextContent('Please check the entered code and try again.');
+  expect(input).toHaveAttribute('aria-describedby', error.id);
+  expect(error).not.toHaveTextContent('ABC DEF');
+  expect(request).not.toHaveBeenCalled();
+});
+
+it.each([
+  [400, 'VALIDATION_FAILED', 'Please check the entered code and try again.'],
+  [429, 'PUBLIC_VERIFICATION_RATE_LIMITED', 'Too many checks. Wait a minute, then try again.'],
+  [0, 'NETWORK_ERROR', 'Verification could not be completed. Please try again shortly.'],
+  [500, 'INTERNAL_ERROR', 'Verification could not be completed. Please try again shortly.'],
+  [403, 'FORBIDDEN', 'Verification could not be completed.'],
+])(
+  'announces safe guidance for HTTP %s without echoing API details',
+  async (status, code, message) => {
+    request.mockRejectedValueOnce(new ApiError(status, code, 'PRIVATE-REFERENCE-DETAIL'));
+    render(<VerificationPanel service="certificate" />);
+    fireEvent.change(screen.getByLabelText('Certificate number'), {
+      target: { value: 'VALID-001' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    const error = await screen.findByRole('alert');
+    expect(error.textContent).toBe(message);
+    expect(error).not.toHaveTextContent('PRIVATE-REFERENCE-DETAIL');
+    expect(screen.getByLabelText('Certificate number')).toHaveAttribute(
+      'aria-describedby',
+      error.id,
+    );
+  },
+);

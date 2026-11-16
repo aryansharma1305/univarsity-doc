@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
+import type { Prisma } from '@docversity/database';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   officialPublishedResultSchema,
   type attestOfficialResultSchema,
   type publishOfficialResultSchema,
+  type StudentResultsQuery,
 } from '@docversity/validation';
 import type { z } from 'zod';
 import { PrismaService } from '../database/prisma.service.js';
@@ -197,91 +199,101 @@ export class OfficialResultsService {
       id?: string;
     } = {},
   ) {
-    const authorities = await this.prisma.client.verificationPolicy.findMany({
-      where: {
-        service: 'result',
-        status: 'APPROVED',
-        program: { registrations: { some: { studentId } } },
+    return (await this.read(studentId, filter)).data;
+  }
+  async page(studentId: string, query: StudentResultsQuery) {
+    const { data, total } = await this.read(studentId, {}, query);
+    return {
+      publicationAvailable: total > 0,
+      data,
+      meta: {
+        page: query.page,
+        pageSize: query.pageSize,
+        total,
+        totalPages: Math.ceil(total / query.pageSize),
       },
-    });
-    const policyIds = authorities
-      .filter(
-        (p) =>
-          p.approvedById &&
-          p.approvedById !== p.proposedById &&
-          p.approvedAt &&
-          this.policies.allowed(p.definition),
-      )
-      .map((p) => p.id);
-    if (!policyIds.length) return [];
-    const rows = await this.prisma.client.result.findMany({
-      where: {
-        officialPublication: { policyId: { in: policyIds } },
-        ...(filter.id ? { id: filter.id } : {}),
-        studentRegistration: {
-          studentId,
-          ...(filter.registrationId ? { id: filter.registrationId } : {}),
-        },
-        publicationStatus: 'PUBLISHED',
-        approvedAt: { not: null },
-        publishedAt: { not: null },
-        examination: {
-          ...(filter.periodNumber ? { semesterNumber: filter.periodNumber } : {}),
-          ...(filter.examinationId ? { id: filter.examinationId } : {}),
-        },
-      },
-      include: {
-        studentRegistration: true,
-        examination: true,
-        items: { include: { programSubject: { include: { subject: true } } } },
-      },
-      orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
-      take: 100,
-    });
-    const visible = [];
-    for (const r of rows) {
-      if (!r.publishedAt) continue;
-      const receipt = await this.prisma.client.resultPublication.findUnique({
-        where: { resultId: r.id },
-      });
-      if (
-        !receipt ||
-        !(await this.policies.current(
-          'result',
-          r.studentRegistration.programId,
-          this.prisma.client,
-          receipt.policyId,
-        ))
-      )
-        continue;
-      visible.push(
-        officialPublishedResultSchema.parse({
-          id: r.id,
-          usage: 'OFFICIAL',
-          label: 'Official published result',
-          examination: r.examination.name,
-          examinationId: r.examinationId,
-          periodNumber: r.examination.semesterNumber,
-          attemptNumber: r.attemptNumber,
-          publishedAt: r.publishedAt.toISOString(),
-          sgpa: r.sgpa?.toString() ?? null,
-          outcome: r.outcome,
-          subjects: r.items.map((i) => ({
-            programSubjectId: i.programSubjectId,
-            code: i.programSubject.subject.code,
-            name: i.programSubject.subject.name,
-            internalMarks: i.internalMarks?.toString() ?? null,
-            externalMarks: i.externalMarks?.toString() ?? null,
-            practicalMarks: i.practicalMarks?.toString() ?? null,
-            otherMarks: i.otherMarks?.toString() ?? null,
-            totalMarks: i.totalMarks?.toString() ?? null,
-            maxMarks: i.maxMarks?.toString() ?? null,
-            grade: i.grade,
-            status: i.status,
+    };
+  }
+  private async read(
+    studentId: string,
+    filter: { registrationId?: string; periodNumber?: number; examinationId?: string; id?: string },
+    page?: StudentResultsQuery,
+  ) {
+    // Count and page share one eligibility predicate and one policy/publication snapshot.
+    return this.prisma.client.$transaction(
+      async (tx) => {
+        const authorities = await tx.verificationPolicy.findMany({
+          where: {
+            service: 'result',
+            status: 'APPROVED',
+            program: { registrations: { some: { studentId } } },
+          },
+        });
+        const eligible = authorities.filter((policy) => this.policies.approvedDefinition(policy));
+        if (!eligible.length) return { data: [], total: 0 };
+        const where: Prisma.ResultWhereInput = {
+          OR: eligible.map((p) => ({
+            officialPublication: { policyId: p.id },
+            studentRegistration: { programId: p.programId },
           })),
-        }),
-      );
-    }
-    return visible;
+          ...(filter.id ? { id: filter.id } : {}),
+          studentRegistration: {
+            studentId,
+            ...(filter.registrationId ? { id: filter.registrationId } : {}),
+          },
+          publicationStatus: 'PUBLISHED',
+          approvedAt: { not: null },
+          publishedAt: { not: null },
+          examination: {
+            ...(filter.periodNumber ? { semesterNumber: filter.periodNumber } : {}),
+            ...(filter.examinationId ? { id: filter.examinationId } : {}),
+          },
+        };
+        const total = page ? await tx.result.count({ where }) : 0;
+        const rows = await tx.result.findMany({
+          where,
+          include: {
+            examination: true,
+            items: { include: { programSubject: { include: { subject: true } } } },
+          },
+          orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
+          skip: page ? (page.page - 1) * page.pageSize : 0,
+          take: page?.pageSize ?? 100,
+        });
+        const visible = [];
+        for (const r of rows) {
+          if (!r.publishedAt) continue;
+          visible.push(
+            officialPublishedResultSchema.parse({
+              id: r.id,
+              usage: 'OFFICIAL',
+              label: 'Official published result',
+              examination: r.examination.name,
+              examinationId: r.examinationId,
+              periodNumber: r.examination.semesterNumber,
+              attemptNumber: r.attemptNumber,
+              publishedAt: r.publishedAt.toISOString(),
+              sgpa: r.sgpa?.toString() ?? null,
+              outcome: r.outcome,
+              subjects: r.items.map((i) => ({
+                programSubjectId: i.programSubjectId,
+                code: i.programSubject.subject.code,
+                name: i.programSubject.subject.name,
+                internalMarks: i.internalMarks?.toString() ?? null,
+                externalMarks: i.externalMarks?.toString() ?? null,
+                practicalMarks: i.practicalMarks?.toString() ?? null,
+                otherMarks: i.otherMarks?.toString() ?? null,
+                totalMarks: i.totalMarks?.toString() ?? null,
+                maxMarks: i.maxMarks?.toString() ?? null,
+                grade: i.grade,
+                status: i.status,
+              })),
+            }),
+          );
+        }
+        return { data: visible, total };
+      },
+      { isolationLevel: 'RepeatableRead' },
+    );
   }
 }

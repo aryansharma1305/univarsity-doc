@@ -7,11 +7,14 @@ import { Button } from '@docversity/ui/components/button';
 import { Input } from '@docversity/ui/components/input';
 import {
   officialVerificationResponseSchema,
+  officialVerificationRequestSchema,
   type OfficialVerificationResponse,
   type PublicVerificationService,
 } from '@docversity/validation';
 import { ApiError, studentRequest } from '@/lib/api';
 import styles from './verification-panel.module.css';
+
+const CHECK_CODE = 'Please check the entered code and try again.';
 
 const SERVICES = {
   'admission-letter': {
@@ -62,7 +65,9 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
       // QR credentials must leave browser history before any request can be submitted.
       window.history.replaceState(null, '', window.location.pathname);
       queueMicrotask(() => {
-        const valid = !privateLookup && /^[A-Za-z0-9_-]{43}$/.test(value);
+        const valid =
+          !privateLookup &&
+          officialVerificationRequestSchema.safeParse({ contractVersion: 2, token: value }).success;
         setToken(valid ? value : '');
         setReference('');
         setResponse(null);
@@ -89,6 +94,16 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
 
   async function lookup(periodNumber?: number) {
     if (busy) return;
+    const input = officialVerificationRequestSchema.safeParse({
+      contractVersion: 2,
+      ...(token ? { token } : { reference }),
+      ...(service === 'result' && periodNumber ? { periodNumber } : {}),
+    });
+    if (!input.success) {
+      setResponse(null);
+      setError(CHECK_CODE);
+      return;
+    }
     const version = ++requestVersion.current;
     setBusy(true);
     setError('');
@@ -100,21 +115,17 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
         `public/verify/${service}`,
         officialVerificationResponseSchema,
         {
-          body: {
-            contractVersion: 2,
-            ...(token ? { token } : { reference }),
-            ...(service === 'result' && periodNumber ? { periodNumber } : {}),
-          },
+          body: input.data,
         },
       );
       if (version === requestVersion.current) setResponse(result);
     } catch (caught) {
-      if (version === requestVersion.current)
-        setError(
-          caught instanceof ApiError && caught.status === 429
-            ? 'Too many checks. Wait a minute, then try again.'
-            : 'Verification could not be completed. Please try again shortly.',
-        );
+      if (version !== requestVersion.current) return;
+      const status = caught instanceof ApiError ? caught.status : 0;
+      if (status === 429) setError('Too many checks. Wait a minute, then try again.');
+      else if (status === 400) setError(CHECK_CODE);
+      else if (status >= 400 && status < 500) setError('Verification could not be completed.');
+      else setError('Verification could not be completed. Please try again shortly.');
     } finally {
       if (version === requestVersion.current) setBusy(false);
     }
