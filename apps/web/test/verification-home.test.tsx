@@ -34,31 +34,42 @@ afterEach(() => {
 
 describe('public verification homepage', () => {
   it('shows exactly the five header destinations in order', () => {
-    render(<VerificationHome />);
+    render(<VerificationHome year={2026} />);
     const links = within(screen.getByRole('navigation', { name: 'Main' })).getAllByRole('link');
     expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual(navigation);
     expect(screen.queryByRole('link', { name: 'Docversity home' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Staff|Help|Contact/ })).not.toBeInTheDocument();
   });
 
-  it('replaces the large hero, CTA badges and footer with the verification box', () => {
-    const { container } = render(<VerificationHome />);
+  it('is a distinct animated homepage, not the admission-letter form', () => {
+    render(<VerificationHome year={2026} />);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      /Verify\.\s*Trust\.\s*Confirm\./,
+    );
+    expect(screen.getByRole('img', { name: 'Docversity University' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Activate your account' })).toHaveAttribute(
+      'href',
+      '/student/register',
+    );
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Verify Admission Letter' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Admission letter number' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Verify$/ })).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('No record checked yet');
-    expect(container.querySelectorAll('main section')).toHaveLength(1);
-    expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument();
+      screen.queryByRole('heading', { name: 'Verify Admission Letter' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Verify$/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the mentor-removed subtitle and badge row out', () => {
+    render(<VerificationHome year={2026} />);
     expect(
       screen.queryByText(/Single-use activation codes|Only your own records|Separate staff access/),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText('Verify.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/examination services in one secure student portal/),
+    ).not.toBeInTheDocument();
   });
 
   it('uses the same five destinations in the mobile drawer and closes on navigation', () => {
-    render(<VerificationHome />);
+    render(<VerificationHome year={2026} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
     const links = within(screen.getByRole('navigation', { name: 'Mobile' })).getAllByRole('link');
     expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual(navigation);
