@@ -313,22 +313,35 @@ export class AuthController {
   @ApiCookieAuth(SESSION_AUTH)
   @ApiSecurity(CSRF_AUTH)
   @ApiOperation({
-    summary: 'Confirm enrollment with a current code',
+    summary: 'Confirm enrollment with your current password and a current code',
     description:
-      'Activates MFA, returns single-use recovery codes ONCE and ends your other sessions.',
+      'Re-authenticates with the current password (throttled like sign-in), activates MFA, returns ' +
+      'single-use recovery codes ONCE, replaces the session cookie with a new session ID and ends ' +
+      'your other sessions.',
   })
   @ApiBody({ schema: openApiRequestSchema(mfaEnrollmentConfirmRequestSchema) })
   @ApiOkResponse({ standardSchema: mfaEnrollmentConfirmResponseSchema })
   @ApiResponse({ status: 400, description: 'Enrollment expired', ...errorResponse })
-  @ApiResponse({ status: 401, description: 'Invalid code', ...errorResponse })
+  @ApiResponse({
+    status: 401,
+    description: 'Current password incorrect or invalid code',
+    ...errorResponse,
+  })
+  @ApiResponse({ status: 429, description: 'Too many attempts', ...errorResponse })
   async confirmMfaEnrollment(
     @CurrentAuth() auth: AuthContext,
     @Body(new ZodValidationPipe(mfaEnrollmentConfirmRequestSchema))
     body: MfaEnrollmentConfirmRequest,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<MfaEnrollmentConfirmResponse> {
     res.setHeader('Cache-Control', 'no-store');
-    return this.mfa.confirmEnrollment(auth, body.code);
+    const { sessionId, result } = await this.mfa.confirmEnrollment(auth, body, {
+      ip: req.ip ?? req.socket.remoteAddress ?? 'unknown',
+      userAgent: req.header('user-agent'),
+    });
+    res.cookie(cookieNames(this.config).session, sessionId, sessionCookieOptions(this.config));
+    return result;
   }
 
   @Post('mfa/verify')
@@ -341,12 +354,15 @@ export class AuthController {
     description:
       'Only for a pending (MFA_VERIFY) session. Each 30-second code works once (±1 step accepted); ' +
       'each recovery code works once. On success the pending session is replaced by a new full ' +
-      'session cookie. Throttled like sign-in (429).',
+      'session cookie. Throttled with the dedicated MFA_* limits (429 AUTH_RATE_LIMITED); repeated ' +
+      'wrong codes lock verification for the account (429 MFA_LOCKED) until the cool-down ends or ' +
+      'an administrator resets access.',
   })
   @ApiBody({ schema: openApiRequestSchema(mfaVerifyRequestSchema) })
   @ApiOkResponse({ standardSchema: authUserSchema })
   @ApiResponse({ status: 401, description: 'Invalid or reused code', ...errorResponse })
-  @ApiResponse({ status: 429, description: 'Too many attempts', ...errorResponse })
+  @ApiResponse({ status: 409, description: 'Verification already in progress', ...errorResponse })
+  @ApiResponse({ status: 429, description: 'Too many attempts or locked', ...errorResponse })
   async verifyMfa(
     @CurrentAuth() auth: AuthContext,
     @Body(new ZodValidationPipe(mfaVerifyRequestSchema)) body: MfaVerifyRequest,

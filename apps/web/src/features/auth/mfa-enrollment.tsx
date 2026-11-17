@@ -20,8 +20,9 @@ type State =
   | { phase: 'codes'; recoveryCodes: string[]; user: AuthUser };
 
 /**
- * Authenticator-app enrollment: start → scan the QR code (or type the key) → confirm with a current
- * code → save the one-time recovery codes. The secret and the codes are shown only here, once.
+ * Authenticator-app enrollment: start → scan the QR code (or type the key) → confirm with the current
+ * password and a current code → save the one-time recovery codes. The secret and the codes are shown
+ * only here, once. Confirming re-authenticates (the API checks the password) and rotates the session.
  */
 export function MfaEnrollment({ required }: { required: boolean }) {
   const router = useRouter();
@@ -48,7 +49,11 @@ export function MfaEnrollment({ required }: { required: boolean }) {
 
   async function confirm(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    const value = new FormData(event.currentTarget).get('code');
+    const form = new FormData(event.currentTarget);
+    const field = (name: string) => {
+      const value = form.get(name);
+      return typeof value === 'string' ? value : '';
+    };
     setPending(true);
     setError(null);
     try {
@@ -56,14 +61,22 @@ export function MfaEnrollment({ required }: { required: boolean }) {
         'POST',
         'auth/mfa/enrollment/confirm',
         mfaEnrollmentConfirmResponseSchema,
-        { body: { code: typeof value === 'string' ? value : '' } },
+        { body: { currentPassword: field('currentPassword'), code: field('code') } },
       );
+      // The API issued a new session ID; drop the CSRF token bound to the old one.
+      resetApiClient();
       setState({ phase: 'codes', recoveryCodes: result.recoveryCodes, user: result.user });
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === 'MFA_ENROLLMENT_EXPIRED') {
         setState({ phase: 'intro' });
       }
-      setError(caught instanceof ApiError ? caught.message : 'Could not confirm the code.');
+      setError(
+        caught instanceof ApiError
+          ? caught.code === 'AUTH_INVALID_CREDENTIALS'
+            ? 'The current password is not correct.'
+            : caught.message
+          : 'Could not confirm the code.',
+      );
     } finally {
       setPending(false);
     }
@@ -105,7 +118,7 @@ export function MfaEnrollment({ required }: { required: boolean }) {
       <form onSubmit={(event) => void confirm(event)} className="flex flex-col gap-4" noValidate>
         <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
           <li>Scan this QR code with your authenticator app.</li>
-          <li>Enter the 6-digit code the app shows to finish.</li>
+          <li>Enter your current password and the 6-digit code the app shows to finish.</li>
         </ol>
         {/* eslint-disable-next-line @next/next/no-img-element -- inline data: URL, nothing to optimise */}
         <img
@@ -123,6 +136,19 @@ export function MfaEnrollment({ required }: { required: boolean }) {
           >
             {enrollment.secret.replace(/(.{4})/g, '$1 ').trim()}
           </code>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="mfa-current-password" className="text-label">
+            Current password
+          </Label>
+          <Input
+            id="mfa-current-password"
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            required
+            className="h-10"
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="mfa-confirm-code" className="text-label">

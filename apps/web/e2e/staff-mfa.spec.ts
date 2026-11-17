@@ -59,7 +59,14 @@ test('CLI-created staff: forced password change → MFA enrollment → sign-in w
   const secret = (await page.getByTestId('mfa-secret').innerText()).replace(/\s+/g, '');
   expect(secret).toMatch(/^[A-Z2-7]{32}$/);
   await expectNoSeriousA11yViolations(page);
+  // Confirming re-authenticates: a wrong current password is refused, the right one works.
+  await page.getByLabel('Current password').fill('not the current password 1');
   await page.getByLabel('Authenticator code').fill(totp(secret));
+  await page.getByRole('button', { name: 'Confirm and turn on' }).click();
+  await expect(page.locator('form').getByRole('alert')).toContainText(
+    'The current password is not correct.',
+  );
+  await page.getByLabel('Current password').fill(NEW_PASSWORD);
   await page.getByRole('button', { name: 'Confirm and turn on' }).click();
   await expect(page.getByRole('status')).toHaveText('Two-step verification is on.');
   await expect(page.getByTestId('recovery-codes').getByRole('listitem')).toHaveCount(10);

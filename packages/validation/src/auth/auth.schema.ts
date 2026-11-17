@@ -115,8 +115,15 @@ export const mfaEnrollmentStartResponseSchema = z
   })
   .meta({ id: 'MfaEnrollmentStartResponse' });
 
+/**
+ * Confirming enrollment binds a new second factor to the account, so it re-authenticates: the current
+ * password is required (checked with Argon2 and throttled like sign-in), not just a live session.
+ */
 export const mfaEnrollmentConfirmRequestSchema = z
-  .object({ code: totpCodeSchema })
+  .object({
+    currentPassword: z.string().min(1, 'Enter your current password.').max(1024),
+    code: totpCodeSchema,
+  })
   .meta({ id: 'MfaEnrollmentConfirmRequest' });
 
 export const mfaEnrollmentConfirmResponseSchema = z
@@ -155,11 +162,12 @@ export const staffUserListResponseSchema = z
 
 /**
  * SUPER_ADMIN reset of another staff member: removes their authenticator and recovery codes, requires
- * a new password at next sign-in and ends every session. An optional temporary password (handed over
- * out of band) replaces the current one.
+ * a new password at next sign-in and ends every session. The temporary password (handed over out of
+ * band) is REQUIRED and always replaces the current one, so whoever knew the old password — possibly
+ * the reason for the reset — cannot sign in afterwards.
  */
 export const staffAccessResetRequestSchema = z
-  .object({ temporaryPassword: newPasswordSchema.optional() })
+  .object({ temporaryPassword: newPasswordSchema })
   .strict()
   .meta({ id: 'StaffAccessResetRequest' });
 

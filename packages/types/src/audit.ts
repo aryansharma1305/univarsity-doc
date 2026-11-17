@@ -28,6 +28,8 @@ export const AUDIT_ACTIONS = {
   userDisabled: 'USER_DISABLED',
   authMfaVerified: 'AUTH_MFA_VERIFIED',
   authMfaFailure: 'AUTH_MFA_FAILURE',
+  /** Too many wrong authenticator/recovery codes: MFA verification locked for the account. */
+  authMfaLocked: 'AUTH_MFA_LOCKED',
   mfaEnabled: 'MFA_ENABLED',
   mfaRecoveryCodeUsed: 'MFA_RECOVERY_CODE_USED',
   staffAccessReset: 'STAFF_ACCESS_RESET',

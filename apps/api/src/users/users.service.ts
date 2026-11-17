@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@docversity/database';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import { AuditService } from '../audit/audit.service.js';
 import { SessionStore } from '../auth/session.store.js';
@@ -63,8 +64,17 @@ export class UsersService {
    * early is harmless. The AuthGuard also reloads the user on every request and refuses (and revokes)
    * sessions of a DISABLED account.
    */
-  async disableUser(userId: string, actorUserId: string | null, reason: string): Promise<void> {
+  async disableUser(
+    userId: string,
+    actorUserId: string | null,
+    reason: string,
+    options: {
+      /** Runs first inside the same transaction (locks + invariant checks); throw to refuse. */
+      beforeDisable?: (tx: Prisma.TransactionClient) => Promise<void>;
+    } = {},
+  ): Promise<void> {
     await this.prisma.client.$transaction(async (tx) => {
+      await options.beforeDisable?.(tx);
       await tx.user.update({ where: { id: userId }, data: { status: 'DISABLED' } });
       const revoked = await this.sessions.revokeAllForUser(userId);
       await this.audit.writeAuditEvent(

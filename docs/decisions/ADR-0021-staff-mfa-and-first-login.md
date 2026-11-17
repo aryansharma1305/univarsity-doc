@@ -26,34 +26,49 @@ notifier is configured), so recovery must work without email.
    no OTP library; a minimal implementation avoids a new security-critical dependency. Parameters are
    the interoperable defaults: HMAC-SHA1, 6 digits, 30 s, 160-bit secret, ±1 step window.
    - **Enrollment:** the server generates the secret, returns it once (base32, `otpauth://` URI and an
-     SVG QR code) and keeps it encrypted in Redis for 10 minutes; it becomes active only after a valid
-     code (`POST /auth/mfa/enrollment/confirm`).
+     SVG QR code) and keeps it encrypted in Redis for 10 minutes; it becomes active only after the
+     user re-enters their **current password** (Argon2 check, sign-in rate limits, scope
+     `mfa-enroll`) together with a valid code (`POST /auth/mfa/enrollment/confirm`), so a stolen
+     session alone cannot bind an attacker's authenticator. Confirmation rotates the session ID (as
+     verification does) and ends every other session.
    - **At rest:** AES-256-GCM, key derived by HKDF from `STAFF_MFA_ENCRYPTION_KEY` (64 hex chars), the
      user ID as associated data (a ciphertext copied to another row does not decrypt).
    - **Login is two steps.** A correct password for an MFA account creates a _pending_ session
      (`stage: 'mfa'`, 5-minute absolute lifetime) that can only call `POST /auth/mfa/verify`. Success
-     replaces it with a **new** session ID (fixation defence). Pending sessions use a separate
+     replaces it with a **new** session ID (fixation defence). The pending session is single use: a
+     verify request takes an exclusive Redis claim on it before any code is spent (concurrent verifies
+     get `409`) and consumes it with `GETDEL` before creating the full session, so one pending session
+     yields at most one full session. Pending sessions use a separate
      credential-binding HMAC domain, so any reader that ignores `stage` — including release 70b11d2 on
      the same Redis — rejects them instead of treating them as full sessions.
    - **Replay protection:** `users.mfa_totp_last_used_step` is advanced with a compare-and-set; a step
      at or below it is never accepted (each code works once, and older codes stop working).
-   - **Rate limiting:** the sign-in limits (`LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP`/`_PER_ACCOUNT`/`_PER_IP`
-     per `LOGIN_RATE_LIMIT_WINDOW_SECONDS`) in an own `mfa` scope, checked before any code is compared;
-     the first throttled attempt per window is audited.
+   - **Rate limiting:** dedicated, tighter limits for a 10^6-value code (`MFA_MAX_ATTEMPTS_PER_ACCOUNT_IP`
+     5, `MFA_MAX_ATTEMPTS_PER_ACCOUNT` 5, `MFA_MAX_ATTEMPTS_PER_IP` 50 per
+     `MFA_RATE_LIMIT_WINDOW_SECONDS` 900) in an own `mfa` scope, checked before any code is compared;
+     the first throttled attempt per window is audited. A success clears only the account+IP counter,
+     never the per-account counter.
+   - **Escalating lockout:** `MFA_LOCKOUT_THRESHOLD` (10) wrong codes within
+     `MFA_LOCKOUT_WINDOW_SECONDS` (24 h) lock verification for the account for `MFA_LOCKOUT_SECONDS`
+     (24 h) or until a SUPER_ADMIN access reset (`429 MFA_LOCKED`, audited `AUTH_MFA_LOCKED`); further
+     wrong codes inside the window re-arm it. With the defaults an attacker gets at most 10 guesses a
+     day (success probability ≈ 3 × 10⁻⁵ per day with the ±1 step window).
    - **Enforcement:** `STAFF_MFA_ENFORCED=true` makes every staff account without MFA enroll before
      anything else (step `MFA_ENROLL`). Default `false`.
 3. **Recovery.** Ten single-use recovery codes (50 bits each, `XXXXX-XXXXX`) are issued at enrollment
    and shown once; only `HMAC-SHA256(HKDF(key, "recovery-code"), userId‖code)` is stored
    (`staff_mfa_recovery_codes`), spent by a compare-and-set on `used_at`. A SUPER_ADMIN (`users.manage`)
    can reset another member's access (`POST /api/v1/staff-users/:id/access-reset`: removes MFA and
-   recovery codes, sets the password-change flag, optional temporary password, revokes all sessions;
-   audited `STAFF_ACCESS_RESET`). When no administrator can sign in, the operator CLI
+   recovery codes, replaces the password with a **required**, policy-checked temporary password — so
+   anyone who knew the old password is locked out — sets the password-change flag, clears the MFA
+   lockout, revokes all sessions; audited `STAFF_ACCESS_RESET`). When no administrator can sign in, the operator CLI
    `pnpm staff:reset-access` does the same on the server with a mandatory temporary password (all
    sessions die because they are bound to the password hash).
 4. **Session revocation** on password change (others), MFA enrollment (others), access reset (all) and
    account disable (all). `POST /api/v1/staff-users/:id/disable` (SUPER_ADMIN, reason code, audited
    `USER_DISABLED`, refuses self and the last active SUPER_ADMIN) reuses `UsersService.disableUser` to
-   retire demo accounts.
+   retire demo accounts. The last-SUPER_ADMIN count and the status change run in one transaction under
+   `pg_advisory_xact_lock`, so concurrent disables cannot remove the last one.
 5. Roles and permissions are unchanged; student authentication is untouched (student routes skip the
    staff guard entirely).
 
@@ -66,6 +81,20 @@ MFA; nothing changes for them until `STAFF_MFA_ENFORCED=true`. Release 70b11d2 k
 migrated schema: it never selects the new columns, its inserts get the defaults, and it rejects pending
 MFA sessions (see 2). Rolling back to 70b11d2 after enrollment disables the second factor (that release
 does not know about MFA) — roll back only in an emergency, and turn enforcement off first.
+
+**Rollback rules (operators).**
+
+- **`STAFF_MFA_ENFORCED` must stay `false`** until a rollback to 70b11d2 is no longer expected. Turning
+  enforcement on while a rollback is still possible would make staff depend on a factor that the
+  rolled-back release silently drops.
+- **After any rollback to 70b11d2, every account with `password_change_required = true` must be reset or
+  disabled.** 70b11d2 ignores the flag, so such an account signs in with the operator-issued
+  first-login or temporary password as a full session. Before reopening the service, list them
+  (`SELECT id, email FROM users WHERE password_change_required AND status = 'ACTIVE';`) and either
+  give each a new password the account holder sets in person, or disable the account. The same
+  applies when moving forward again: re-check the list.
+- The new MFA lockout state lives only in Redis (`<prefix>mfa-lock:*`, `<prefix>mfa-failures:*`);
+  70b11d2 ignores it, and no migration is involved.
 
 ## Consequences
 

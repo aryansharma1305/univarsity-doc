@@ -52,12 +52,14 @@ export class StaffUsersController {
   @ApiOperation({
     summary: "Reset another staff member's MFA and require a new password",
     description:
-      'Removes the authenticator and recovery codes, sets the password-change flag, optionally sets a ' +
-      'temporary password, and revokes all of their sessions. Audited (STAFF_ACCESS_RESET). Not for ' +
-      'your own account.',
+      'Removes the authenticator and recovery codes, replaces the password with the required ' +
+      'temporary password (the old one stops working), sets the password-change flag, clears any MFA ' +
+      'lockout and revokes all of their sessions. Audited (STAFF_ACCESS_RESET). Not for your own ' +
+      'account.',
   })
   @ApiBody({ schema: openApiRequestSchema(staffAccessResetRequestSchema) })
   @ApiOkResponse({ standardSchema: okResponseSchema })
+  @ApiResponse({ status: 400, description: 'Temporary password missing or weak', ...errorResponse })
   @ApiResponse({ status: 404, description: 'No such user', ...errorResponse })
   @ApiResponse({ status: 409, description: 'Own account', ...errorResponse })
   async resetAccess(

@@ -4,7 +4,11 @@ const VERSION = 'v1';
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
-/** Unambiguous RFC 4648 base32 alphabet for recovery codes (no 0/1/8/9 to confuse with O/I/B/g). */
+/**
+ * RFC 4648 base32 alphabet (A–Z, 2–7) for recovery codes. It is NOT a confusion-free alphabet: the
+ * digits 0, 1, 8 and 9 are absent, but the letters O, I and B are present, so a code can still be
+ * misread. A mistyped 0/1/8/9 fails the `[A-Z2-7]` format check instead of being silently mapped.
+ */
 const RECOVERY_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 export const RECOVERY_CODE_COUNT = 10;
 /** 10 base32 characters = 50 bits per code; only an HMAC is stored and each works once. */

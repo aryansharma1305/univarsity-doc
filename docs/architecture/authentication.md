@@ -206,21 +206,33 @@ step is pending the session has **no permissions** and reaches only `GET /auth/m
 `nextStep` and `mfaEnabled`; the web app redirects to `/admin/login/verify`, `/admin/security/password`
 or `/admin/security/mfa`.
 
-| Endpoint                                    | Step / access           | Behaviour                                                                                          |
-| ------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/auth/password`                | full or PASSWORD_CHANGE | New password must differ; clears the flag; revokes other sessions                                  |
-| `POST /api/v1/auth/mfa/enrollment`          | full or MFA_ENROLL      | New secret, returned once (base32, otpauth URI, SVG QR); kept encrypted in Redis for 10 min        |
-| `POST /api/v1/auth/mfa/enrollment/confirm`  | full or MFA_ENROLL      | Valid code activates MFA; returns 10 recovery codes once; revokes other sessions; `MFA_ENABLED`    |
-| `POST /api/v1/auth/mfa/verify`              | MFA_VERIFY only         | `{ code }` or `{ recoveryCode }`; replaces the pending session with a new one; `AUTH_MFA_VERIFIED` |
-| `GET /api/v1/staff-users`                   | `users.manage`          | Staff with status, `mfaEnabled`, `passwordChangeRequired`                                          |
-| `POST /api/v1/staff-users/:id/access-reset` | `users.manage`          | Removes MFA + recovery codes, sets the flag, optional `temporaryPassword`, revokes all sessions    |
-| `POST /api/v1/staff-users/:id/disable`      | `users.manage`          | Reason code; `USER_DISABLED`; revokes all sessions; refuses self and the last active SUPER_ADMIN   |
+| Endpoint                                    | Step / access           | Behaviour                                                                                                                                                            |
+| ------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/auth/password`                | full or PASSWORD_CHANGE | New password must differ; clears the flag; revokes other sessions                                                                                                    |
+| `POST /api/v1/auth/mfa/enrollment`          | full or MFA_ENROLL      | New secret, returned once (base32, otpauth URI, SVG QR); kept encrypted in Redis for 10 min                                                                          |
+| `POST /api/v1/auth/mfa/enrollment/confirm`  | full or MFA_ENROLL      | `{ currentPassword, code }`: re-authenticates (Argon2, sign-in limits), activates MFA; 10 recovery codes once; new session ID; revokes other sessions; `MFA_ENABLED` |
+| `POST /api/v1/auth/mfa/verify`              | MFA_VERIFY only         | `{ code }` or `{ recoveryCode }`; consumes the pending session atomically and creates a new one; `AUTH_MFA_VERIFIED`                                                 |
+| `GET /api/v1/staff-users`                   | `users.manage`          | Staff with status, `mfaEnabled`, `passwordChangeRequired`                                                                                                            |
+| `POST /api/v1/staff-users/:id/access-reset` | `users.manage`          | Removes MFA + recovery codes, **required** `temporaryPassword` replaces the password, sets the flag, clears the MFA lockout, revokes all sessions                    |
+| `POST /api/v1/staff-users/:id/disable`      | `users.manage`          | Reason code; `USER_DISABLED`; revokes all sessions; refuses self and the last active SUPER_ADMIN (checked under an advisory lock in the same transaction)            |
 
 **TOTP.** RFC 6238, HMAC-SHA1, 6 digits, 30 s, 160-bit secret, ±1 step. Secrets are AES-256-GCM
 encrypted with a key derived from `STAFF_MFA_ENCRYPTION_KEY` (bound to the user ID). A step is accepted
 at most once (`mfa_totp_last_used_step`, compare-and-set). Pending sessions (`stage: "mfa"` in Redis)
-live 5 minutes and use a separate credential-binding domain. Verification is throttled like sign-in
-(scope `mfa`: per user+IP, per user, per IP); failures are audited `AUTH_MFA_FAILURE`.
+live 5 minutes and use a separate credential-binding domain. A verify request first takes an exclusive
+Redis claim on its pending session (a concurrent verify gets `409`, without spending a code), and on
+success consumes the pending session with `GETDEL`; if it is already gone no full session is created.
+
+**MFA throttling and lockout.** Verification has its own, tighter limits (scope `mfa`, checked before
+any code is compared): `MFA_MAX_ATTEMPTS_PER_ACCOUNT_IP` (default 5), `MFA_MAX_ATTEMPTS_PER_ACCOUNT`
+(default 5) and `MFA_MAX_ATTEMPTS_PER_IP` (default 50) per `MFA_RATE_LIMIT_WINDOW_SECONDS` (default 900).
+A success clears only the account+IP counter, never the per-account one. Every wrong code also counts
+towards an escalating lockout: `MFA_LOCKOUT_THRESHOLD` (default 10) wrong codes within
+`MFA_LOCKOUT_WINDOW_SECONDS` (default 24 h) lock verification for the account for `MFA_LOCKOUT_SECONDS`
+(default 24 h) — `429 MFA_LOCKED` with `Retry-After` — or until a SUPER_ADMIN access reset; further
+wrong codes inside the window re-arm it. Failures are audited `AUTH_MFA_FAILURE`, each new lock
+`AUTH_MFA_LOCKED`. Enrollment confirmation requires the current password and uses the sign-in limits
+(scope `mfa-enroll`).
 
 **Recovery codes.** 10 × 50-bit codes `XXXXX-XXXXX` (case, spaces and hyphens ignored), stored only as
 keyed HMACs in `staff_mfa_recovery_codes`, each spent once (`MFA_RECOVERY_CODE_USED` with the remaining
@@ -237,8 +249,8 @@ Removes the authenticator and recovery codes, sets the temporary password and th
 audits `STAFF_ACCESS_RESET (via: cli)`. Existing sessions stop working at once (bound to the password
 hash). Email reset stays disabled.
 
-**Configuration.** `STAFF_MFA_ENCRYPTION_KEY` (64 hex chars) is required in production and whenever
-`STAFF_MFA_ENFORCED=true`; without it (development only) enrollment answers `503 MFA_UNAVAILABLE`.
+**Configuration.** `STAFF_MFA_ENCRYPTION_KEY` (64 hex chars, never equal to `SESSION_SECRET`) is
+required in production and whenever `STAFF_MFA_ENFORCED=true`; without it (development only) enrollment answers `503 MFA_UNAVAILABLE`.
 `STAFF_MFA_ENFORCED` defaults to `false`; switching it on requires every staff member without MFA to
 enroll at their next request.
 

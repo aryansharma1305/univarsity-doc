@@ -14,6 +14,9 @@ import { AppError, Errors } from '../common/app-error.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { UsersService } from './users.service.js';
 
+/** Serialises every change that could remove the last active SUPER_ADMIN. */
+const SUPER_ADMIN_LOCK = 'staff-users:last-super-admin';
+
 /**
  * SUPER_ADMIN staff-account administration (permission `users.manage`, which only SUPER_ADMIN holds):
  * list staff, reset another member's MFA + require a new password, and disable (retire) an account.
@@ -58,9 +61,10 @@ export class StaffUsersService {
   }
 
   /**
-   * Removes the target's authenticator and recovery codes, requires a new password at their next
-   * sign-in (optionally replacing the password with a temporary one handed over out of band) and
-   * revokes all their sessions. The change and its audit entry commit together.
+   * Removes the target's authenticator and recovery codes, replaces the password with a REQUIRED
+   * temporary one handed over out of band (so the password hash always changes and nobody who knew
+   * the old password can sign in), requires a new password at their next sign-in, clears any MFA
+   * lockout and revokes all their sessions. The change and its audit entry commit together.
    */
   async resetAccess(
     actorUserId: string,
@@ -72,27 +76,24 @@ export class StaffUsersService {
     }
     const target = await this.users.findForAuthById(targetUserId);
     if (!target) throw Errors.notFound();
-    let passwordHash: string | undefined;
-    if (input.temporaryPassword !== undefined) {
-      const problems = passwordPolicyViolations(input.temporaryPassword, {
-        email: target.email,
-        displayName: target.displayName,
-      });
-      if (problems.length > 0) {
-        throw new AppError(
-          HttpStatus.BAD_REQUEST,
-          ERROR_CODES.authPasswordPolicy,
-          'Choose a stronger temporary password.',
-          {
-            details: problems.map((problem) => ({
-              path: 'temporaryPassword',
-              message: `Password ${problem}.`,
-            })),
-          },
-        );
-      }
-      passwordHash = await this.passwords.hashPassword(input.temporaryPassword);
+    const problems = passwordPolicyViolations(input.temporaryPassword, {
+      email: target.email,
+      displayName: target.displayName,
+    });
+    if (problems.length > 0) {
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        ERROR_CODES.authPasswordPolicy,
+        'Choose a stronger temporary password.',
+        {
+          details: problems.map((problem) => ({
+            path: 'temporaryPassword',
+            message: `Password ${problem}.`,
+          })),
+        },
+      );
     }
+    const passwordHash = await this.passwords.hashPassword(input.temporaryPassword);
 
     await this.prisma.client.$transaction(async (tx) => {
       await tx.user.update({
@@ -102,7 +103,7 @@ export class StaffUsersService {
           mfaTotpLastUsedStep: null,
           mfaEnabledAt: null,
           passwordChangeRequired: true,
-          ...(passwordHash ? { passwordHash } : {}),
+          passwordHash,
         },
       });
       const codes = await tx.staffMfaRecoveryCode.deleteMany({ where: { userId: targetUserId } });
@@ -117,7 +118,7 @@ export class StaffUsersService {
             via: 'api',
             mfaWasEnabled: target.mfaEnabled,
             recoveryCodesRemoved: codes.count,
-            temporaryLoginSet: passwordHash !== undefined,
+            temporaryLoginSet: true,
             sessionsRevoked: revoked,
           },
         },
@@ -125,25 +126,40 @@ export class StaffUsersService {
       );
     });
     await this.mfa.discardEnrollment(targetUserId);
+    await this.mfa.clearLockout(targetUserId);
   }
 
-  /** Disables (retires) another staff account and revokes all of its sessions. */
+  /**
+   * Disables (retires) another staff account and revokes all of its sessions. The "last active
+   * SUPER_ADMIN" check and the status change run in ONE transaction under a global advisory lock, so
+   * two concurrent disables can never both pass the check and leave no active SUPER_ADMIN.
+   */
   async disable(actorUserId: string, targetUserId: string, reason: string): Promise<void> {
     if (actorUserId === targetUserId) throw refused('You cannot disable your own account.');
-    const target = await this.users.findForAuthById(targetUserId);
-    if (!target) throw Errors.notFound();
-    if (target.status === 'DISABLED') throw refused('This account is already disabled.');
-    if (target.roles.includes(ROLE_NAMES.superAdmin)) {
-      const otherAdmins = await this.prisma.client.user.count({
-        where: {
-          id: { not: targetUserId },
-          status: 'ACTIVE',
-          roles: { some: { role: { name: ROLE_NAMES.superAdmin } } },
-        },
-      });
-      if (otherAdmins === 0) throw refused('The last active SUPER_ADMIN cannot be disabled.');
-    }
-    await this.users.disableUser(targetUserId, actorUserId, reason);
+    const exists = await this.users.findForAuthById(targetUserId);
+    if (!exists) throw Errors.notFound();
+    await this.users.disableUser(targetUserId, actorUserId, reason, {
+      beforeDisable: async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${SUPER_ADMIN_LOCK}, 0))`;
+        // Re-read under the lock: another transaction may have changed it since the request began.
+        const target = await tx.user.findUnique({
+          where: { id: targetUserId },
+          select: { status: true, roles: { select: { role: { select: { name: true } } } } },
+        });
+        if (!target) throw Errors.notFound();
+        if (target.status === 'DISABLED') throw refused('This account is already disabled.');
+        if (target.roles.some((link) => link.role.name === ROLE_NAMES.superAdmin)) {
+          const otherAdmins = await tx.user.count({
+            where: {
+              id: { not: targetUserId },
+              status: 'ACTIVE',
+              roles: { some: { role: { name: ROLE_NAMES.superAdmin } } },
+            },
+          });
+          if (otherAdmins === 0) throw refused('The last active SUPER_ADMIN cannot be disabled.');
+        }
+      },
+    });
   }
 }
 

@@ -3,6 +3,7 @@ import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   type AuthUser,
   ERROR_CODES,
+  type MfaEnrollmentConfirmRequest,
   type MfaEnrollmentConfirmResponse,
   type MfaEnrollmentStartResponse,
   type MfaVerifyRequest,
@@ -19,7 +20,8 @@ import type { AuthContext } from './auth.decorators.js';
 import { summariseUserAgent } from './device-summary.js';
 import { IdentifierHasher } from './identifier-hasher.js';
 import { generateRecoveryCodes, MfaCrypto } from './mfa-crypto.js';
-import { RateLimiter } from './rate-limiter.js';
+import { PasswordService } from './password.service.js';
+import { type LimitRule, RateLimiter } from './rate-limiter.js';
 import { SessionStore } from './session.store.js';
 import { describeUser } from './auth-user.js';
 import { staffNextStep } from './staff-steps.js';
@@ -30,6 +32,11 @@ export const MFA_PENDING_SESSION_SECONDS = 300;
 /** An unconfirmed enrollment secret lives this long (Redis, encrypted). */
 const ENROLLMENT_TTL_SECONDS = 600;
 const ISSUER = 'Docversity';
+/**
+ * How long one verify request holds the exclusive claim on its pending session. Long enough for a
+ * normal request; the atomic GETDEL of the pending session remains the hard guarantee if it expires.
+ */
+const VERIFY_CLAIM_MS = 15_000;
 
 export interface MfaClientInfo {
   ip: string;
@@ -55,6 +62,7 @@ export class MfaService {
     private readonly rateLimiter: RateLimiter,
     private readonly hasher: IdentifierHasher,
     private readonly audit: AuditService,
+    private readonly passwords: PasswordService,
   ) {
     this.crypto = config.STAFF_MFA_ENCRYPTION_KEY
       ? new MfaCrypto(config.STAFF_MFA_ENCRYPTION_KEY)
@@ -86,14 +94,35 @@ export class MfaService {
   }
 
   /**
-   * Activates MFA after a valid code proves the authenticator holds the secret. Issues fresh
-   * single-use recovery codes (returned once), ends the user's other sessions, and audits MFA_ENABLED
-   * in the same transaction as the change.
+   * Activates MFA after the user re-authenticates with their current password (Argon2, throttled like
+   * sign-in) and a valid code proves the authenticator holds the secret. Issues fresh single-use
+   * recovery codes (returned once), audits MFA_ENABLED in the same transaction as the change, then
+   * replaces the current session with a NEW session ID and ends every other session.
    */
-  async confirmEnrollment(auth: AuthContext, code: string): Promise<MfaEnrollmentConfirmResponse> {
+  async confirmEnrollment(
+    auth: AuthContext,
+    input: MfaEnrollmentConfirmRequest,
+    client: MfaClientInfo,
+  ): Promise<{ sessionId: string; result: MfaEnrollmentConfirmResponse }> {
     const crypto = this.requireCrypto();
-    await this.throttle('mfa-enroll', auth.user.id, null);
-    const pending = await this.redisOp((redis) => redis.get(this.enrollmentKey(auth.user.id)));
+    const userId = auth.user.id;
+    const ipHash = this.hasher.hash('ip', client.ip);
+    await this.throttle('mfa-enroll', userId, client.ip);
+
+    const user = await this.users.findForAuthById(userId);
+    if (user?.status !== 'ACTIVE' || !user.passwordHash) throw Errors.sessionExpired();
+    if (!(await this.passwords.verifyPassword(user.passwordHash, input.currentPassword))) {
+      await this.audit.writeAuditEvent({
+        actorUserId: userId,
+        action: AUDIT_ACTIONS.authMfaFailure,
+        entityType: 'User',
+        entityId: userId,
+        metadata: { stage: 'enrollment', reason: 'invalid_password', ipHash },
+      });
+      throw Errors.invalidCredentials();
+    }
+
+    const pending = await this.redisOp((redis) => redis.get(this.enrollmentKey(userId)));
     if (!pending) {
       throw new AppError(
         HttpStatus.BAD_REQUEST,
@@ -103,47 +132,63 @@ export class MfaService {
     }
     let secret: Buffer;
     try {
-      secret = crypto.decrypt(pending, auth.user.id, 'enrollment');
+      secret = crypto.decrypt(pending, userId, 'enrollment');
     } catch {
       throw Errors.authUnavailable();
     }
-    const step = verifyTotp(secret, code, Date.now(), null);
+    const step = verifyTotp(secret, input.code, Date.now(), null);
     if (step === null) throw invalidCode();
 
     const recoveryCodes = generateRecoveryCodes();
     await this.prisma.client.$transaction(async (tx) => {
       const updated = await tx.user.updateMany({
-        where: { id: auth.user.id, status: 'ACTIVE', mfaEnabledAt: null },
+        where: { id: userId, status: 'ACTIVE', mfaEnabledAt: null },
         data: {
-          mfaTotpSecretEnc: crypto.encrypt(secret, auth.user.id, 'secret'),
+          mfaTotpSecretEnc: crypto.encrypt(secret, userId, 'secret'),
           mfaTotpLastUsedStep: BigInt(step),
           mfaEnabledAt: new Date(),
         },
       });
       if (updated.count !== 1) throw mfaAlreadyEnabled();
-      await tx.staffMfaRecoveryCode.deleteMany({ where: { userId: auth.user.id } });
+      await tx.staffMfaRecoveryCode.deleteMany({ where: { userId } });
       await tx.staffMfaRecoveryCode.createMany({
         data: recoveryCodes.map((item) => ({
-          userId: auth.user.id,
-          codeHash: crypto.hashRecoveryCode(auth.user.id, item.normalised),
+          userId,
+          codeHash: crypto.hashRecoveryCode(userId, item.normalised),
         })),
       });
       await this.audit.writeAuditEvent(
         {
-          actorUserId: auth.user.id,
+          actorUserId: userId,
           action: AUDIT_ACTIONS.mfaEnabled,
           entityType: 'User',
-          entityId: auth.user.id,
+          entityId: userId,
           metadata: { method: 'totp', recoveryCodeCount: recoveryCodes.length },
         },
         tx,
       );
     });
-    await this.redisOp((redis) => redis.del(this.enrollmentKey(auth.user.id)));
-    await this.sessions.revokeAllForUser(auth.user.id, { exceptSessionId: auth.sessionId });
+    await this.redisOp((redis) => redis.del(this.enrollmentKey(userId)));
+    // A new authenticator starts with a clean failure history (only reachable after an access reset).
+    await this.clearLockout(userId);
+    await this.rateLimiter.clear('mfa-enroll', [this.pairKey(userId, client.ip)]);
+
+    // Rotate the session ID (as after sign-in verification), then end every other session.
+    const previous = await this.sessions.revoke(auth.sessionId);
+    if (previous?.userId !== userId) throw Errors.sessionExpired();
+    const { sessionId, record } = await this.sessions.create({
+      userId,
+      passwordHash: user.passwordHash,
+      device: summariseUserAgent(client.userAgent),
+      ipHash,
+    });
+    await this.sessions.revokeAllForUser(userId, { exceptSessionId: sessionId });
     return {
-      recoveryCodes: recoveryCodes.map((item) => item.display),
-      user: await this.currentUser(auth.user.id, null),
+      sessionId,
+      result: {
+        recoveryCodes: recoveryCodes.map((item) => item.display),
+        user: await this.currentUser(userId, record),
+      },
     };
   }
 
@@ -162,14 +207,37 @@ export class MfaService {
     const crypto = this.requireCrypto();
     const userId = auth.user.id;
     const ipHash = this.hasher.hash('ip', client.ip);
+    await this.assertNotLocked(userId);
     await this.throttle('mfa', userId, client.ip);
 
+    // Exclusive claim on this pending session BEFORE any code is spent: concurrent verifies of one
+    // pending session cannot each burn a code, and at most one of them can turn it into a session.
+    const claimKey = this.verifyClaimKey(auth.sessionId);
+    const claimed = await this.redisOp((redis) =>
+      redis.set(claimKey, '1', 'PX', VERIFY_CLAIM_MS, 'NX'),
+    );
+    if (claimed !== 'OK') {
+      throw new AppError(
+        HttpStatus.CONFLICT,
+        ERROR_CODES.conflict,
+        'This sign-in is already being verified.',
+      );
+    }
+
     const method = input.code !== undefined ? 'totp' : 'recovery_code';
-    const accepted =
-      input.code !== undefined
-        ? await this.consumeTotp(crypto, userId, input.code)
-        : await this.consumeRecoveryCode(crypto, userId, input.recoveryCode ?? '');
+    let accepted: boolean;
+    try {
+      accepted =
+        input.code !== undefined
+          ? await this.consumeTotp(crypto, userId, input.code)
+          : await this.consumeRecoveryCode(crypto, userId, input.recoveryCode ?? '');
+    } catch (error) {
+      await this.redisOp((redis) => redis.del(claimKey));
+      throw error;
+    }
     if (!accepted) {
+      // Release the claim so the user can retry on the same pending session (within the limits).
+      await this.redisOp((redis) => redis.del(claimKey));
       await this.audit.writeAuditEvent({
         actorUserId: null,
         action: AUDIT_ACTIONS.authMfaFailure,
@@ -177,12 +245,16 @@ export class MfaService {
         entityId: userId,
         metadata: { method, reason: 'invalid_code', ipHash },
       });
+      await this.recordFailure(userId);
       throw invalidCode();
     }
 
     const user = await this.users.findForAuthById(userId);
     if (user?.status !== 'ACTIVE' || !user.passwordHash) throw Errors.sessionExpired();
-    await this.sessions.revoke(auth.sessionId);
+    // Consume the pending session atomically (GETDEL). If it is already gone (expired, revoked, or
+    // consumed by a concurrent request), no full session is created.
+    const consumed = await this.sessions.revoke(auth.sessionId);
+    if (consumed?.userId !== userId || consumed.stage !== 'mfa') throw Errors.sessionExpired();
     const device = summariseUserAgent(client.userAgent);
     const { sessionId, record } = await this.sessions.create({
       userId,
@@ -190,10 +262,10 @@ export class MfaService {
       device,
       ipHash,
     });
-    await this.rateLimiter.clear('mfa', [
-      `pair:${this.hasher.hash('user-ip', `${userId}|${client.ip}`)}`,
-      `account:${userId}`,
-    ]);
+    // Only the per-account+IP counter is cleared; the per-account counter keeps running so a
+    // success never refills the allowance for guesses from elsewhere.
+    await this.rateLimiter.clear('mfa', [this.pairKey(userId, client.ip)]);
+    // The claim is left to expire: a late concurrent request is refused before it can spend a code.
     await this.audit.writeAuditEvent({
       actorUserId: userId,
       action: AUDIT_ACTIONS.authMfaVerified,
@@ -202,6 +274,14 @@ export class MfaService {
       metadata: { method, sessionHandle: record.publicId, device, ipHash },
     });
     return { sessionId, user: await this.currentUser(userId, record) };
+  }
+
+  /**
+   * Clears the escalating MFA lockout and its failure history (SUPER_ADMIN access reset, or a newly
+   * confirmed authenticator).
+   */
+  async clearLockout(userId: string): Promise<void> {
+    await this.redisOp((redis) => redis.del(this.lockKey(userId), this.failureKey(userId)));
   }
 
   /** Drops an unconfirmed enrollment secret (e.g. after an administrator reset). */
@@ -274,41 +354,104 @@ export class MfaService {
   }
 
   /**
-   * Sign-in step: the same limits as password sign-in (per user+IP, per user, per IP; own scope).
-   * Enrollment (ip = null): the per-account+IP allowance per user.
+   * Sign-in step (`mfa`): the dedicated, tighter MFA_* limits per user+IP, per user and per IP.
+   * Enrollment confirmation (`mfa-enroll`, which checks the password): the sign-in LOGIN_* limits.
+   * Counted before any password or code is compared; the first throttled attempt per window is audited.
    */
-  private async throttle(scope: 'mfa' | 'mfa-enroll', userId: string, ip: string | null) {
-    const rules =
-      ip === null
-        ? [{ key: `account:${userId}`, limit: this.config.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP }]
-        : [
-            {
-              key: `pair:${this.hasher.hash('user-ip', `${userId}|${ip}`)}`,
-              limit: this.config.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP,
-            },
-            { key: `account:${userId}`, limit: this.config.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT },
-            {
-              key: `ip:${this.hasher.hash('ip', ip)}`,
-              limit: this.config.LOGIN_MAX_ATTEMPTS_PER_IP,
-            },
-          ];
+  private async throttle(scope: 'mfa' | 'mfa-enroll', userId: string, ip: string) {
+    const c = this.config;
+    const signIn = scope === 'mfa';
+    const rules: LimitRule[] = [
+      {
+        key: this.pairKey(userId, ip),
+        limit: signIn ? c.MFA_MAX_ATTEMPTS_PER_ACCOUNT_IP : c.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP,
+      },
+      {
+        key: `account:${userId}`,
+        limit: signIn ? c.MFA_MAX_ATTEMPTS_PER_ACCOUNT : c.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT,
+      },
+      {
+        key: `ip:${this.hasher.hash('ip', ip)}`,
+        limit: signIn ? c.MFA_MAX_ATTEMPTS_PER_IP : c.LOGIN_MAX_ATTEMPTS_PER_IP,
+      },
+    ];
     const limit = await this.rateLimiter.hit(
       scope,
       rules,
-      this.config.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+      signIn ? c.MFA_RATE_LIMIT_WINDOW_SECONDS : c.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     );
     if (!limit.limited) return;
-    if (limit.justExceeded && scope === 'mfa') {
+    if (limit.justExceeded) {
       // Once per window, like password sign-in, so an attack cannot flood the audit log.
       await this.audit.writeAuditEvent({
         actorUserId: null,
         action: AUDIT_ACTIONS.authMfaFailure,
         entityType: 'User',
         entityId: userId,
-        metadata: { reason: 'rate_limited' },
+        metadata: { reason: 'rate_limited', ...(signIn ? {} : { stage: 'enrollment' }) },
       });
     }
     throw Errors.rateLimited(limit.retryAfterSeconds);
+  }
+
+  /** Refuses verification while the account's escalating MFA lockout is active. */
+  private async assertNotLocked(userId: string): Promise<void> {
+    const ttlMs = await this.redisOp((redis) => redis.pttl(this.lockKey(userId)));
+    // -2 = no lock; -1 = a lock without expiry (never written by us, but treat it as locked).
+    if (ttlMs === -2) return;
+    throw mfaLocked(ttlMs > 0 ? Math.ceil(ttlMs / 1000) : this.config.MFA_LOCKOUT_SECONDS);
+  }
+
+  /**
+   * Counts a wrong code in the long (default 24 h) window. Reaching MFA_LOCKOUT_THRESHOLD locks
+   * verification for MFA_LOCKOUT_SECONDS (or until an access reset); every further failure while the
+   * window lasts re-arms it. The lock is audited once each time it is newly set.
+   */
+  private async recordFailure(userId: string): Promise<void> {
+    const failureKey = this.failureKey(userId);
+    const results = await this.redisOp((redis) =>
+      redis
+        .multi()
+        .incr(failureKey)
+        .expire(failureKey, this.config.MFA_LOCKOUT_WINDOW_SECONDS, 'NX')
+        .exec(),
+    );
+    if (results?.length !== 2 || results.some(([error]) => error)) throw Errors.authUnavailable();
+    const failures = Number(results[0]?.[1] ?? 0);
+    if (failures < this.config.MFA_LOCKOUT_THRESHOLD) return;
+    const locked = await this.redisOp((redis) =>
+      redis.set(this.lockKey(userId), '1', 'EX', this.config.MFA_LOCKOUT_SECONDS, 'NX'),
+    );
+    if (locked !== 'OK') return;
+    await this.audit.writeAuditEvent({
+      actorUserId: null,
+      action: AUDIT_ACTIONS.authMfaLocked,
+      entityType: 'User',
+      entityId: userId,
+      metadata: {
+        failures,
+        threshold: this.config.MFA_LOCKOUT_THRESHOLD,
+        windowSeconds: this.config.MFA_LOCKOUT_WINDOW_SECONDS,
+        lockSeconds: this.config.MFA_LOCKOUT_SECONDS,
+      },
+    });
+  }
+
+  private pairKey(userId: string, ip: string): string {
+    return `pair:${this.hasher.hash('user-ip', `${userId}|${ip}`)}`;
+  }
+
+  private lockKey(userId: string): string {
+    return `${this.config.REDIS_KEY_PREFIX}mfa-lock:${userId}`;
+  }
+
+  private failureKey(userId: string): string {
+    return `${this.config.REDIS_KEY_PREFIX}mfa-failures:${userId}`;
+  }
+
+  /** Keyed by the session-ID hash (never the raw session ID). */
+  private verifyClaimKey(sessionId: string): string {
+    return `${this.config.REDIS_KEY_PREFIX}mfa-verify-claim:${this.sessions.hashOf(sessionId)}`;
   }
 
   private requireCrypto(): MfaCrypto {
@@ -341,6 +484,16 @@ function invalidCode(): AppError {
     HttpStatus.UNAUTHORIZED,
     ERROR_CODES.mfaInvalidCode,
     'That code is not valid. Try the current code from your authenticator app.',
+  );
+}
+
+function mfaLocked(retryAfterSeconds: number): AppError {
+  return new AppError(
+    HttpStatus.TOO_MANY_REQUESTS,
+    ERROR_CODES.mfaLocked,
+    'Two-step verification is locked after too many wrong codes. Try again later or ask an ' +
+      'administrator to reset your access.',
+    { headers: { 'Retry-After': String(Math.max(1, retryAfterSeconds)) } },
   );
 }
 

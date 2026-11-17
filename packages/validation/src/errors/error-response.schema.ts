@@ -37,6 +37,8 @@ export const ERROR_CODES = {
   mfaInvalidCode: 'MFA_INVALID_CODE',
   mfaAlreadyEnabled: 'MFA_ALREADY_ENABLED',
   mfaEnrollmentExpired: 'MFA_ENROLLMENT_EXPIRED',
+  /** Too many wrong codes: verification is locked until the cool-down ends or an access reset. */
+  mfaLocked: 'MFA_LOCKED',
   /** The server has no MFA encryption key configured (development only; production refuses to start). */
   mfaUnavailable: 'MFA_UNAVAILABLE',
   studentActivationFailed: 'STUDENT_ACTIVATION_FAILED',

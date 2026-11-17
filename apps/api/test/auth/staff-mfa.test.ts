@@ -7,12 +7,15 @@ import { createAdmin } from '../../src/cli/create-admin-core.js';
 import { resetStaffAccess } from '../../src/cli/reset-staff-access-core.js';
 import type { ApiConfig } from '../../src/config/api-config.js';
 import { RedisService } from '../../src/redis/redis.service.js';
+import { StaffUsersService } from '../../src/users/staff-users.service.js';
+import { SessionStore } from '../../src/auth/session.store.js';
 import {
   browser,
   createTestApp,
   createTestUser,
   csrfToken,
   errorOf,
+  http,
   realConfig,
   setCookie,
   signIn,
@@ -51,6 +54,8 @@ function expectable(pending: Promise<Sent>) {
   });
 }
 
+const TEMPORARY_PASSWORD = 'temporary handover phrase 9931';
+
 function login(agent: Agent, user: Pick<TestUser, 'email' | 'password'>) {
   return expectable(
     (async () => {
@@ -78,23 +83,31 @@ function codeFor(secret: string, offset = 0): string {
 }
 
 /** Enrolls MFA for a signed-in agent; returns the base32 secret and the recovery codes. */
-async function enroll(agent: Agent) {
+async function enroll(agent: Agent, currentPassword = TEST_PASSWORD) {
   const started = await post(agent, 'auth/mfa/enrollment');
   expect(started.status).toBe(200);
   const { secret } = mfaEnrollmentStartResponseSchema.parse(started.body);
-  const confirmed = await post(agent, 'auth/mfa/enrollment/confirm', { code: codeFor(secret) });
+  const confirmed = await post(agent, 'auth/mfa/enrollment/confirm', {
+    currentPassword,
+    code: codeFor(secret),
+  });
   expect(confirmed.status).toBe(200);
   return { secret, recoveryCodes: (confirmed.body as { recoveryCodes: string[] }).recoveryCodes };
 }
 
 /** A user with MFA enabled; returns them signed out, with their secret and recovery codes. */
-async function mfaUser(roles: ('SUPER_ADMIN' | 'REGISTRAR' | 'EXAM_ADMIN')[] = ['REGISTRAR']) {
+async function mfaUser(
+  roles: ('SUPER_ADMIN' | 'REGISTRAR' | 'EXAM_ADMIN')[] = ['REGISTRAR'],
+  target: INestApplication = app,
+) {
   const user = await createTestUser({ roles });
-  const agent = browser(app);
+  const agent = browser(target);
   await signIn(agent, user);
   const enrollment = await enroll(agent);
   return { user, ...enrollment };
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('first-login password change (CLI-created accounts)', () => {
   it('restricts the session to password change, me, csrf and logout until the password changes', async () => {
@@ -179,7 +192,8 @@ describe('authenticator enrollment', () => {
     const user = await createTestUser({ roles: ['REGISTRAR'] });
     const agent = browser(app);
     const other = browser(app);
-    await signIn(agent, user);
+    const signedIn = await login(agent, user).expect(200);
+    const cookieBefore = setCookie(signedIn, 'dv_session')?.split(';')[0] ?? '';
     await signIn(other, user);
 
     const started = await post(agent, 'auth/mfa/enrollment');
@@ -193,14 +207,19 @@ describe('authenticator enrollment', () => {
     // Not active until confirmed.
     expect(userOf(await agent.get('/api/v1/auth/me')).mfaEnabled).toBe(false);
     const wrong = await post(agent, 'auth/mfa/enrollment/confirm', {
+      currentPassword: TEST_PASSWORD,
       code: codeFor(enrollment.secret, 5),
     });
     expect(wrong.status).toBe(401);
     expect(errorOf(wrong).code).toBe('MFA_INVALID_CODE');
-    const malformed = await post(agent, 'auth/mfa/enrollment/confirm', { code: '12ab56' });
+    const malformed = await post(agent, 'auth/mfa/enrollment/confirm', {
+      currentPassword: TEST_PASSWORD,
+      code: '12ab56',
+    });
     expect(malformed.status).toBe(400);
 
     const confirmed = await post(agent, 'auth/mfa/enrollment/confirm', {
+      currentPassword: TEST_PASSWORD,
       code: codeFor(enrollment.secret),
     });
     expect(confirmed.status).toBe(200);
@@ -218,7 +237,12 @@ describe('authenticator enrollment', () => {
       expect(stored.some((item) => item.codeHash.includes(code.replace('-', '')))).toBe(false);
     }
 
-    // The current session continues; other sessions end. A second enrollment is refused.
+    // The session ID is rotated (like after sign-in verification): the old cookie is dead, the new
+    // one continues. Other sessions end. A second enrollment is refused.
+    const cookieAfter = setCookie(confirmed, 'dv_session')?.split(';')[0];
+    expect(cookieAfter).toBeDefined();
+    expect(cookieAfter).not.toBe(cookieBefore);
+    await browser(app).get('/api/v1/auth/me').set('Cookie', cookieBefore).expect(401);
     expect(userOf(await agent.get('/api/v1/auth/me').expect(200)).mfaEnabled).toBe(true);
     await other.get('/api/v1/auth/me').expect(401);
     const again = await post(agent, 'auth/mfa/enrollment');
@@ -226,11 +250,55 @@ describe('authenticator enrollment', () => {
     expect(errorOf(again).code).toBe('MFA_ALREADY_ENABLED');
   });
 
+  it('requires the current password to confirm (re-authentication), throttled like sign-in', async () => {
+    const user = await createTestUser();
+    const agent = browser(app);
+    await signIn(agent, user);
+    const started = await post(agent, 'auth/mfa/enrollment').expect(200);
+    const { secret } = mfaEnrollmentStartResponseSchema.parse(started.body);
+
+    // The contract requires it: a stolen session alone cannot bind an attacker's authenticator.
+    const missing = await post(agent, 'auth/mfa/enrollment/confirm', { code: codeFor(secret) });
+    expect(missing.status).toBe(400);
+    expect(errorOf(missing).code).toBe('VALIDATION_FAILED');
+
+    // A wrong password with a valid code is refused and nothing is activated.
+    const wrongPassword = { currentPassword: 'not the account password 77', code: codeFor(secret) };
+    const wrong = await post(agent, 'auth/mfa/enrollment/confirm', wrongPassword);
+    expect(wrong.status).toBe(401);
+    expect(errorOf(wrong).code).toBe('AUTH_INVALID_CREDENTIALS');
+    const row = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(row.mfaEnabledAt).toBeNull();
+    expect(row.mfaTotpSecretEnc).toBeNull();
+    const audit = await testDb().auditLog.findFirstOrThrow({
+      where: { action: 'AUTH_MFA_FAILURE', entityId: user.id },
+    });
+    expect(audit.metadata).toMatchObject({ stage: 'enrollment', reason: 'invalid_password' });
+    expect(JSON.stringify(audit.metadata)).not.toContain(wrongPassword.currentPassword);
+
+    // Throttled with the sign-in allowance (per account+IP): then even the right password is refused.
+    for (let attempt = 1; attempt < config.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP; attempt++) {
+      expect((await post(agent, 'auth/mfa/enrollment/confirm', wrongPassword)).status).toBe(401);
+    }
+    const throttled = await post(agent, 'auth/mfa/enrollment/confirm', {
+      currentPassword: TEST_PASSWORD,
+      code: codeFor(secret),
+    });
+    expect(throttled.status).toBe(429);
+    expect(errorOf(throttled).code).toBe('AUTH_RATE_LIMITED');
+    expect(
+      (await testDb().user.findUniqueOrThrow({ where: { id: user.id } })).mfaEnabledAt,
+    ).toBeNull();
+  });
+
   it('refuses to confirm without a started enrollment', async () => {
     const user = await createTestUser();
     const agent = browser(app);
     await signIn(agent, user);
-    const response = await post(agent, 'auth/mfa/enrollment/confirm', { code: '123456' });
+    const response = await post(agent, 'auth/mfa/enrollment/confirm', {
+      currentPassword: TEST_PASSWORD,
+      code: '123456',
+    });
     expect(response.status).toBe(400);
     expect(errorOf(response).code).toBe('MFA_ENROLLMENT_EXPIRED');
   });
@@ -354,6 +422,44 @@ describe('sign-in with an authenticator', () => {
     expect(audit.map((entry) => entry.metadata)).toEqual([{ remaining: 9 }, { remaining: 8 }]);
   });
 
+  it('concurrent verifies of one pending session yield at most one full session', async () => {
+    const { user, secret, recoveryCodes } = await mfaUser();
+    const agent = browser(app);
+    const response = await login(agent, user).expect(200);
+    const cookie = setCookie(response, 'dv_session')?.split(';')[0] ?? '';
+    const token = await csrfToken(agent);
+    const store = app.get(SessionStore);
+    const fullBefore = (await store.list(user.id)).filter((item) => !item.record.stage).length;
+
+    // One valid TOTP code and four valid recovery codes race on the same pending session.
+    const bodies = [
+      { code: codeFor(secret, 1) },
+      ...recoveryCodes.slice(0, 4).map((recoveryCode) => ({ recoveryCode })),
+    ];
+    const results = await Promise.all(
+      bodies.map((body) =>
+        http(app)
+          .post('/api/v1/auth/mfa/verify')
+          .set('Cookie', cookie)
+          .set('X-CSRF-Token', token)
+          .send(body),
+      ),
+    );
+    const statuses = results.map((result) => result.status);
+    expect(statuses.filter((status) => status === 200)).toHaveLength(1);
+    for (const status of statuses) expect([200, 401, 409]).toContain(status);
+
+    // Exactly one new full session; the pending one is gone; at most one recovery code was spent.
+    const after = await store.list(user.id);
+    expect(after.filter((item) => item.record.stage === 'mfa')).toHaveLength(0);
+    expect(after.filter((item) => !item.record.stage)).toHaveLength(fullBefore + 1);
+    const spent = await testDb().staffMfaRecoveryCode.count({
+      where: { userId: user.id, usedAt: { not: null } },
+    });
+    expect(spent).toBeLessThanOrEqual(1);
+    await http(app).get('/api/v1/auth/me').set('Cookie', cookie).expect(401);
+  });
+
   it('requires exactly one of code / recoveryCode', async () => {
     const { user, secret } = await mfaUser();
     const agent = browser(app);
@@ -366,7 +472,7 @@ describe('sign-in with an authenticator', () => {
     expect(both.status).toBe(400);
   });
 
-  it('throttles wrong codes like password sign-in (5 per account+IP per window)', async () => {
+  it('throttles wrong codes with the dedicated MFA limits (5 per account+IP per window)', async () => {
     const { user, secret } = await mfaUser();
     const agent = browser(app);
     await login(agent, user).expect(200);
@@ -451,7 +557,7 @@ describe('MFA enforcement (STAFF_MFA_ENFORCED=true)', () => {
     const confirmed = await agent
       .post('/api/v1/auth/mfa/enrollment/confirm')
       .set('X-CSRF-Token', csrf)
-      .send({ code: codeFor(secret) })
+      .send({ currentPassword: user.password, code: codeFor(secret) })
       .expect(200);
     expect(authUserSchema.parse((confirmed.body as { user: unknown }).user).nextStep).toBeNull();
     await agent.get('/api/v1/staff-users').expect(200);
@@ -517,7 +623,7 @@ describe('SUPER_ADMIN staff administration', () => {
     await login(targetAgent, target).expect(200);
     await post(targetAgent, 'auth/mfa/verify', { code: codeFor(secret, 1) }).expect(200);
 
-    const temporaryPassword = 'temporary handover phrase 9931';
+    const temporaryPassword = TEMPORARY_PASSWORD;
     await post(agent, `staff-users/${target.id}/access-reset`, { temporaryPassword }).expect(200);
 
     await targetAgent.get('/api/v1/auth/me').expect(401);
@@ -547,8 +653,9 @@ describe('SUPER_ADMIN staff administration', () => {
     expect(userOf(relog).nextStep).toBe('PASSWORD_CHANGE');
 
     // Own account is refused; unknown user is 404.
-    expect((await post(agent, `staff-users/${actor.id}/access-reset`, {})).status).toBe(409);
-    expect((await post(agent, `staff-users/${randomUUID()}/access-reset`, {})).status).toBe(404);
+    const body = { temporaryPassword };
+    expect((await post(agent, `staff-users/${actor.id}/access-reset`, body)).status).toBe(409);
+    expect((await post(agent, `staff-users/${randomUUID()}/access-reset`, body)).status).toBe(404);
   });
 
   it('disables (retires) a staff account and revokes its sessions (audited)', async () => {
@@ -576,6 +683,184 @@ describe('SUPER_ADMIN staff administration', () => {
     expect((await post(agent, `staff-users/${actor.id}/disable`, { reason: 'OTHER' })).status).toBe(
       409,
     );
+  });
+});
+
+describe('dedicated MFA limits and escalating lockout', () => {
+  let counting: INestApplication;
+  let locking: INestApplication;
+  let lockingConfig: ApiConfig;
+  beforeAll(async () => {
+    counting = await createTestApp(
+      realConfig({ MFA_MAX_ATTEMPTS_PER_ACCOUNT_IP: 100, MFA_MAX_ATTEMPTS_PER_ACCOUNT: 3 }),
+    );
+    lockingConfig = realConfig({
+      MFA_MAX_ATTEMPTS_PER_ACCOUNT_IP: 100,
+      MFA_MAX_ATTEMPTS_PER_ACCOUNT: 100,
+      MFA_LOCKOUT_THRESHOLD: 3,
+      MFA_LOCKOUT_SECONDS: 2,
+    });
+    locking = await createTestApp(lockingConfig);
+  });
+  afterAll(async () => {
+    await counting.close();
+    await locking.close();
+  });
+
+  it('a successful code clears only the account+IP counter, never the per-account one', async () => {
+    const { user, secret, recoveryCodes } = await mfaUser(['REGISTRAR'], counting);
+    const agent = browser(counting);
+    await login(agent, user).expect(200);
+    expect((await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 7) })).status).toBe(401);
+    expect((await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 7) })).status).toBe(401);
+    await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 1) }).expect(200);
+
+    // The per-account allowance (3) is used up, success or not: the next sign-in must wait.
+    const again = browser(counting);
+    await login(again, user).expect(200);
+    const throttled = await post(again, 'auth/mfa/verify', { recoveryCode: recoveryCodes[0] });
+    expect(throttled.status).toBe(429);
+    expect(errorOf(throttled).code).toBe('AUTH_RATE_LIMITED');
+    expect(throttled.headers['retry-after']).toBeDefined();
+    expect(
+      await testDb().staffMfaRecoveryCode.count({
+        where: { userId: user.id, usedAt: { not: null } },
+      }),
+    ).toBe(0);
+  });
+
+  it('locks verification after repeated wrong codes (audited), re-arms, and an access reset clears it', async () => {
+    const { user, secret } = await mfaUser(['REGISTRAR'], locking);
+    const agent = browser(locking);
+    await login(agent, user).expect(200);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      expect((await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 7) })).status).toBe(401);
+    }
+    // Locked: even the right code is refused, for this and every other pending sign-in.
+    const locked = await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 1) });
+    expect(locked.status).toBe(429);
+    expect(errorOf(locked).code).toBe('MFA_LOCKED');
+    expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
+    const other = browser(locking);
+    await login(other, user).expect(200);
+    const lockedToo = await post(other, 'auth/mfa/verify', { code: codeFor(secret, 1) });
+    expect(errorOf(lockedToo).code).toBe('MFA_LOCKED');
+    const audits = await testDb().auditLog.findMany({
+      where: { action: 'AUTH_MFA_LOCKED', entityId: user.id },
+    });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]?.metadata).toEqual({
+      failures: 3,
+      threshold: 3,
+      windowSeconds: 86_400,
+      lockSeconds: 2,
+    });
+
+    // After the cool-down the right code works (no step was spent while locked).
+    await sleep(2_100);
+    await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 1) }).expect(200);
+
+    // Escalation: the failures stay counted for the long window, so one more wrong code re-locks.
+    const third = browser(locking);
+    await login(third, user).expect(200);
+    expect((await post(third, 'auth/mfa/verify', { code: codeFor(secret, 7) })).status).toBe(401);
+    const relocked = await post(third, 'auth/mfa/verify', { code: codeFor(secret, 2) });
+    expect(errorOf(relocked).code).toBe('MFA_LOCKED');
+    expect(
+      await testDb().auditLog.count({ where: { action: 'AUTH_MFA_LOCKED', entityId: user.id } }),
+    ).toBe(2);
+
+    // A SUPER_ADMIN access reset clears the lock and the failure history.
+    const admin = await createTestUser({ roles: ['SUPER_ADMIN'] });
+    const adminAgent = browser(locking);
+    await signIn(adminAgent, admin);
+    await post(adminAgent, `staff-users/${user.id}/access-reset`, {
+      temporaryPassword: TEMPORARY_PASSWORD,
+    }).expect(200);
+    const redis = locking.get(RedisService).client;
+    const prefix = lockingConfig.REDIS_KEY_PREFIX;
+    expect(
+      await redis.exists(`${prefix}mfa-lock:${user.id}`, `${prefix}mfa-failures:${user.id}`),
+    ).toBe(0);
+  });
+});
+
+describe('access reset always replaces the password', () => {
+  it('requires a policy-compliant temporary password, so the password hash always changes', async () => {
+    const actor = await createTestUser({ roles: ['SUPER_ADMIN'] });
+    const agent = browser(app);
+    await signIn(agent, actor);
+    const target = await createTestUser();
+    const before = await testDb().user.findUniqueOrThrow({ where: { id: target.id } });
+
+    const missing = await post(agent, `staff-users/${target.id}/access-reset`, {});
+    expect(missing.status).toBe(400);
+    expect(errorOf(missing).code).toBe('VALIDATION_FAILED');
+    const weak = await post(agent, `staff-users/${target.id}/access-reset`, {
+      temporaryPassword: 'password1234',
+    });
+    expect(weak.status).toBe(400);
+    const unchanged = await testDb().user.findUniqueOrThrow({ where: { id: target.id } });
+    expect(unchanged.passwordHash).toBe(before.passwordHash);
+    expect(unchanged.passwordChangeRequired).toBe(false);
+
+    await post(agent, `staff-users/${target.id}/access-reset`, {
+      temporaryPassword: TEMPORARY_PASSWORD,
+    }).expect(200);
+    const after = await testDb().user.findUniqueOrThrow({ where: { id: target.id } });
+    expect(after.passwordHash).not.toBe(before.passwordHash);
+    expect(after.passwordChangeRequired).toBe(true);
+    expect((await login(browser(app), target)).status).toBe(401);
+    const audit = await testDb().auditLog.findFirstOrThrow({
+      where: { action: 'STAFF_ACCESS_RESET', entityId: target.id },
+    });
+    expect(audit.metadata).toMatchObject({ temporaryLoginSet: true });
+  });
+});
+
+describe('last active SUPER_ADMIN', () => {
+  it('two concurrent disables can never leave no active SUPER_ADMIN', async () => {
+    const db = testDb();
+    const service = app.get(StaffUsersService);
+    // Test files run one at a time (fileParallelism: false). Park the other active SUPER_ADMINs so
+    // the two created here are the only ones, and restore them afterwards.
+    const parked = await db.user.findMany({
+      where: { status: 'ACTIVE', roles: { some: { role: { name: 'SUPER_ADMIN' } } } },
+      select: { id: true },
+    });
+    const parkedIds = parked.map((item) => item.id);
+    await db.user.updateMany({ where: { id: { in: parkedIds } }, data: { status: 'DISABLED' } });
+    try {
+      for (let round = 0; round < 5; round++) {
+        const first = await createTestUser({ roles: ['SUPER_ADMIN'] });
+        const second = await createTestUser({ roles: ['SUPER_ADMIN'] });
+        // Each disables the other at the same time.
+        const results = await Promise.allSettled([
+          service.disable(first.id, second.id, 'OTHER'),
+          service.disable(second.id, first.id, 'OTHER'),
+        ]);
+        expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+        const rejected = results.find((result) => result.status === 'rejected');
+        expect(rejected?.reason).toMatchObject({
+          code: 'CONFLICT',
+          message: 'The last active SUPER_ADMIN cannot be disabled.',
+        });
+        expect(
+          await db.user.count({ where: { id: { in: [first.id, second.id] }, status: 'ACTIVE' } }),
+        ).toBe(1);
+        expect(
+          await db.auditLog.count({
+            where: { action: 'USER_DISABLED', entityId: { in: [first.id, second.id] } },
+          }),
+        ).toBe(1);
+        await db.user.updateMany({
+          where: { id: { in: [first.id, second.id] } },
+          data: { status: 'DISABLED' },
+        });
+      }
+    } finally {
+      await db.user.updateMany({ where: { id: { in: parkedIds } }, data: { status: 'ACTIVE' } });
+    }
   });
 });
 
