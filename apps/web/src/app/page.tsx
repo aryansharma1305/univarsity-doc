@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { MOTION_GUARD } from '@/features/public-verification/motion-guard';
 import { VerificationHome } from '@/features/public-verification/verification-home';
 
 const TITLE = 'Docversity | Verification';
@@ -20,5 +21,11 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return <VerificationHome />;
+  return (
+    <>
+      {/* Runs before paint; see MOTION_GUARD. Hides only the hero words while GSAP loads. */}
+      <script dangerouslySetInnerHTML={{ __html: MOTION_GUARD }} />
+      <VerificationHome year={new Date().getFullYear()} />
+    </>
+  );
 }
