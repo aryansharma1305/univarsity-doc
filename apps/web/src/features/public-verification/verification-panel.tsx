@@ -302,7 +302,7 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
                 </p>
                 <div
                   role="region"
-                  aria-label={`${r.examination} subject marks`}
+                  aria-label={`${r.examination} subject marks, period ${String(r.periodNumber)}, attempt ${String(r.attemptNumber)}`}
                   // Keyboard users must be able to scroll wide tables (WCAG 2.1.1).
                   // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
                   tabIndex={0}
