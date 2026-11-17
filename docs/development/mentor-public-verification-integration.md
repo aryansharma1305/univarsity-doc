@@ -1,5 +1,7 @@
 # Mentor frontend and public verification integration — 15 November 2026
 
+> **Update (PR #41, 17 November 2026):** `/` is the animated hero homepage again (headline, crest, single "Activate your account" action; subtitle and badge row stay removed). The four verification forms remain on their own routes, and `/verify` redirects to `/verify/admission-letter`.
+
 This candidate combines the approved mentor frontend with the reviewed public-verification workstream.
 It does not deploy the university application, apply a live migration, activate Razorpay or change
 university records/backups. The final candidate SHA, green CI run and verified image identities are
