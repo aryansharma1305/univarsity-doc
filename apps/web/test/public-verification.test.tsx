@@ -239,6 +239,13 @@ it('reveals private result filters only after a response and prints only matchin
   await waitFor(() => {
     expect(screen.getAllByRole('article')).toHaveLength(2);
   });
+  // Each scrollable marks region has a distinct accessible name.
+  for (const n of [1, 2])
+    expect(
+      screen.getByRole('region', {
+        name: `Synthetic examination ${String(n)} subject marks, period ${String(n)}, attempt 1`,
+      }),
+    ).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Semester / academic year'), { target: { value: '2' } });
   await waitFor(() => {
     expect(screen.getAllByRole('article')).toHaveLength(1);

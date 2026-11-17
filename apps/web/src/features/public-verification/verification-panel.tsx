@@ -300,7 +300,14 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
                   Period {r.periodNumber} · Attempt {r.attemptNumber} ·{' '}
                   {r.outcome ?? 'Status not supplied'} · GPA {r.sgpa ?? 'Not supplied'}
                 </p>
-                <div className="mt-5 overflow-x-auto">
+                <div
+                  role="region"
+                  aria-label={`${r.examination} subject marks, period ${String(r.periodNumber)}, attempt ${String(r.attemptNumber)}`}
+                  // Keyboard users must be able to scroll wide tables (WCAG 2.1.1).
+                  // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                  tabIndex={0}
+                  className="mt-5 overflow-x-auto focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+                >
                   <table className="w-full text-left text-sm">
                     <caption className="sr-only">Published subject marks and grades</caption>
                     <thead>
