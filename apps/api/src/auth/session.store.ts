@@ -21,7 +21,16 @@ export interface SessionRecord {
   absoluteExpiresAt: number;
   device: string | null;
   ipHash: string | null;
+  /**
+   * Absent = a full session. `mfa` = the password was verified but the authenticator step is still
+   * pending: the guard lets such a session reach only the MFA verification endpoint (+ me/csrf/logout).
+   * Its credential binding uses a separate HMAC domain, so code that does not know about stages
+   * (including the previous release reading the same Redis) rejects it instead of treating it as full.
+   */
+  stage?: SessionStage;
 }
+
+export type SessionStage = 'mfa';
 
 export interface StoredSession {
   keyHash: string;
@@ -59,6 +68,9 @@ export class SessionStore {
     passwordHash: string;
     device: string | null;
     ipHash: string | null;
+    stage?: SessionStage;
+    /** Shorter absolute lifetime (e.g. pending-MFA sessions); never longer than the configured one. */
+    absoluteTimeoutSeconds?: number;
   }): Promise<{
     sessionId: string;
     record: SessionRecord;
@@ -66,15 +78,20 @@ export class SessionStore {
     const sessionId = randomToken(32);
     const keyHash = sha256(sessionId);
     const now = Date.now();
+    const lifetimeSeconds = Math.min(
+      input.absoluteTimeoutSeconds ?? this.config.SESSION_ABSOLUTE_TIMEOUT_SECONDS,
+      this.config.SESSION_ABSOLUTE_TIMEOUT_SECONDS,
+    );
     const record: SessionRecord = {
       publicId: randomToken(12),
       userId: input.userId,
-      credentialVersion: this.credentialVersion(input.passwordHash),
+      credentialVersion: this.credentialVersion(input.passwordHash, input.stage),
       createdAt: now,
       lastSeenAt: now,
-      absoluteExpiresAt: now + this.config.SESSION_ABSOLUTE_TIMEOUT_SECONDS * 1000,
+      absoluteExpiresAt: now + lifetimeSeconds * 1000,
       device: input.device,
       ipHash: input.ipHash,
+      ...(input.stage ? { stage: input.stage } : {}),
     };
     await this.op(async (redis) => {
       await redis
@@ -148,6 +165,7 @@ export class SessionStore {
       if not raw then return false end
       local value = cjson.decode(raw)
       if value.userId ~= ARGV[1] or value.credentialVersion ~= ARGV[2] then return false end
+      if value.stage then return false end
       value.credentialVersion = ARGV[3]
       return redis.call('SET', KEYS[1], cjson.encode(value), 'XX', 'KEEPTTL')
     `,
@@ -212,16 +230,17 @@ export class SessionStore {
     return doomed.length;
   }
 
-  credentialVersion(passwordHash: string): string {
+  credentialVersion(passwordHash: string, stage?: SessionStage): string {
+    const domain = stage ? `${this.keys.session}:${stage}-pending` : this.keys.session;
     return createHmac('sha256', this.config.SESSION_SECRET)
-      .update(`credential:${this.keys.session}\0${passwordHash}`)
+      .update(`credential:${domain}\0${passwordHash}`)
       .digest('hex');
   }
 
   matchesCredential(record: SessionRecord, passwordHash: string | null): boolean {
     return (
       passwordHash !== null &&
-      safeEqual(record.credentialVersion, this.credentialVersion(passwordHash))
+      safeEqual(record.credentialVersion, this.credentialVersion(passwordHash, record.stage))
     );
   }
 
@@ -264,9 +283,10 @@ export class SessionStore {
 
 function parseRecord(raw: string): SessionRecord | null {
   try {
-    const value = JSON.parse(raw) as Partial<SessionRecord>;
+    const value = JSON.parse(raw) as Partial<Omit<SessionRecord, 'stage'>> & { stage?: unknown };
     return typeof value.userId === 'string' &&
       typeof value.publicId === 'string' &&
+      (value.stage === undefined || value.stage === 'mfa') &&
       typeof value.credentialVersion === 'string' &&
       /^[0-9a-f]{64}$/.test(value.credentialVersion)
       ? (value as SessionRecord)

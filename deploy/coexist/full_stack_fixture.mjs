@@ -119,7 +119,12 @@ try {
     for (const role of ['SUPER_ADMIN', 'REGISTRAR', 'EXAM_ADMIN']) {
       const account = fixture.staff[role];
       assert.ok(account.email.endsWith('.example.invalid'));
-      await createAdmin(db, { ...account, role, displayName: `SYNTHETIC ${role}` });
+      await createAdmin(db, {
+        ...account,
+        role,
+        displayName: `SYNTHETIC ${role}`,
+        requirePasswordChange: false,
+      });
     }
     const department = await db.department.create({
       data: { code: `COEX-${fixture.label}`, name: `SYNTHETIC ${fixture.label}` },

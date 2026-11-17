@@ -99,7 +99,7 @@ development placeholder) and `COOKIE_SECURE=true`.
 - **PostgreSQL:** `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST_PORT`
 - **Redis / queues:** `REDIS_URL`, `REDIS_PASSWORD`, `REDIS_HOST_PORT`, `QUEUE_PREFIX`, `WORKER_CONCURRENCY`, `IMPORT_CONCURRENCY`
 - **Object storage:** `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_TEST_BUCKET` (tests only; never equal to `S3_BUCKET`), `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_API_HOST_PORT`, `MINIO_CONSOLE_HOST_PORT`
-- **Sessions / auth:** `SESSION_SECRET`, `COOKIE_SECURE`, `SESSION_IDLE_TIMEOUT_SECONDS`, `SESSION_ABSOLUTE_TIMEOUT_SECONDS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP`, `LOGIN_MAX_ATTEMPTS_PER_ACCOUNT`, `LOGIN_MAX_ATTEMPTS_PER_IP`, `PASSWORD_RESET_TOKEN_TTL_SECONDS`, `REDIS_KEY_PREFIX` (optional, default `dv:`)
+- **Sessions / auth:** `SESSION_SECRET`, `COOKIE_SECURE`, `SESSION_IDLE_TIMEOUT_SECONDS`, `SESSION_ABSOLUTE_TIMEOUT_SECONDS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP`, `LOGIN_MAX_ATTEMPTS_PER_ACCOUNT`, `LOGIN_MAX_ATTEMPTS_PER_IP`, `PASSWORD_RESET_TOKEN_TTL_SECONDS`, `REDIS_KEY_PREFIX` (optional, default `dv:`), `STAFF_MFA_ENCRYPTION_KEY` (required in production), `STAFF_MFA_ENFORCED`
 - **Student accounts:** `STUDENT_ACTIVATION_CODE_TTL_DAYS`, `STUDENT_ACTIVATION_MAX_FAILED_ATTEMPTS`
 - **Imports:** `IMPORT_MAX_FILE_MB`, `IMPORT_MAX_UNCOMPRESSED_MB`, `IMPORT_MAX_ROWS`, `IMPORT_MAX_COLUMNS`, `IMPORT_BATCH_SIZE`
 
@@ -154,7 +154,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261015093000_re_exam_fee_snapshot_required_fields` (9B assessed-fee NULL hardening),
   `20261016090000_re_exam_payments` (9C payment destinations and payments),
   `20261016093000_re_exam_payment_destination_editor_check` (9C: approver ≠ last editor),
-  `20261020090000_program_certificate_eligibility` (12C: course certificate sets, proposer ≠ decider).
+  `20261020090000_program_certificate_eligibility` (12C: course certificate sets, proposer ≠ decider),
+  `20261117090000_staff_mfa_first_login` (staff first-login flag, TOTP MFA, recovery codes; ADR-0021).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -188,6 +189,12 @@ endpoints derive the student from the session and take no student/registration I
 repeated wrong guesses, identical error for every failure; a new code recovers a forgotten password. The
 registration number alone is never sufficient. Details: [docs/architecture/authentication.md](docs/architecture/authentication.md),
 [authorization.md](docs/architecture/authorization.md), ADR-0007 and ADR-0010.
+
+Staff first-login and MFA (ADR-0021): CLI-created accounts must change their password at first sign-in;
+staff can enroll an authenticator app (RFC 6238 TOTP, secrets encrypted with `STAFF_MFA_ENCRYPTION_KEY`,
+single-use recovery codes); `STAFF_MFA_ENFORCED=true` makes it mandatory. Restricted sessions are
+enforced in the `AuthGuard` (`@AllowDuringStep`), never the frontend. SUPER_ADMIN resets access / disables
+accounts at `/api/v1/staff-users`; `pnpm staff:reset-access` is the break-glass CLI.
 
 ## 10a. Student profile change requests (Phase 7)
 

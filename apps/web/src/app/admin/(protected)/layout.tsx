@@ -3,6 +3,7 @@ import { connection } from 'next/server';
 import type { ReactNode } from 'react';
 import { AdminShell } from '@/components/admin/admin-shell';
 import { getSessionState } from '@/lib/server-auth';
+import { STEP_PATHS } from '@/lib/staff-steps';
 
 /**
  * Every page under /admin (except /admin/login) requires a signed-in staff member. This is a UX
@@ -22,5 +23,8 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
       </main>
     );
   }
+  // Restricted sessions (pending authenticator code, required password change or MFA setup) can only
+  // finish that step — the API refuses everything else with 403 anyway.
+  if (state.user.nextStep) redirect(STEP_PATHS[state.user.nextStep]);
   return <AdminShell user={state.user}>{children}</AdminShell>;
 }

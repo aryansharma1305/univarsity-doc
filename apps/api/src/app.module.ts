@@ -31,6 +31,7 @@ import { StudentProfileModule } from './student-profile/student-profile.module.j
 import { StudentAuthGuard } from './student-auth/student-auth.guard.js';
 import { StudentResultsModule } from './student-results/student-results.module.js';
 import { StudentAuthModule } from './student-auth/student-auth.module.js';
+import { StaffUsersModule } from './users/staff-users.module.js';
 
 import { PublicVerificationModule } from './public-verification/public-verification.module.js';
 
@@ -48,6 +49,7 @@ export class AppModule {
         QueueModule,
         AuditModule,
         AuthModule,
+        StaffUsersModule,
         AcademicModule,
         ImportsModule,
         ResultImportsModule,

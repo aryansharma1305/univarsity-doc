@@ -9,6 +9,11 @@ export interface CreateAdminInput {
   displayName: string;
   password: string;
   role?: BootstrapRole;
+  /**
+   * The operator-chosen password is a bootstrap credential: the person must choose their own at
+   * first sign-in (default true). Only disposable synthetic test fixtures pass false.
+   */
+  requirePasswordChange?: boolean;
 }
 
 export class CreateAdminError extends Error {}
@@ -41,7 +46,8 @@ export function parseStaffRole(args: readonly string[]): 'REGISTRAR' | 'EXAM_ADM
 
 /**
  * Creates an explicitly scoped staff account (SUPER_ADMIN by default). Refuses duplicates and records an
- * ADMIN_CREATED audit event. Shared by the CLI and its tests.
+ * ADMIN_CREATED audit event. The account must change its password at first sign-in unless
+ * `requirePasswordChange: false`. Shared by the CLI and its tests.
  */
 export async function createAdmin(
   db: PrismaClient,
@@ -74,6 +80,7 @@ export async function createAdmin(
         email: email.data,
         displayName,
         passwordHash,
+        passwordChangeRequired: input.requirePasswordChange ?? true,
         roles: { create: { roleId: role.id } },
       },
     });
@@ -82,7 +89,11 @@ export async function createAdmin(
         action: AUDIT_ACTIONS.adminCreated,
         entityType: 'User',
         entityId: user.id,
-        metadata: { via: 'cli', role: roleName },
+        metadata: {
+          via: 'cli',
+          role: roleName,
+          passwordChangeRequired: input.requirePasswordChange ?? true,
+        },
       },
     });
     return { id: user.id, email: user.email };

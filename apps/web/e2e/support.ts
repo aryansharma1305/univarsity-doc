@@ -34,6 +34,8 @@ export interface E2EFixtures {
   /** Phase 9C: a second SUPER_ADMIN (maker–checker approvals) and an APPROVER (payment review). */
   paymentChecker: Account;
   approver: Account;
+  /** Staff MFA: a CLI-created REGISTRAR flagged for a first-login password change (no MFA yet). */
+  staffMfa: Account;
 }
 
 export interface StudentAccount {

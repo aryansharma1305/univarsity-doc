@@ -49,7 +49,7 @@ def validate_origin(origin):
 
 def runtime_files(origin, private_origin=None):
     validate_origin(origin)
-    values = {key: secrets.token_hex(32) for key in ('bootstrap', 'owner', 'app', 'redis', 'session', 'minio', 's3')}
+    values = {key: secrets.token_hex(32) for key in ('bootstrap', 'owner', 'app', 'redis', 'session', 'mfa', 'minio', 's3')}
     web_origin = private_origin or origin
     api = f'''NODE_ENV=production
 LOG_LEVEL=log
@@ -61,6 +61,7 @@ SWAGGER_ENABLED=false
 TRUST_PROXY=2
 COOKIE_SECURE=true
 SESSION_SECRET={values['session']}
+STAFF_MFA_ENCRYPTION_KEY={values['mfa']}
 DATABASE_URL=postgresql://docversity_app:{values['app']}@postgres:5432/docversity_university
 REDIS_URL=redis://docversity:{values['redis']}@redis:6379
 REDIS_KEY_PREFIX=university:

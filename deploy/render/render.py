@@ -79,12 +79,20 @@ def load(path):
     return json.loads(path.read_text())
 
 
+def staff_mfa_key(generated):
+    # Bridges initialised before staff MFA have no key yet. Generating one silently on every assemble
+    # would orphan enrolled authenticators, so the operator adds it once, deliberately.
+    if not re.fullmatch(r'[0-9a-f]{64}', generated.get('mfa', '')):
+        raise SystemExit("generated.json lacks 'mfa' (64 hex chars for STAFF_MFA_ENCRYPTION_KEY); add it once, then re-run.")
+    return generated['mfa']
+
+
 def init():
     if DIRECTORY.exists():
         raise SystemExit('Render staging secrets already exist; refusing to overwrite.')
     DIRECTORY.mkdir(parents=True, mode=0o700)
     password = lambda: secrets.token_urlsafe(24)
-    write(DIRECTORY / 'generated.json', json.dumps({key: secrets.token_hex(32) for key in ['owner', 'app', 'session']}))
+    write(DIRECTORY / 'generated.json', json.dumps({key: secrets.token_hex(32) for key in ['owner', 'app', 'session', 'mfa']}))
     write(DIRECTORY / 'reviewers.json', json.dumps({
         'gate': {'username': 'reviewer', 'password': password()},
         'staff': [
@@ -151,6 +159,7 @@ def assemble():
         'WEB_URL': origin, 'CORS_ORIGINS': origin, 'SWAGGER_ENABLED': 'false',
         # Caddy hands Next.js exactly one X-Forwarded-For entry, so the 14B hop count holds unchanged.
         'TRUST_PROXY': '2', 'COOKIE_SECURE': 'true', 'SESSION_SECRET': generated['session'],
+        'STAFF_MFA_ENCRYPTION_KEY': staff_mfa_key(generated),
         'DATABASE_URL': f"postgresql://docversity_app:{generated['app']}@{v['DATABASE_INTERNAL_HOST']}:5432/docversity_staging",
         'REDIS_URL': v['REDIS_INTERNAL_URL'], 'REDIS_KEY_PREFIX': 'staging:', 'QUEUE_PREFIX': 'staging',
         'S3_ENDPOINT': v['R2_ENDPOINT'], 'S3_REGION': 'auto', 'S3_BUCKET': v['R2_BUCKET'],

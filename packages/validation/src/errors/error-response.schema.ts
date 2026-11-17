@@ -28,6 +28,17 @@ export const ERROR_CODES = {
   authUnavailable: 'AUTH_SERVICE_UNAVAILABLE',
   authInvalidResetToken: 'AUTH_INVALID_RESET_TOKEN',
   authPasswordPolicy: 'AUTH_PASSWORD_POLICY',
+  /** Staff session restricted until the password is changed (first login or access reset). */
+  passwordChangeRequired: 'PASSWORD_CHANGE_REQUIRED',
+  /** Password accepted; the session can only complete the authenticator (MFA) step. */
+  mfaRequired: 'MFA_REQUIRED',
+  /** MFA is enforced for staff and this account has not enrolled an authenticator yet. */
+  mfaEnrollmentRequired: 'MFA_ENROLLMENT_REQUIRED',
+  mfaInvalidCode: 'MFA_INVALID_CODE',
+  mfaAlreadyEnabled: 'MFA_ALREADY_ENABLED',
+  mfaEnrollmentExpired: 'MFA_ENROLLMENT_EXPIRED',
+  /** The server has no MFA encryption key configured (development only; production refuses to start). */
+  mfaUnavailable: 'MFA_UNAVAILABLE',
   studentActivationFailed: 'STUDENT_ACTIVATION_FAILED',
   passwordResetUnavailable: 'PASSWORD_RESET_UNAVAILABLE',
   csrfInvalid: 'CSRF_INVALID',

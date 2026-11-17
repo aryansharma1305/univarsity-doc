@@ -52,6 +52,7 @@ describe('individually scoped staff bootstrap', () => {
               data: {
                 email: string;
                 passwordHash: string;
+                passwordChangeRequired: boolean;
                 roles: { create: { roleId: string } };
               };
             }) => Promise.resolve({ id: 'synthetic-user', email: input.data.email }),
@@ -71,12 +72,13 @@ describe('individually scoped staff bootstrap', () => {
       const data = db.user.create.mock.calls[0]?.[0].data;
       expect(data?.roles).toEqual({ create: { roleId: `role-${role}` } });
       expect(data?.passwordHash).toMatch(/^\$argon2id\$/);
+      expect(data?.passwordChangeRequired).toBe(true);
       expect(db.auditLog.create).toHaveBeenCalledWith({
         data: {
           action: 'ADMIN_CREATED',
           entityType: 'User',
           entityId: 'synthetic-user',
-          metadata: { via: 'cli', role },
+          metadata: { via: 'cli', role, passwordChangeRequired: true },
         },
       });
       expect(db.$transaction).toHaveBeenCalledOnce();

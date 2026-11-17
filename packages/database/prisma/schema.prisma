@@ -1439,8 +1439,18 @@ model User {
   /// Argon2id hash (Phase 3). Null = cannot sign in with a password.
   passwordHash               String?                  @map("password_hash")
   status                     UserStatus               @default(ACTIVE)
+  /// Staff must choose a new password before reaching anything else (set by the CLI and by access resets).
+  passwordChangeRequired     Boolean                  @default(false) @map("password_change_required")
+  /// AES-256-GCM ciphertext of the RFC 6238 TOTP secret (key: STAFF_MFA_ENCRYPTION_KEY). Null = no MFA.
+  mfaTotpSecretEnc           String?                  @map("mfa_totp_secret_enc")
+  /// Highest TOTP time-step accepted so far (replay protection: a step is never accepted twice).
+  mfaTotpLastUsedStep        BigInt?                  @map("mfa_totp_last_used_step")
+  /// When the authenticator was confirmed. Non-null exactly when mfaTotpSecretEnc is set (CHECK).
+  mfaEnabledAt               DateTime?                @map("mfa_enabled_at") @db.Timestamptz(3)
   createdAt                  DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                  DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  mfaRecoveryCodes StaffMfaRecoveryCode[]
 
   roles                          UserRole[]
   importJobs                     ImportJob[]                     @relation("ImportJobCreatedBy")
@@ -1474,6 +1484,21 @@ model User {
   certificatesRevoked            Certificate[]                   @relation("CertificateRevokedBy")
 
   @@map("users")
+}
+
+/// One-time MFA recovery codes of a staff user. Only a keyed hash is stored; a code is spent by
+/// setting usedAt (single use). Replaced as a set on (re-)enrollment, deleted on MFA reset.
+model StaffMfaRecoveryCode {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  codeHash  String    @unique @map("code_hash") @db.Char(64)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("staff_mfa_recovery_codes")
 }
 
 /// Roles are records, not an enum, so new roles need no migration.

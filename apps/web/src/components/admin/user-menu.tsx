@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogOutIcon } from 'lucide-react';
+import { KeyRoundIcon, LogOutIcon, ShieldCheckIcon } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@docversity/ui/components/avatar';
 import { Button } from '@docversity/ui/components/button';
 import {
@@ -72,6 +73,19 @@ export function UserMenu() {
             {user.roles.length > 0 ? user.roles.join(', ') : 'No roles'}
           </span>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/admin/security/mfa">
+            <ShieldCheckIcon aria-hidden="true" />
+            {user.mfaEnabled ? 'Two-step verification: on' : 'Set up two-step verification'}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/admin/security/password">
+            <KeyRoundIcon aria-hidden="true" />
+            Change password
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void signOut()}>
           <LogOutIcon aria-hidden="true" />

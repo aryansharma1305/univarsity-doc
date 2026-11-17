@@ -27,6 +27,7 @@ describe('production-mode synthetic review environment templates', () => {
     const values = {
       ...template('api'),
       SESSION_SECRET: 'synthetic-template-session-key-0000000000000000',
+      STAFF_MFA_ENCRYPTION_KEY: '5e'.repeat(32),
       DATABASE_URL: 'postgresql://synthetic:synthetic-only@postgres:5432/docversity_staging',
       REDIS_URL: 'redis://docversity:synthetic-only@redis:6379',
       S3_ACCESS_KEY: 'synthetic-app',
@@ -43,6 +44,13 @@ describe('production-mode synthetic review environment templates', () => {
     expect(() =>
       loadApiConfig({ ...values, SESSION_SECRET: 'dev-only-unsafe-placeholder-secret-00000' }),
     ).toThrow();
+    // Production refuses to start without a real MFA encryption key.
+    expect(() => loadApiConfig({ ...values, STAFF_MFA_ENCRYPTION_KEY: '' })).toThrow(
+      /STAFF_MFA_ENCRYPTION_KEY/,
+    );
+    expect(() => loadApiConfig({ ...values, STAFF_MFA_ENCRYPTION_KEY: '0'.repeat(64) })).toThrow(
+      /STAFF_MFA_ENCRYPTION_KEY/,
+    );
   });
   it('keeps database/storage/session secrets out of web and session-signing authority out of worker', () => {
     const web = template('web');
@@ -51,11 +59,13 @@ describe('production-mode synthetic review environment templates', () => {
       'DATABASE_URL',
       'REDIS_URL',
       'SESSION_SECRET',
+      'STAFF_MFA_ENCRYPTION_KEY',
       'S3_ACCESS_KEY',
       'S3_SECRET_KEY',
     ])
       expect(web).not.toHaveProperty(key);
     expect(worker).not.toHaveProperty('SESSION_SECRET');
+    expect(worker).not.toHaveProperty('STAFF_MFA_ENCRYPTION_KEY');
     expect(web.API_INTERNAL_URL).toBe('http://api:4000');
     expect(web.WEB_BEHIND_TRUSTED_PROXY).toBe('true');
   });

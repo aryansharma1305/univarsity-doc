@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
@@ -20,6 +20,8 @@ const API_PORT = Number(process.env.E2E_API_PORT ?? 4100);
 const QUEUE_PREFIX = 'dve2eq';
 // Session and rate-limit keys belong to this test run, including repeated local runs.
 const REDIS_KEY_PREFIX = `dve2e:${randomUUID()}:`;
+// Staff MFA secrets of this disposable run are encrypted with a throwaway key (never a real one).
+const STAFF_MFA_ENCRYPTION_KEY = randomBytes(32).toString('hex');
 const isCI = Boolean(process.env.CI);
 /**
  * Uploads (historical documents, imports, payments, photos) go to the dedicated test bucket shared by
@@ -65,6 +67,7 @@ export default defineConfig({
         REDIS_KEY_PREFIX,
         QUEUE_PREFIX,
         S3_BUCKET,
+        STAFF_MFA_ENCRYPTION_KEY,
         LOG_LEVEL: 'warn',
       },
       reuseExistingServer: false,

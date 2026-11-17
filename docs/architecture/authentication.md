@@ -77,8 +77,8 @@ Every authenticated request reloads the user (status + roles) from PostgreSQL an
 window, never beyond the absolute expiry. A disabled user's sessions are revoked on their next request.
 
 **Revocation** (`SessionStore`): `revoke(sessionId)` (logout), `revokeByPublicId` (session list),
-`revokeAllForUser(userId, { exceptSessionId })` — used by password change (others), password reset (all)
-and `UsersService.disableUser` (all).
+`revokeAllForUser(userId, { exceptSessionId })` — used by password change (others), MFA enrollment
+(others), password reset (all), staff access reset (all) and `UsersService.disableUser` (all).
 
 **Redis unavailable → fail closed.** Every Redis call has a 2-second deadline; failures become
 `503 AUTH_SERVICE_UNAVAILABLE`. A request is never treated as authenticated without reading its session.
@@ -189,6 +189,58 @@ Builds the API, ensures the code-defined roles exist, validates the email and pa
 existing emails, creates the user with `SUPER_ADMIN`, records `ADMIN_CREATED`, and prints only the email
 and user ID. There are no default credentials and nothing creates an admin automatically (the development
 seed creates no users).
+
+The account is created with `password_change_required = true`: at first sign-in the person must replace
+the operator-chosen password before anything else works (see below).
+
+## First-login password change and authenticator-app MFA (ADR-0021)
+
+Details and rationale: [ADR-0021](../decisions/ADR-0021-staff-mfa-and-first-login.md).
+
+**Restricted sessions.** On every request the `AuthGuard` derives the session's _next step_
+(`staff-steps.ts`): `MFA_VERIFY` (password verified, code pending) → `PASSWORD_CHANGE`
+(`password_change_required`) → `MFA_ENROLL` (`STAFF_MFA_ENFORCED=true` and no authenticator). While a
+step is pending the session has **no permissions** and reaches only `GET /auth/me`, `GET /auth/csrf`,
+`POST /auth/logout`, the login/reset endpoints and the step's own endpoint; anything else answers
+`403 MFA_REQUIRED` / `PASSWORD_CHANGE_REQUIRED` / `MFA_ENROLLMENT_REQUIRED`. `AuthUser` carries
+`nextStep` and `mfaEnabled`; the web app redirects to `/admin/login/verify`, `/admin/security/password`
+or `/admin/security/mfa`.
+
+| Endpoint                                    | Step / access           | Behaviour                                                                                          |
+| ------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/auth/password`                | full or PASSWORD_CHANGE | New password must differ; clears the flag; revokes other sessions                                  |
+| `POST /api/v1/auth/mfa/enrollment`          | full or MFA_ENROLL      | New secret, returned once (base32, otpauth URI, SVG QR); kept encrypted in Redis for 10 min        |
+| `POST /api/v1/auth/mfa/enrollment/confirm`  | full or MFA_ENROLL      | Valid code activates MFA; returns 10 recovery codes once; revokes other sessions; `MFA_ENABLED`    |
+| `POST /api/v1/auth/mfa/verify`              | MFA_VERIFY only         | `{ code }` or `{ recoveryCode }`; replaces the pending session with a new one; `AUTH_MFA_VERIFIED` |
+| `GET /api/v1/staff-users`                   | `users.manage`          | Staff with status, `mfaEnabled`, `passwordChangeRequired`                                          |
+| `POST /api/v1/staff-users/:id/access-reset` | `users.manage`          | Removes MFA + recovery codes, sets the flag, optional `temporaryPassword`, revokes all sessions    |
+| `POST /api/v1/staff-users/:id/disable`      | `users.manage`          | Reason code; `USER_DISABLED`; revokes all sessions; refuses self and the last active SUPER_ADMIN   |
+
+**TOTP.** RFC 6238, HMAC-SHA1, 6 digits, 30 s, 160-bit secret, ±1 step. Secrets are AES-256-GCM
+encrypted with a key derived from `STAFF_MFA_ENCRYPTION_KEY` (bound to the user ID). A step is accepted
+at most once (`mfa_totp_last_used_step`, compare-and-set). Pending sessions (`stage: "mfa"` in Redis)
+live 5 minutes and use a separate credential-binding domain. Verification is throttled like sign-in
+(scope `mfa`: per user+IP, per user, per IP); failures are audited `AUTH_MFA_FAILURE`.
+
+**Recovery codes.** 10 × 50-bit codes `XXXXX-XXXXX` (case, spaces and hyphens ignored), stored only as
+keyed HMACs in `staff_mfa_recovery_codes`, each spent once (`MFA_RECOVERY_CODE_USED` with the remaining
+count).
+
+**When nobody can sign in** (break glass, on the server):
+
+```bash
+pnpm staff:reset-access                                        # prompts; temporary password hidden
+STAFF_EMAIL=… STAFF_TEMP_PASSWORD=… pnpm staff:reset-access    # non-interactive
+```
+
+Removes the authenticator and recovery codes, sets the temporary password and the password-change flag,
+audits `STAFF_ACCESS_RESET (via: cli)`. Existing sessions stop working at once (bound to the password
+hash). Email reset stays disabled.
+
+**Configuration.** `STAFF_MFA_ENCRYPTION_KEY` (64 hex chars) is required in production and whenever
+`STAFF_MFA_ENFORCED=true`; without it (development only) enrollment answers `503 MFA_UNAVAILABLE`.
+`STAFF_MFA_ENFORCED` defaults to `false`; switching it on requires every staff member without MFA to
+enroll at their next request.
 
 ## Correlation IDs and logs
 

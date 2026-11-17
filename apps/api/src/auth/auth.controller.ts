@@ -32,6 +32,14 @@ import {
   type ForgotPasswordRequest,
   loginRequestSchema,
   type LoginRequest,
+  mfaEnrollmentConfirmRequestSchema,
+  type MfaEnrollmentConfirmRequest,
+  mfaEnrollmentConfirmResponseSchema,
+  type MfaEnrollmentConfirmResponse,
+  mfaEnrollmentStartResponseSchema,
+  type MfaEnrollmentStartResponse,
+  mfaVerifyRequestSchema,
+  type MfaVerifyRequest,
   okResponseSchema,
   resetPasswordRequestSchema,
   type ResetPasswordRequest,
@@ -44,6 +52,8 @@ import { openApiRequestSchema } from '../common/openapi.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 import {
+  ALL_STAFF_STEPS,
+  AllowDuringStep,
   type AuthContext,
   CsrfPreAuth,
   CurrentAuth,
@@ -58,6 +68,7 @@ import {
   sessionCookieOptions,
 } from './cookies.js';
 import { CsrfService } from './csrf.service.js';
+import { MfaService } from './mfa.service.js';
 
 const SESSION_AUTH = 'session';
 const CSRF_AUTH = 'csrf';
@@ -69,11 +80,13 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly csrf: CsrfService,
+    private readonly mfa: MfaService,
     @Inject(API_CONFIG) private readonly config: ApiConfig,
   ) {}
 
   @Get('csrf')
   @Public('optional')
+  @AllowDuringStep(...ALL_STAFF_STEPS)
   @ApiOperation({
     summary: 'Get a CSRF token',
     description:
@@ -96,13 +109,17 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Public('optional')
+  @AllowDuringStep(...ALL_STAFF_STEPS)
   @CsrfPreAuth()
   @ApiSecurity(CSRF_AUTH)
   @ApiOperation({
     summary: 'Sign in (staff only)',
     description:
       'On success sets the HttpOnly session cookie and returns the user. Every failure returns the ' +
-      'same AUTH_INVALID_CREDENTIALS error. Throttled per account+IP, per account and per IP (429).',
+      'same AUTH_INVALID_CREDENTIALS error. Throttled per account+IP, per account and per IP (429). ' +
+      'If `nextStep` is set the session is restricted to that step: MFA_VERIFY (POST /auth/mfa/verify, ' +
+      'a 5-minute pending session), PASSWORD_CHANGE (POST /auth/password) or MFA_ENROLL ' +
+      '(POST /auth/mfa/enrollment). Other routes answer 403 with the matching error code.',
   })
   @ApiBody({ schema: openApiRequestSchema(loginRequestSchema) })
   @ApiOkResponse({ standardSchema: authUserSchema })
@@ -138,6 +155,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @Public('optional')
+  @AllowDuringStep(...ALL_STAFF_STEPS)
   @ApiSecurity(CSRF_AUTH)
   @ApiCookieAuth(SESSION_AUTH)
   @ApiOperation({
@@ -155,6 +173,7 @@ export class AuthController {
   }
 
   @Get('me')
+  @AllowDuringStep(...ALL_STAFF_STEPS)
   @ApiCookieAuth(SESSION_AUTH)
   @ApiOperation({ summary: 'The signed-in user' })
   @ApiOkResponse({ standardSchema: authUserSchema })
@@ -201,9 +220,15 @@ export class AuthController {
 
   @Post('password')
   @HttpCode(HttpStatus.OK)
+  @AllowDuringStep('PASSWORD_CHANGE')
   @ApiCookieAuth(SESSION_AUTH)
   @ApiSecurity(CSRF_AUTH)
-  @ApiOperation({ summary: 'Change your password (revokes your other sessions)' })
+  @ApiOperation({
+    summary: 'Change your password (revokes your other sessions)',
+    description:
+      'Also completes a required first-login / access-reset password change. The new password must ' +
+      'differ from the current one.',
+  })
   @ApiBody({ schema: openApiRequestSchema(changePasswordRequestSchema) })
   @ApiOkResponse({ standardSchema: okResponseSchema })
   @ApiResponse({ status: 400, description: 'Password policy not met', ...errorResponse })
@@ -219,6 +244,7 @@ export class AuthController {
   @Post('forgot-password')
   @HttpCode(HttpStatus.ACCEPTED)
   @Public('optional')
+  @AllowDuringStep(...ALL_STAFF_STEPS)
   @CsrfPreAuth()
   @ApiSecurity(CSRF_AUTH)
   @ApiOperation({
@@ -241,6 +267,7 @@ export class AuthController {
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @Public('optional')
+  @AllowDuringStep(...ALL_STAFF_STEPS)
   @CsrfPreAuth()
   @ApiSecurity(CSRF_AUTH)
   @ApiOperation({ summary: 'Complete a password reset (single-use token; ends all sessions)' })
@@ -256,5 +283,82 @@ export class AuthController {
   ): Promise<{ ok: true }> {
     await this.auth.resetPassword(body);
     return { ok: true };
+  }
+
+  @Post('mfa/enrollment')
+  @HttpCode(HttpStatus.OK)
+  @AllowDuringStep('MFA_ENROLL')
+  @ApiCookieAuth(SESSION_AUTH)
+  @ApiSecurity(CSRF_AUTH)
+  @ApiOperation({
+    summary: 'Start authenticator-app (TOTP) enrollment',
+    description:
+      'Generates a new secret and returns it once (base32 + otpauth URI + QR). It becomes active only ' +
+      'after POST /auth/mfa/enrollment/confirm with a valid code (within 10 minutes).',
+  })
+  @ApiOkResponse({ standardSchema: mfaEnrollmentStartResponseSchema })
+  @ApiResponse({ status: 409, description: 'MFA already enabled', ...errorResponse })
+  @ApiResponse({ status: 503, description: 'MFA not configured on this server', ...errorResponse })
+  async startMfaEnrollment(
+    @CurrentAuth() auth: AuthContext,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<MfaEnrollmentStartResponse> {
+    res.setHeader('Cache-Control', 'no-store');
+    return this.mfa.startEnrollment(auth);
+  }
+
+  @Post('mfa/enrollment/confirm')
+  @HttpCode(HttpStatus.OK)
+  @AllowDuringStep('MFA_ENROLL')
+  @ApiCookieAuth(SESSION_AUTH)
+  @ApiSecurity(CSRF_AUTH)
+  @ApiOperation({
+    summary: 'Confirm enrollment with a current code',
+    description:
+      'Activates MFA, returns single-use recovery codes ONCE and ends your other sessions.',
+  })
+  @ApiBody({ schema: openApiRequestSchema(mfaEnrollmentConfirmRequestSchema) })
+  @ApiOkResponse({ standardSchema: mfaEnrollmentConfirmResponseSchema })
+  @ApiResponse({ status: 400, description: 'Enrollment expired', ...errorResponse })
+  @ApiResponse({ status: 401, description: 'Invalid code', ...errorResponse })
+  async confirmMfaEnrollment(
+    @CurrentAuth() auth: AuthContext,
+    @Body(new ZodValidationPipe(mfaEnrollmentConfirmRequestSchema))
+    body: MfaEnrollmentConfirmRequest,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<MfaEnrollmentConfirmResponse> {
+    res.setHeader('Cache-Control', 'no-store');
+    return this.mfa.confirmEnrollment(auth, body.code);
+  }
+
+  @Post('mfa/verify')
+  @HttpCode(HttpStatus.OK)
+  @AllowDuringStep('MFA_VERIFY')
+  @ApiCookieAuth(SESSION_AUTH)
+  @ApiSecurity(CSRF_AUTH)
+  @ApiOperation({
+    summary: 'Second sign-in step: authenticator code or recovery code',
+    description:
+      'Only for a pending (MFA_VERIFY) session. Each 30-second code works once (±1 step accepted); ' +
+      'each recovery code works once. On success the pending session is replaced by a new full ' +
+      'session cookie. Throttled like sign-in (429).',
+  })
+  @ApiBody({ schema: openApiRequestSchema(mfaVerifyRequestSchema) })
+  @ApiOkResponse({ standardSchema: authUserSchema })
+  @ApiResponse({ status: 401, description: 'Invalid or reused code', ...errorResponse })
+  @ApiResponse({ status: 429, description: 'Too many attempts', ...errorResponse })
+  async verifyMfa(
+    @CurrentAuth() auth: AuthContext,
+    @Body(new ZodValidationPipe(mfaVerifyRequestSchema)) body: MfaVerifyRequest,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthUser> {
+    const { sessionId, user } = await this.mfa.verifyLogin(auth, body, {
+      ip: req.ip ?? req.socket.remoteAddress ?? 'unknown',
+      userAgent: req.header('user-agent'),
+    });
+    res.cookie(cookieNames(this.config).session, sessionId, sessionCookieOptions(this.config));
+    res.setHeader('Cache-Control', 'no-store');
+    return user;
   }
 }

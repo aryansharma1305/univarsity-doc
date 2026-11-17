@@ -57,6 +57,8 @@ describe('POST /api/v1/auth/login', () => {
         'subjects.read',
         'templates.read',
       ],
+      mfaEnabled: false,
+      nextStep: null,
     });
     const cookie = setCookie(response, 'dv_session');
     expect(cookie).toBeDefined();

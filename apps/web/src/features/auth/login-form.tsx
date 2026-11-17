@@ -5,8 +5,10 @@ import { type SyntheticEvent, useState } from 'react';
 import { Button } from '@docversity/ui/components/button';
 import { Input } from '@docversity/ui/components/input';
 import { Label } from '@docversity/ui/components/label';
+import { authUserSchema } from '@docversity/validation';
 import { resetApiClient } from '@/lib/api';
 import { errorMessage, postJson } from '@/lib/api-client';
+import { pathAfterSignIn } from '@/lib/staff-steps';
 
 /** Minimal staff sign-in form (Phase 3). Product design comes with the admin shell later. */
 export function LoginForm() {
@@ -26,7 +28,10 @@ export function LoginForm() {
       });
       if (response.ok) {
         resetApiClient();
-        router.replace('/admin');
+        // A restricted session (authenticator code, first-login password change, MFA setup) goes
+        // straight to its step; the API enforces the restriction either way.
+        const user = authUserSchema.safeParse(await response.json());
+        router.replace(pathAfterSignIn(user.success ? user.data.nextStep : null));
         router.refresh();
         return;
       }

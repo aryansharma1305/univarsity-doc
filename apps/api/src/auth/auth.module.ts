@@ -4,6 +4,7 @@ import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { CsrfService } from './csrf.service.js';
 import { IdentifierHasher } from './identifier-hasher.js';
+import { MfaService } from './mfa.service.js';
 import {
   PASSWORD_RESET_NOTIFIER,
   UnconfiguredPasswordResetNotifier,
@@ -20,6 +21,7 @@ import { SessionStore } from './session.store.js';
     AuthService,
     CsrfService,
     IdentifierHasher,
+    MfaService,
     PasswordResetStore,
     { provide: PasswordService, useValue: new PasswordService() },
     RateLimiter,
@@ -34,6 +36,7 @@ import { SessionStore } from './session.store.js';
     PasswordService,
     IdentifierHasher,
     RateLimiter,
+    MfaService,
   ],
 })
 export class AuthModule {}

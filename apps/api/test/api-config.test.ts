@@ -82,6 +82,39 @@ describe('loadApiConfig', () => {
     ).toThrow(/SESSION_SECRET: must be a real random secret/);
   });
 
+  it('requires a real staff-MFA encryption key in production and under enforcement', () => {
+    const key = 'a1'.repeat(32);
+    const production = {
+      ...validEnv,
+      NODE_ENV: 'production',
+      COOKIE_SECURE: 'true',
+      WEB_URL: 'https://verify.university.test',
+      CORS_ORIGINS: 'https://verify.university.test',
+    };
+    expect(() => loadApiConfig(production)).toThrow(/STAFF_MFA_ENCRYPTION_KEY: is required/);
+    expect(() => loadApiConfig({ ...production, STAFF_MFA_ENCRYPTION_KEY: '' })).toThrow(
+      /STAFF_MFA_ENCRYPTION_KEY/,
+    );
+    expect(() =>
+      loadApiConfig({ ...production, STAFF_MFA_ENCRYPTION_KEY: 'f'.repeat(64) }),
+    ).toThrow(/STAFF_MFA_ENCRYPTION_KEY: must be a real random key/);
+    expect(() =>
+      loadApiConfig({ ...production, STAFF_MFA_ENCRYPTION_KEY: 'zz'.repeat(32) }),
+    ).toThrow(/64 hexadecimal/);
+    expect(loadApiConfig({ ...production, STAFF_MFA_ENCRYPTION_KEY: key }).STAFF_MFA_ENFORCED).toBe(
+      false,
+    );
+    // Development may run without MFA, but not with enforcement switched on.
+    expect(loadApiConfig(validEnv).STAFF_MFA_ENCRYPTION_KEY).toBeUndefined();
+    expect(() => loadApiConfig({ ...validEnv, STAFF_MFA_ENFORCED: 'true' })).toThrow(
+      /STAFF_MFA_ENCRYPTION_KEY/,
+    );
+    expect(
+      loadApiConfig({ ...validEnv, STAFF_MFA_ENFORCED: 'true', STAFF_MFA_ENCRYPTION_KEY: key })
+        .STAFF_MFA_ENFORCED,
+    ).toBe(true);
+  });
+
   it('never trusts every proxy, but accepts explicit proxy settings', () => {
     expect(() => loadApiConfig({ ...validEnv, TRUST_PROXY: 'true' })).toThrow(/TRUST_PROXY/);
     expect(loadApiConfig({ ...validEnv, TRUST_PROXY: 'loopback' }).TRUST_PROXY).toBe('loopback');
