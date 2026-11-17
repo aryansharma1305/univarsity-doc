@@ -1,5 +1,7 @@
 # Mentor UI refinement — 14–15 November 2026
 
+> **Update (PR #41, 17 November 2026):** `/` is the animated hero homepage again (headline, crest, single "Activate your account" action; subtitle and badge row stay removed). The four verification forms remain on their own routes, and `/verify` redirects to `/verify/admission-letter`.
+
 This report records the frontend-only state in PR #39. The combined runtime behavior and release gates are documented in [the integration handoff](docs/development/mentor-public-verification-integration.md).
 
 Implemented locally on `feature/mentor-verification-ui`, rebased onto main `18468504aa213589606cee7a16187c8ea12d30f8` after PR #38 (original frontend validation base: `0942978`). Changes are isolated on this frontend branch; no deployment or live database change is included.

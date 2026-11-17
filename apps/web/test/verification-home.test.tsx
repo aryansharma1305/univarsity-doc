@@ -47,7 +47,7 @@ describe('public verification homepage', () => {
       /Verify\.\s*Trust\.\s*Confirm\./,
     );
     expect(screen.getByRole('img', { name: 'Docversity University' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Activate your account/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Activate your account' })).toHaveAttribute(
       'href',
       '/student/register',
     );
