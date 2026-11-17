@@ -24,6 +24,7 @@ interface Created {
   registrations: { id: string }[];
   issued: { code: string }[];
   verificationUrl: string;
+  version: number;
   periods: { subjects: { id: string }[] }[];
   subjects: { id: string }[];
 }
@@ -72,17 +73,25 @@ async function signedIn(
 
 /**
  * Submits the form. Earlier specs in the same run share the 20-checks-per-minute client budget; a
- * rate-limited check is a correct, recoverable outcome, so wait out the window once and retry.
+ * rate-limited check is a correct, recoverable outcome, so wait for the 429's Retry-After (plus one
+ * second) once and retry.
  */
 async function verifyNow(page: Page) {
   const verify = page.getByRole('button', { name: 'Verify', exact: true });
-  const limited = page.getByRole('alert').filter({ hasText: 'Too many checks' });
+  const checked = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().includes('/api/v1/public/verify/'),
+  );
   await verify.click();
+  const response = await checked;
   await expect(page.locator('main form')).toHaveAttribute('aria-busy', 'false', {
     timeout: 15_000,
   });
-  if (await limited.isVisible()) {
-    await page.waitForTimeout(61_000);
+  if (response.status() === 429) {
+    await expect(page.getByRole('alert').filter({ hasText: 'Too many checks' })).toBeVisible();
+    const seconds = Number(response.headers()['retry-after']);
+    expect(seconds).toBeGreaterThan(0);
+    expect(seconds).toBeLessThanOrEqual(60);
+    await new Promise((resolve) => setTimeout(resolve, seconds * 1000 + 1000));
     await verify.click();
     await expect(page.locator('main form')).toHaveAttribute('aria-busy', 'false', {
       timeout: 15_000,
@@ -240,10 +249,12 @@ test('acceptance: issued, revoked and published states are responsive and printa
         totalMarks: '83',
       },
     });
+    // Read the current version before each step instead of assuming how many writes happened.
+    const version = async () => (await proposer.get(`result-review/${draft.resultId}`)).version;
     const review = await proposer.get(`result-review/${draft.resultId}`);
     await proposer.post(`official-results/${draft.resultId}/attest`, {
       policyId: policies.result,
-      expectedVersion: 1,
+      expectedVersion: review.version,
       authorityReference: 'Local e2e examination decision',
       outcome: 'PASS',
       totalMarks: '83',
@@ -254,17 +265,17 @@ test('acceptance: issued, revoked and published states are responsive and printa
     });
     await examAdmin.post(`result-review/${draft.resultId}/submit`, {
       requestId: crypto.randomUUID(),
-      expectedVersion: 2,
+      expectedVersion: await version(),
       confirmed: true,
     });
     await checker.post(`result-review/${draft.resultId}/approve`, {
       requestId: crypto.randomUUID(),
-      expectedVersion: 3,
+      expectedVersion: await version(),
       confirmed: true,
     });
     await approver.post(`official-results/${draft.resultId}/publish`, {
       policyId: policies.result,
-      expectedVersion: 4,
+      expectedVersion: await version(),
     });
 
     const activation = await proposer.post('student-accounts/activation-codes', {

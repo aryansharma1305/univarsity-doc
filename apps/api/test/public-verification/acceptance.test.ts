@@ -29,7 +29,7 @@ import type { RoleName } from '@docversity/types';
 import { RateLimiter } from '../../src/auth/rate-limiter.js';
 import { IdentifierHasher } from '../../src/auth/identifier-hasher.js';
 import { browser, createTestApp, http, realConfig, staff, testDb, uniqueCode } from '../helpers.js';
-import { activate, studentCsrf } from '../student-auth/support.js';
+import { activate, STUDENT_PASSWORD, studentCsrf } from '../student-auth/support.js';
 import { staticPdf } from '../historical-documents/support.js';
 
 type Staff = Awaited<ReturnType<typeof staff>>;
@@ -62,6 +62,8 @@ const people = {} as Record<
   | 'registrar'
   | 'examAdmin'
   | 'attester'
+  | 'superAttester'
+  | 'superSubmitter'
   | 'certAdmin'
   | 'approver'
   | 'viewer',
@@ -116,7 +118,7 @@ async function verify(
   return { http: r.status, headers: r.headers, body: parsed.success ? parsed.data : undefined };
 }
 async function learner(prefix: string): Promise<Learner> {
-  const registrationNumber = `000${prefix}${String(Date.now()).slice(-6)}`;
+  const registrationNumber = `000${prefix}${String(Date.now()).slice(-6)}${randomBytes(2).toString('hex').toUpperCase()}`;
   const created = (
     await people.registrar
       .post('students', {
@@ -178,6 +180,8 @@ async function template(type: 'ADMISSION_LETTER' | 'TRANSCRIPT', policyId: strin
 const tokenOf = (url?: string) => new URL(url ?? 'http://x/').hash.replace('#token=', '');
 
 beforeAll(async () => {
+  // Run as a non-test deployment: outside NODE_ENV=test SYNTHETIC_ONLY policies are refused, so only
+  // the OFFICIAL path (gated by OFFICIAL_VERIFICATION_ENABLED) can be exercised.
   on = await createTestApp(
     realConfig({ NODE_ENV: 'development', OFFICIAL_VERIFICATION_ENABLED: true }),
   );
@@ -190,6 +194,8 @@ beforeAll(async () => {
     registrar: 'REGISTRAR',
     examAdmin: 'EXAM_ADMIN',
     attester: 'EXAM_ADMIN',
+    superAttester: 'SUPER_ADMIN',
+    superSubmitter: 'SUPER_ADMIN',
     certAdmin: 'CERTIFICATE_ADMIN',
     approver: 'APPROVER',
     viewer: 'VIEWER',
@@ -655,6 +661,74 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     ).rejects.toThrow();
   });
 
+  it('A10b results separation of duties: a SUPER_ADMIN attester or submitter cannot approve', async () => {
+    // Both hold results.approve, so the refusal comes from the service, not the permission guard.
+    const draft = savedDraftSchema.parse(
+      (
+        await people.examAdmin
+          .post('draft-results', {
+            context: {
+              programId: s.programId,
+              curriculumId: s.curriculumId,
+              academicSessionId: s.sessionId,
+              periodNumber: '1',
+              examinationId: s.examinationId,
+            },
+            registrationId: bob.registrationId,
+            programSubjectId: s.programSubjectId,
+            reExamApplicationId: null,
+            expectedVersion: null,
+            marks: {
+              internalMarks: '20',
+              externalMarks: '50',
+              practicalMarks: null,
+              otherMarks: null,
+              totalMarks: '70',
+            },
+          })
+          .expect(201)
+      ).body,
+    );
+    const id = draft.resultId;
+    const version = async () =>
+      (await testDb().result.findUniqueOrThrow({ where: { id } })).version;
+    const items = await testDb().resultItem.findMany({ where: { resultId: id } });
+    await people.superAttester
+      .post(`official-results/${id}/attest`, {
+        policyId: s.policies.result,
+        authorityReference: 'Local acceptance examination committee decision',
+        outcome: 'PASS',
+        totalMarks: '70',
+        maxMarks: '100',
+        sgpa: null,
+        cgpa: null,
+        subjects: items.map((i) => ({ id: i.id, status: 'PASS', grade: 'B' })),
+        expectedVersion: await version(),
+      })
+      .expect(200);
+    await people.superSubmitter
+      .post(`result-review/${id}/submit`, {
+        requestId: randomUUID(),
+        expectedVersion: await version(),
+        confirmed: true,
+      })
+      .expect(200);
+    const approve = async (who: Staff) =>
+      who.post(`result-review/${id}/approve`, {
+        requestId: randomUUID(),
+        expectedVersion: await version(),
+        confirmed: true,
+      });
+    // attester != approver
+    expect((await approve(people.superAttester)).status).toBe(403);
+    // submitter != approver
+    expect((await approve(people.superSubmitter)).status).toBe(403);
+    const r = await testDb().result.findUniqueOrThrow({ where: { id } });
+    expect(r.publicationStatus).toBe('UNDER_REVIEW');
+    // An independent SUPER_ADMIN can still approve the same version.
+    expect((await approve(people.proposer)).status).toBe(200);
+  });
+
   it('A11 results lookup: owner sees published values; filters; other students and anonymous refused', async () => {
     const own = await verify(
       'result',
@@ -728,7 +802,7 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
       .set('X-CSRF-Token', offCsrf)
       .send({
         registrationNumber: alice.registrationNumber,
-        password: 'student horse battery staple 7',
+        password: STUDENT_PASSWORD,
       });
     expect(login.status).toBe(200);
     expect(
