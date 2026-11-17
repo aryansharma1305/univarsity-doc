@@ -17,6 +17,11 @@ export interface UserForAuth {
   passwordChangeRequired: boolean;
   /** A confirmed authenticator app exists (the TOTP secret itself is never part of this shape). */
   mfaEnabled: boolean;
+  /**
+   * When the authenticator was confirmed. Full sessions created before it are un-rotated
+   * pre-enrollment sessions and are refused by the AuthGuard.
+   */
+  mfaEnabledAt: Date | null;
 }
 
 @Injectable()
@@ -114,6 +119,7 @@ export class UsersService {
       roles: user.roles.map((link) => link.role.name).sort(),
       passwordChangeRequired: user.passwordChangeRequired,
       mfaEnabled: user.mfaEnabledAt !== null,
+      mfaEnabledAt: user.mfaEnabledAt,
     };
   }
 }

@@ -31,6 +31,11 @@ export const AUDIT_ACTIONS = {
   /** Too many wrong authenticator/recovery codes: MFA verification locked for the account. */
   authMfaLocked: 'AUTH_MFA_LOCKED',
   mfaEnabled: 'MFA_ENABLED',
+  /**
+   * MFA was enabled (committed) but a best-effort step afterwards failed (session rotation, revoking
+   * other sessions, dropping the enrollment secret, clearing counters). Metadata: step names only.
+   */
+  mfaEnrollmentCleanupIncomplete: 'MFA_ENROLLMENT_CLEANUP_INCOMPLETE',
   mfaRecoveryCodeUsed: 'MFA_RECOVERY_CODE_USED',
   staffAccessReset: 'STAFF_ACCESS_RESET',
   adminCreated: 'ADMIN_CREATED',

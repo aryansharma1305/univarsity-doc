@@ -28,9 +28,17 @@ notifier is configured), so recovery must work without email.
    - **Enrollment:** the server generates the secret, returns it once (base32, `otpauth://` URI and an
      SVG QR code) and keeps it encrypted in Redis for 10 minutes; it becomes active only after the
      user re-enters their **current password** (Argon2 check, sign-in rate limits, scope
-     `mfa-enroll`) together with a valid code (`POST /auth/mfa/enrollment/confirm`), so a stolen
-     session alone cannot bind an attacker's authenticator. Confirmation rotates the session ID (as
-     verification does) and ends every other session.
+     `mfa-enroll`, plus the sign-in per-account bucket shared with `POST /auth/login`) together with a
+     valid code (`POST /auth/mfa/enrollment/confirm`), so a stolen session alone cannot bind an
+     attacker's authenticator and gets no separate password-guessing budget. The pending enrollment is
+     loaded first: without one (`400 MFA_ENROLLMENT_EXPIRED`) no counter is consumed and no password is
+     checked. Confirmation rotates the session ID (as verification does) and ends every other session.
+   - **Codes are never lost:** once the enabling transaction commits, the recovery codes are always
+     returned; session rotation and cleanup are best-effort (audited `MFA_ENROLLMENT_CLEANUP_INCOMPLETE`).
+     The current session is revoked _before_ the rotated one is created; if rotation fails the
+     response says `reauthenticate: true` and the user signs in again. The `AuthGuard` refuses any full
+     session created before `users.mfa_enabled_at`, so an un-rotated pre-enrollment session never stays
+     valid, even if Redis revocation failed.
    - **At rest:** AES-256-GCM, key derived by HKDF from `STAFF_MFA_ENCRYPTION_KEY` (64 hex chars), the
      user ID as associated data (a ciphertext copied to another row does not decrypt).
    - **Login is two steps.** A correct password for an MFA account creates a _pending_ session
@@ -47,7 +55,11 @@ notifier is configured), so recovery must work without email.
      5, `MFA_MAX_ATTEMPTS_PER_ACCOUNT` 5, `MFA_MAX_ATTEMPTS_PER_IP` 50 per
      `MFA_RATE_LIMIT_WINDOW_SECONDS` 900) in an own `mfa` scope, checked before any code is compared;
      the first throttled attempt per window is audited. A success clears only the account+IP counter,
-     never the per-account counter.
+     never the per-account counter. _Open proposal (requires review, not implemented):_ successes also
+     consume the per-IP bucket, so staff behind one campus NAT can hit `429`; refunding the per-IP unit
+     on success (failures still count in full) is analysed in
+     [authentication.md](../architecture/authentication.md#first-login-password-change-and-authenticator-app-mfa-adr-0021)
+     ("Shared client IPs and the MFA per-IP limit").
    - **Escalating lockout:** `MFA_LOCKOUT_THRESHOLD` (10) wrong codes within
      `MFA_LOCKOUT_WINDOW_SECONDS` (24 h) lock verification for the account for `MFA_LOCKOUT_SECONDS`
      (24 h) or until a SUPER_ADMIN access reset (`429 MFA_LOCKED`, audited `AUTH_MFA_LOCKED`); further

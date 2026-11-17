@@ -206,15 +206,15 @@ step is pending the session has **no permissions** and reaches only `GET /auth/m
 `nextStep` and `mfaEnabled`; the web app redirects to `/admin/login/verify`, `/admin/security/password`
 or `/admin/security/mfa`.
 
-| Endpoint                                    | Step / access           | Behaviour                                                                                                                                                            |
-| ------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/auth/password`                | full or PASSWORD_CHANGE | New password must differ; clears the flag; revokes other sessions                                                                                                    |
-| `POST /api/v1/auth/mfa/enrollment`          | full or MFA_ENROLL      | New secret, returned once (base32, otpauth URI, SVG QR); kept encrypted in Redis for 10 min                                                                          |
-| `POST /api/v1/auth/mfa/enrollment/confirm`  | full or MFA_ENROLL      | `{ currentPassword, code }`: re-authenticates (Argon2, sign-in limits), activates MFA; 10 recovery codes once; new session ID; revokes other sessions; `MFA_ENABLED` |
-| `POST /api/v1/auth/mfa/verify`              | MFA_VERIFY only         | `{ code }` or `{ recoveryCode }`; consumes the pending session atomically and creates a new one; `AUTH_MFA_VERIFIED`                                                 |
-| `GET /api/v1/staff-users`                   | `users.manage`          | Staff with status, `mfaEnabled`, `passwordChangeRequired`                                                                                                            |
-| `POST /api/v1/staff-users/:id/access-reset` | `users.manage`          | Removes MFA + recovery codes, **required** `temporaryPassword` replaces the password, sets the flag, clears the MFA lockout, revokes all sessions                    |
-| `POST /api/v1/staff-users/:id/disable`      | `users.manage`          | Reason code; `USER_DISABLED`; revokes all sessions; refuses self and the last active SUPER_ADMIN (checked under an advisory lock in the same transaction)            |
+| Endpoint                                    | Step / access           | Behaviour                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/auth/password`                | full or PASSWORD_CHANGE | New password must differ; clears the flag; revokes other sessions                                                                                                                                                                                                                                               |
+| `POST /api/v1/auth/mfa/enrollment`          | full or MFA_ENROLL      | New secret, returned once (base32, otpauth URI, SVG QR); kept encrypted in Redis for 10 min                                                                                                                                                                                                                     |
+| `POST /api/v1/auth/mfa/enrollment/confirm`  | full or MFA_ENROLL      | `{ currentPassword, code }`: needs a live enrollment (else `400 MFA_ENROLLMENT_EXPIRED`, before any password check); re-authenticates (Argon2, sign-in limits), activates MFA; 10 recovery codes once (always, once committed); new session ID or `reauthenticate: true`; revokes other sessions; `MFA_ENABLED` |
+| `POST /api/v1/auth/mfa/verify`              | MFA_VERIFY only         | `{ code }` or `{ recoveryCode }`; consumes the pending session atomically and creates a new one; `AUTH_MFA_VERIFIED`                                                                                                                                                                                            |
+| `GET /api/v1/staff-users`                   | `users.manage`          | Staff with status, `mfaEnabled`, `passwordChangeRequired`                                                                                                                                                                                                                                                       |
+| `POST /api/v1/staff-users/:id/access-reset` | `users.manage`          | Removes MFA + recovery codes, **required** `temporaryPassword` replaces the password, sets the flag, clears the MFA lockout, revokes all sessions                                                                                                                                                               |
+| `POST /api/v1/staff-users/:id/disable`      | `users.manage`          | Reason code; `USER_DISABLED`; revokes all sessions; refuses self and the last active SUPER_ADMIN (checked under an advisory lock in the same transaction)                                                                                                                                                       |
 
 **TOTP.** RFC 6238, HMAC-SHA1, 6 digits, 30 s, 160-bit secret, ±1 step. Secrets are AES-256-GCM
 encrypted with a key derived from `STAFF_MFA_ENCRYPTION_KEY` (bound to the user ID). A step is accepted
@@ -232,7 +232,92 @@ towards an escalating lockout: `MFA_LOCKOUT_THRESHOLD` (default 10) wrong codes 
 (default 24 h) — `429 MFA_LOCKED` with `Retry-After` — or until a SUPER_ADMIN access reset; further
 wrong codes inside the window re-arm it. Failures are audited `AUTH_MFA_FAILURE`, each new lock
 `AUTH_MFA_LOCKED`. Enrollment confirmation requires the current password and uses the sign-in limits
-(scope `mfa-enroll`).
+(scope `mfa-enroll`); every attempt that reaches the password check also counts against the account's
+**sign-in** bucket (scope `login`, `LOGIN_MAX_ATTEMPTS_PER_ACCOUNT`), so a stolen session gets no
+separate password-guessing budget — once it is spent, enrollment confirmation and normal sign-in for
+the account are both throttled. Without a live enrollment (none started, or the 10-minute secret
+expired) the request is refused with `400 MFA_ENROLLMENT_EXPIRED` before any counter is touched or any
+password is checked.
+
+**Enrollment after the commit.** Enabling MFA and storing the recovery-code hashes is one transaction;
+no codes are returned unless it commits. After it commits the codes are **always** returned and every
+later step is best-effort (failures are logged by step name and audited once as
+`MFA_ENROLLMENT_CLEANUP_INCOMPLETE`): (1) revoke the current session (`GETDEL`); (2) only if that
+succeeded, create the rotated session; (3) revoke all other sessions (all of them if no rotated session
+exists); (4) drop the enrollment secret, the MFA lockout history and the enrollment counter. If no
+rotated session exists, the response has `reauthenticate: true` and `user: null`, the cookie is cleared,
+and the web app sends the user to sign in again after they have saved the codes. Independently of
+Redis, the `AuthGuard` refuses every full session created before `users.mfa_enabled_at`, so an
+un-rotated pre-enrollment session can never stay usable even if every revocation failed.
+
+**Shared client IPs and the MFA per-IP limit (proposal — requires security review, not implemented).**
+
+_Finding._ `MFA_MAX_ATTEMPTS_PER_IP` (50 per 15 min) counts **every** verify attempt, including
+successful ones, and a success clears only the account+IP counter (`mfa.service.ts`, `throttle('mfa')`
+before the code check, `rateLimiter.clear('mfa', [pair])` after). The per-IP counter is never
+refunded. Staff who sign in from one campus NAT therefore share one bucket: the 51st second-factor
+step from that address within a window gets `429 AUTH_RATE_LIMITED`, even if every attempt was
+correct. (Password sign-in has the same shape at 100 per IP — documented above as "generous for shared
+campus NAT" — so with MFA the tighter MFA bucket is the first to run out.)
+
+_Does production see real client IPs?_ Yes, as seen by the edge Caddy, provided nothing else sits in
+front of it:
+
+- The university runtime generated by `deploy/university/clean.py` sets `TRUST_PROXY=2` (API) and
+  `WEB_BEHIND_TRUSTED_PROXY=true` (web); the chain is Caddy → Next.js → API.
+- Caddy (`deploy/university/clean.py` `caddyfile()`, the shared edge in `deploy/coexist/prepare.py`,
+  `deploy/review-site.caddy`) **replaces** `X-Forwarded-For` with exactly one value, `{client_ip}`.
+  None of those Caddyfiles configures `trusted_proxies`, so `{client_ip}` is Caddy's TCP peer. The
+  shared edge publishes `80:80`/`443:443`; Docker's DNAT preserves the external source address.
+- Next.js passes that header through unchanged and adds nothing (verified earlier, see "Client IP and
+  proxy trust"). Express with hop count 2 trusts the socket peer (Next.js) and one more hop, so with a
+  single forwarded entry `req.ip` is that entry: the real client address (checked against
+  `proxy-addr`: one entry `203.0.113.7` → `203.0.113.7`).
+- Caveats: if a CDN or provider load balancer is ever put in front of the shared edge, `{client_ip}`
+  becomes the CDN's address and every user shares a handful of IPs; Caddy then needs
+  `trusted_proxies` for that CDN (as the Render edge already does with `trusted_proxies_strict`). The
+  private `127.0.0.1:<port>` university instance sees the Docker gateway for all local traffic, which is
+  acceptable only because it is not public.
+
+So the API sees real client addresses, and on a campus those really are one NAT address for many staff.
+
+_Proposal._ Count only **failed** second-factor attempts toward the per-IP MFA bucket; leave everything
+else unchanged:
+
+1. Keep `throttle('mfa')` exactly as it is: all three buckets (account+IP 5, account 5, IP 50) are
+   incremented **before** the code is compared, so concurrent requests are still bounded and a
+   throttled request never reaches the database.
+2. After a **successful** verify, refund the one unit this request added to the IP bucket (`DECR` on
+   the `rl:mfa:ip:<hash>` key, floored at 0; a no-op if the window has already rolled over). The
+   account+IP counter is still cleared, as now. The per-account counter is **not** refunded (a success
+   must never refill the per-account allowance — unchanged), and the 24 h escalating lockout is
+   untouched.
+3. No change to `MFA_*` defaults, to the sign-in `LOGIN_*` buckets, or to enrollment.
+
+_Threat analysis._
+
+- To reach `POST /auth/mfa/verify` at all, an attacker needs a pending session, i.e. the account's
+  **password** (and must pass the sign-in limits for it).
+- Guessing codes against one account stays bounded by the per-account (5 per 15 min) and
+  per-account+IP (5) buckets, which keep counting every attempt, and by the lockout (10 wrong codes per
+  24 h). None of these is changed.
+- The per-IP bucket exists to stop **spraying across many accounts** from one address (an attacker
+  holding many stolen passwords). Spraying consists of wrong codes, which still consume the bucket in
+  full; a refund happens only for a correct code — which already means that account is compromised and
+  the per-IP limit would not have prevented it.
+- A refund cannot create budget: each success returns only the unit it consumed, so the bucket
+  converges to "wrong codes per IP per window". Concurrency is unchanged (the unit is held while the
+  request runs). An attacker with one valid account cannot launder failures for other accounts.
+- Residual risk: an attacker who controls many accounts' passwords and one account's authenticator
+  gains nothing beyond the per-account limits that already apply to each target.
+
+_Alternatives considered._ Raising `MFA_MAX_ATTEMPTS_PER_IP` weakens spraying protection for every
+deployment; an allow-list of campus egress addresses with a higher limit needs operator data and still
+counts successes. Neither is proposed.
+
+_Before implementation:_ security review of this section; a regression test that N successful verifies
+from one IP do not consume the IP bucket while N wrong codes do; and a decision whether the same
+refund should apply to the password sign-in per-IP bucket (out of scope here).
 
 **Recovery codes.** 10 × 50-bit codes `XXXXX-XXXXX` (case, spaces and hyphens ignored), stored only as
 keyed HMACs in `staff_mfa_recovery_codes`, each spent once (`MFA_RECOVERY_CODE_USED` with the remaining

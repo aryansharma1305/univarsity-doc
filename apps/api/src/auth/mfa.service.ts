@@ -15,14 +15,14 @@ import { withTimeout } from '../common/with-timeout.js';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { RedisService } from '../redis/redis.service.js';
-import { UsersService } from '../users/users.service.js';
+import { type UserForAuth, UsersService } from '../users/users.service.js';
 import type { AuthContext } from './auth.decorators.js';
 import { summariseUserAgent } from './device-summary.js';
 import { IdentifierHasher } from './identifier-hasher.js';
 import { generateRecoveryCodes, MfaCrypto } from './mfa-crypto.js';
 import { PasswordService } from './password.service.js';
 import { type LimitRule, RateLimiter } from './rate-limiter.js';
-import { SessionStore } from './session.store.js';
+import { type SessionRecord, SessionStore } from './session.store.js';
 import { describeUser } from './auth-user.js';
 import { staffNextStep } from './staff-steps.js';
 import { base32Encode, generateTotpSecret, otpauthUri, verifyTotp } from './totp.js';
@@ -98,16 +98,38 @@ export class MfaService {
    * sign-in) and a valid code proves the authenticator holds the secret. Issues fresh single-use
    * recovery codes (returned once), audits MFA_ENABLED in the same transaction as the change, then
    * replaces the current session with a NEW session ID and ends every other session.
+   *
+   * Order matters:
+   * 1. The pending enrollment (encrypted secret in Redis) is loaded FIRST. Without a live 10-minute
+   *    enrollment the request is refused with 400 before any throttle is consumed or any password is
+   *    checked, so this endpoint is not a password oracle outside an enrollment the user started.
+   * 2. Throttle (`mfa-enroll` scope AND the sign-in per-account `login` bucket), then the password.
+   * 3. One DB transaction enables MFA and stores the recovery-code hashes. Nothing before it commits
+   *    returns codes. Once it has committed, the codes are ALWAYS returned: every later step is
+   *    best-effort (see finishEnrollment).
    */
   async confirmEnrollment(
     auth: AuthContext,
     input: MfaEnrollmentConfirmRequest,
     client: MfaClientInfo,
-  ): Promise<{ sessionId: string; result: MfaEnrollmentConfirmResponse }> {
+  ): Promise<{ sessionId: string | null; result: MfaEnrollmentConfirmResponse }> {
     const crypto = this.requireCrypto();
     const userId = auth.user.id;
     const ipHash = this.hasher.hash('ip', client.ip);
+
+    const pending = await this.redisOp((redis) => redis.get(this.enrollmentKey(userId)));
+    if (!pending) {
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        ERROR_CODES.mfaEnrollmentExpired,
+        'This setup has expired. Start again to get a new QR code.',
+      );
+    }
+
     await this.throttle('mfa-enroll', userId, client.ip);
+    // Wrong current passwords also spend the account's SIGN-IN allowance (the same `login` bucket as
+    // POST /auth/login), so a stolen session gets no separate password-guessing budget.
+    await this.throttleSignInAccount(userId, auth.user.email);
 
     const user = await this.users.findForAuthById(userId);
     if (user?.status !== 'ACTIVE' || !user.passwordHash) throw Errors.sessionExpired();
@@ -122,14 +144,6 @@ export class MfaService {
       throw Errors.invalidCredentials();
     }
 
-    const pending = await this.redisOp((redis) => redis.get(this.enrollmentKey(userId)));
-    if (!pending) {
-      throw new AppError(
-        HttpStatus.BAD_REQUEST,
-        ERROR_CODES.mfaEnrollmentExpired,
-        'This setup has expired. Start again to get a new QR code.',
-      );
-    }
     let secret: Buffer;
     try {
       secret = crypto.decrypt(pending, userId, 'enrollment');
@@ -140,13 +154,14 @@ export class MfaService {
     if (step === null) throw invalidCode();
 
     const recoveryCodes = generateRecoveryCodes();
+    const enabledAt = new Date();
     await this.prisma.client.$transaction(async (tx) => {
       const updated = await tx.user.updateMany({
         where: { id: userId, status: 'ACTIVE', mfaEnabledAt: null },
         data: {
           mfaTotpSecretEnc: crypto.encrypt(secret, userId, 'secret'),
           mfaTotpLastUsedStep: BigInt(step),
-          mfaEnabledAt: new Date(),
+          mfaEnabledAt: enabledAt,
         },
       });
       if (updated.count !== 1) throw mfaAlreadyEnabled();
@@ -168,27 +183,111 @@ export class MfaService {
         tx,
       );
     });
-    await this.redisOp((redis) => redis.del(this.enrollmentKey(userId)));
-    // A new authenticator starts with a clean failure history (only reachable after an access reset).
-    await this.clearLockout(userId);
-    await this.rateLimiter.clear('mfa-enroll', [this.pairKey(userId, client.ip)]);
 
-    // Rotate the session ID (as after sign-in verification), then end every other session.
-    const previous = await this.sessions.revoke(auth.sessionId);
-    if (previous?.userId !== userId) throw Errors.sessionExpired();
-    const { sessionId, record } = await this.sessions.create({
-      userId,
+    // MFA is now enabled: from here on nothing may throw, or the codes would be lost.
+    const display = recoveryCodes.map((item) => item.display);
+    const enrolled = {
+      ...user,
       passwordHash: user.passwordHash,
-      device: summariseUserAgent(client.userAgent),
-      ipHash,
-    });
-    await this.sessions.revokeAllForUser(userId, { exceptSessionId: sessionId });
+      mfaEnabled: true,
+      mfaEnabledAt: enabledAt,
+    };
+    const rotated = await this.finishEnrollment(auth, enrolled, client, ipHash);
+    if (!rotated) {
+      return {
+        sessionId: null,
+        result: { recoveryCodes: display, reauthenticate: true, user: null },
+      };
+    }
     return {
-      sessionId,
-      result: {
-        recoveryCodes: recoveryCodes.map((item) => item.display),
-        user: await this.currentUser(userId, record),
-      },
+      sessionId: rotated.sessionId,
+      result: { recoveryCodes: display, reauthenticate: false, user: rotated.user },
+    };
+  }
+
+  /**
+   * Everything after the MFA-enable transaction commits. Never throws: each step is best-effort and
+   * a failure is logged (step names only, never secrets) and audited once as
+   * MFA_ENROLLMENT_CLEANUP_INCOMPLETE.
+   *
+   * Session order (safe by construction):
+   * 1. Revoke the CURRENT session first (atomic GETDEL). A new session is created only if that
+   *    revocation succeeded and the session was still ours, so the old ID can never survive next to
+   *    the rotated one.
+   * 2. Create the rotated session. If this fails, no session exists: the client is told to sign in
+   *    again (`reauthenticate: true`, cookie cleared) — with MFA, which the codes now back up.
+   * 3. Revoke every other session (or all of them, if no rotated session exists). This also retries
+   *    the removal of the old session if step 1 failed.
+   * Independently of Redis, the AuthGuard rejects every full session created before
+   * `users.mfa_enabled_at` (an un-rotated pre-enrollment session), so even if every Redis step above
+   * failed, the old session cannot be used once MFA is on.
+   * 4. Drop the enrollment secret, the MFA lockout history and the enrollment throttle counter.
+   */
+  private async finishEnrollment(
+    auth: AuthContext,
+    user: UserForAuth & { passwordHash: string },
+    client: MfaClientInfo,
+    ipHash: string,
+  ): Promise<{ sessionId: string; user: AuthUser } | null> {
+    const userId = user.id;
+    const failed: string[] = [];
+    const attempt = async <T>(
+      name: string,
+      operation: () => Promise<T>,
+    ): Promise<T | undefined> => {
+      try {
+        return await operation();
+      } catch {
+        failed.push(name);
+        return undefined;
+      }
+    };
+
+    let rotated: { sessionId: string; record: SessionRecord } | undefined;
+    const previous = await attempt('revoke_current_session', () =>
+      this.sessions.revoke(auth.sessionId),
+    );
+    if (previous?.userId === userId && previous.stage === undefined) {
+      rotated = await attempt('create_rotated_session', () =>
+        this.sessions.create({
+          userId,
+          passwordHash: user.passwordHash,
+          device: summariseUserAgent(client.userAgent),
+          ipHash,
+        }),
+      );
+    }
+    await attempt('revoke_other_sessions', () =>
+      this.sessions.revokeAllForUser(userId, rotated ? { exceptSessionId: rotated.sessionId } : {}),
+    );
+    await attempt('discard_enrollment', () => this.discardEnrollment(userId));
+    // A new authenticator starts with a clean failure history (only reachable after an access reset).
+    await attempt('clear_lockout', () => this.clearLockout(userId));
+    await attempt('clear_enroll_throttle', () =>
+      this.rateLimiter.clear('mfa-enroll', [this.pairKey(userId, client.ip)]),
+    );
+
+    if (failed.length > 0) {
+      this.logger.warn({
+        msg: 'MFA enrollment committed; post-commit cleanup incomplete',
+        userId,
+        failedSteps: failed,
+        sessionRotated: rotated !== undefined,
+      });
+      await attempt('audit', () =>
+        this.audit.writeAuditEvent({
+          actorUserId: userId,
+          action: AUDIT_ACTIONS.mfaEnrollmentCleanupIncomplete,
+          entityType: 'User',
+          entityId: userId,
+          metadata: { failedSteps: failed, sessionRotated: rotated !== undefined, ipHash },
+        }),
+      );
+    }
+    if (!rotated) return null;
+    return {
+      sessionId: rotated.sessionId,
+      user: describeUser(user, staffNextStep(rotated.record, user, this.config)),
     };
   }
 
@@ -389,6 +488,36 @@ export class MfaService {
         entityType: 'User',
         entityId: userId,
         metadata: { reason: 'rate_limited', ...(signIn ? {} : { stage: 'enrollment' }) },
+      });
+    }
+    throw Errors.rateLimited(limit.retryAfterSeconds);
+  }
+
+  /**
+   * Counts an enrollment-confirm attempt (which checks the current password) against the SIGN-IN
+   * per-account bucket: the same `login` scope, key and LOGIN_MAX_ATTEMPTS_PER_ACCOUNT limit that
+   * POST /auth/login uses. Counted before Argon2, like sign-in. When it is exhausted, both enrollment
+   * confirmation and normal sign-in for the account are throttled until the window ends.
+   */
+  private async throttleSignInAccount(userId: string, email: string): Promise<void> {
+    const limit = await this.rateLimiter.hit(
+      'login',
+      [
+        {
+          key: `account:${this.hasher.hash('email', email)}`,
+          limit: this.config.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT,
+        },
+      ],
+      this.config.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    );
+    if (!limit.limited) return;
+    if (limit.justExceeded) {
+      await this.audit.writeAuditEvent({
+        actorUserId: null,
+        action: AUDIT_ACTIONS.authMfaFailure,
+        entityType: 'User',
+        entityId: userId,
+        metadata: { reason: 'rate_limited', stage: 'enrollment', bucket: 'sign_in_account' },
       });
     }
     throw Errors.rateLimited(limit.retryAfterSeconds);

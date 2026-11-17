@@ -69,6 +69,19 @@ export class AuthGuard implements CanActivate {
       return true;
     }
 
+    // A full session older than the account's authenticator never passed the second factor and was
+    // not the session rotated at enrollment: refuse it, even if its Redis revocation failed.
+    if (
+      record.stage === undefined &&
+      user.mfaEnabledAt !== null &&
+      record.createdAt < user.mfaEnabledAt.getTime()
+    ) {
+      await this.sessions.revoke(sessionId);
+      response.clearCookie(names.session, sessionCookieOptions(this.config));
+      if (mode === 'required') throw Errors.sessionExpired();
+      return true;
+    }
+
     const nextStep = staffNextStep(record, user, this.config);
     if (nextStep) {
       const allowed =

@@ -17,12 +17,15 @@ import { pathAfterSignIn } from '@/lib/staff-steps';
 type State =
   | { phase: 'intro' }
   | { phase: 'scan'; enrollment: MfaEnrollmentStartResponse }
-  | { phase: 'codes'; recoveryCodes: string[]; user: AuthUser };
+  /** `user` is null when the API could not rotate the session: the user must sign in again. */
+  | { phase: 'codes'; recoveryCodes: string[]; user: AuthUser | null };
 
 /**
  * Authenticator-app enrollment: start → scan the QR code (or type the key) → confirm with the current
  * password and a current code → save the one-time recovery codes. The secret and the codes are shown
  * only here, once. Confirming re-authenticates (the API checks the password) and rotates the session.
+ * If the rotation failed (`reauthenticate: true`), MFA is still on and the codes are still shown; after
+ * they are acknowledged the user is sent to the sign-in page.
  */
 export function MfaEnrollment({ required }: { required: boolean }) {
   const router = useRouter();
@@ -65,7 +68,11 @@ export function MfaEnrollment({ required }: { required: boolean }) {
       );
       // The API issued a new session ID; drop the CSRF token bound to the old one.
       resetApiClient();
-      setState({ phase: 'codes', recoveryCodes: result.recoveryCodes, user: result.user });
+      setState({
+        phase: 'codes',
+        recoveryCodes: result.recoveryCodes,
+        user: result.reauthenticate ? null : result.user,
+      });
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === 'MFA_ENROLLMENT_EXPIRED') {
         setState({ phase: 'intro' });
@@ -82,9 +89,9 @@ export function MfaEnrollment({ required }: { required: boolean }) {
     }
   }
 
-  function finish(user: AuthUser) {
+  function finish(user: AuthUser | null) {
     resetApiClient();
-    router.replace(pathAfterSignIn(user.nextStep));
+    router.replace(user ? pathAfterSignIn(user.nextStep) : '/admin/login');
     router.refresh();
   }
 
@@ -181,6 +188,12 @@ export function MfaEnrollment({ required }: { required: boolean }) {
         Save these recovery codes somewhere safe (a password manager or printed copy). Each works
         once if you lose your phone. They will not be shown again.
       </p>
+      {state.user === null ? (
+        <p data-testid="mfa-reauthenticate" className="text-sm font-medium" role="note">
+          For your security you will need to sign in again (with your password and authenticator
+          code) after saving these codes.
+        </p>
+      ) : null}
       <ul
         data-testid="recovery-codes"
         className="grid grid-cols-2 gap-2 rounded-md bg-muted p-3 font-mono text-sm"
@@ -196,7 +209,9 @@ export function MfaEnrollment({ required }: { required: boolean }) {
         }}
         className="h-10"
       >
-        I have saved my recovery codes
+        {state.user === null
+          ? 'I have saved my recovery codes — sign in again'
+          : 'I have saved my recovery codes'}
       </Button>
     </div>
   );

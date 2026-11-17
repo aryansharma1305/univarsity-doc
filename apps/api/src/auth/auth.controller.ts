@@ -317,7 +317,9 @@ export class AuthController {
     description:
       'Re-authenticates with the current password (throttled like sign-in), activates MFA, returns ' +
       'single-use recovery codes ONCE, replaces the session cookie with a new session ID and ends ' +
-      'your other sessions.',
+      'your other sessions. Requires a live enrollment (started within 10 minutes), checked before ' +
+      'the password. Once MFA is enabled the codes are always returned; if the session could not be ' +
+      'rotated, `reauthenticate` is true, the cookie is cleared and the client must sign in again.',
   })
   @ApiBody({ schema: openApiRequestSchema(mfaEnrollmentConfirmRequestSchema) })
   @ApiOkResponse({ standardSchema: mfaEnrollmentConfirmResponseSchema })
@@ -340,7 +342,11 @@ export class AuthController {
       ip: req.ip ?? req.socket.remoteAddress ?? 'unknown',
       userAgent: req.header('user-agent'),
     });
-    res.cookie(cookieNames(this.config).session, sessionId, sessionCookieOptions(this.config));
+    const name = cookieNames(this.config).session;
+    // No rotated session (reauthenticate: true): MFA is on and the codes are returned, but the old
+    // session is gone and the client must sign in again.
+    if (sessionId) res.cookie(name, sessionId, sessionCookieOptions(this.config));
+    else res.clearCookie(name, sessionCookieOptions(this.config));
     return result;
   }
 

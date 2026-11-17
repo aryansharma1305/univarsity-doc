@@ -130,7 +130,13 @@ export const mfaEnrollmentConfirmResponseSchema = z
   .object({
     /** One-time recovery codes. Shown once; only keyed hashes are stored. */
     recoveryCodes: z.array(z.string()),
-    user: authUserSchema,
+    /**
+     * MFA is enabled either way. `true` = the session could not be rotated (the old session is
+     * revoked and no new one exists): show the codes, then send the user to sign in again.
+     */
+    reauthenticate: z.boolean(),
+    /** The signed-in user on the rotated session; `null` exactly when `reauthenticate` is true. */
+    user: authUserSchema.nullable(),
   })
   .meta({ id: 'MfaEnrollmentConfirmResponse' });
 

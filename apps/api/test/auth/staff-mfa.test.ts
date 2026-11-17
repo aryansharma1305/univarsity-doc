@@ -1,7 +1,16 @@
 import type { INestApplication } from '@nestjs/common';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { authUserSchema, mfaEnrollmentStartResponseSchema } from '@docversity/validation';
+import {
+  authUserSchema,
+  mfaEnrollmentConfirmResponseSchema,
+  mfaEnrollmentStartResponseSchema,
+} from '@docversity/validation';
+import { AuditService } from '../../src/audit/audit.service.js';
+import { IdentifierHasher } from '../../src/auth/identifier-hasher.js';
+import { MfaService } from '../../src/auth/mfa.service.js';
+import { PasswordService } from '../../src/auth/password.service.js';
+import { RateLimiter } from '../../src/auth/rate-limiter.js';
 import { base32Decode, hotp, totpStep } from '../../src/auth/totp.js';
 import { createAdmin } from '../../src/cli/create-admin-core.js';
 import { resetStaffAccess } from '../../src/cli/reset-staff-access-core.js';
@@ -291,16 +300,287 @@ describe('authenticator enrollment', () => {
     ).toBeNull();
   });
 
-  it('refuses to confirm without a started enrollment', async () => {
+  it('refuses to confirm without a live enrollment BEFORE checking the password or throttling', async () => {
     const user = await createTestUser();
     const agent = browser(app);
     await signIn(agent, user);
-    const response = await post(agent, 'auth/mfa/enrollment/confirm', {
-      currentPassword: TEST_PASSWORD,
-      code: '123456',
+    const passwords = app.get(PasswordService);
+    const verify = vi.spyOn(passwords, 'verifyPassword');
+    const redis = app.get(RedisService).client;
+    const signInAccountKey = `${config.REDIS_KEY_PREFIX}rl:login:account:${app
+      .get(IdentifierHasher)
+      .hash('email', user.email)}`;
+    try {
+      // Never started: a wrong AND a right password get the same 400, and neither reaches Argon2.
+      for (const currentPassword of ['not the account password 77', TEST_PASSWORD]) {
+        const response = await post(agent, 'auth/mfa/enrollment/confirm', {
+          currentPassword,
+          code: '123456',
+        });
+        expect(response.status).toBe(400);
+        expect(errorOf(response).code).toBe('MFA_ENROLLMENT_EXPIRED');
+      }
+
+      // Started, then expired (the encrypted secret is gone from Redis): same answer.
+      await post(agent, 'auth/mfa/enrollment').expect(200);
+      await redis.del(`${config.REDIS_KEY_PREFIX}mfa-enroll:${user.id}`);
+      const expired = await post(agent, 'auth/mfa/enrollment/confirm', {
+        currentPassword: 'not the account password 77',
+        code: '123456',
+      });
+      expect(expired.status).toBe(400);
+      expect(errorOf(expired).code).toBe('MFA_ENROLLMENT_EXPIRED');
+
+      expect(verify).not.toHaveBeenCalled();
+      // No throttle counter was consumed (neither the enrollment scope nor the sign-in bucket) and
+      // no password failure was audited.
+      expect(await redis.exists(signInAccountKey)).toBe(0);
+      expect(await redis.exists(`${config.REDIS_KEY_PREFIX}rl:mfa-enroll:account:${user.id}`)).toBe(
+        0,
+      );
+      expect(
+        await testDb().auditLog.count({ where: { action: 'AUTH_MFA_FAILURE', entityId: user.id } }),
+      ).toBe(0);
+    } finally {
+      verify.mockRestore();
+    }
+  });
+});
+
+describe('enrollment password checks share the sign-in per-account budget', () => {
+  let shared: INestApplication;
+  let sharedConfig: ApiConfig;
+  beforeAll(async () => {
+    // Test-only limits: a wide account+IP allowance so the per-ACCOUNT sign-in bucket is the one that
+    // runs out (the defaults are unchanged).
+    sharedConfig = realConfig({
+      LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP: 100,
+      LOGIN_MAX_ATTEMPTS_PER_ACCOUNT: 3,
     });
-    expect(response.status).toBe(400);
-    expect(errorOf(response).code).toBe('MFA_ENROLLMENT_EXPIRED');
+    shared = await createTestApp(sharedConfig);
+  });
+  afterAll(async () => {
+    await shared.close();
+  });
+
+  it('wrong current passwords during a live enrollment throttle both confirm and normal sign-in', async () => {
+    const user = await createTestUser();
+    const agent = browser(shared);
+    await signIn(agent, user);
+    const started = await post(agent, 'auth/mfa/enrollment').expect(200);
+    const { secret } = mfaEnrollmentStartResponseSchema.parse(started.body);
+
+    const wrongPassword = { currentPassword: 'not the account password 77', code: codeFor(secret) };
+    for (let attempt = 0; attempt < sharedConfig.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT; attempt++) {
+      const wrong = await post(agent, 'auth/mfa/enrollment/confirm', wrongPassword);
+      expect(wrong.status).toBe(401);
+      expect(errorOf(wrong).code).toBe('AUTH_INVALID_CREDENTIALS');
+    }
+
+    // Budget spent: even the right password is refused for enrollment …
+    const confirm = await post(agent, 'auth/mfa/enrollment/confirm', {
+      currentPassword: TEST_PASSWORD,
+      code: codeFor(secret),
+    });
+    expect(confirm.status).toBe(429);
+    expect(errorOf(confirm).code).toBe('AUTH_RATE_LIMITED');
+    expect(confirm.headers['retry-after']).toBeDefined();
+
+    // … and for a normal sign-in to the same account from a fresh browser.
+    const fresh = browser(shared);
+    const token = await csrfToken(fresh);
+    const loginAttempt = await fresh
+      .post('/api/v1/auth/login')
+      .set('X-CSRF-Token', token)
+      .send({ email: user.email, password: TEST_PASSWORD });
+    expect(loginAttempt.status).toBe(429);
+    expect(errorOf(loginAttempt).code).toBe('AUTH_RATE_LIMITED');
+
+    // Another account is unaffected; nothing was enabled.
+    await signIn(browser(shared), await createTestUser());
+    expect(
+      (await testDb().user.findUniqueOrThrow({ where: { id: user.id } })).mfaEnabledAt,
+    ).toBeNull();
+    const throttledAudit = await testDb().auditLog.findFirst({
+      where: {
+        action: 'AUTH_MFA_FAILURE',
+        entityId: user.id,
+        metadata: { path: ['reason'], equals: 'rate_limited' },
+      },
+    });
+    expect(throttledAudit?.metadata).toMatchObject({ stage: 'enrollment' });
+  });
+});
+
+describe('enrollment always returns the recovery codes once MFA is committed', () => {
+  const logs: string[] = [];
+  let faulty: INestApplication;
+  beforeAll(async () => {
+    faulty = await createTestApp(realConfig(), { logSink: (line) => logs.push(line) });
+  });
+  afterAll(async () => {
+    await faulty.close();
+  });
+
+  type Step =
+    | 'revoke_current_session'
+    | 'create_rotated_session'
+    | 'revoke_other_sessions'
+    | 'discard_enrollment'
+    | 'clear_lockout'
+    | 'clear_enroll_throttle';
+
+  /** Makes exactly one post-commit step throw (as a Redis outage would). */
+  function inject(step: Step | 'all_session_steps') {
+    const sessions = faulty.get(SessionStore);
+    const mfa = faulty.get(MfaService);
+    const fail = () => Promise.reject(new Error('injected store failure'));
+    switch (step) {
+      case 'revoke_current_session':
+        return [vi.spyOn(sessions, 'revoke').mockImplementationOnce(fail)];
+      case 'create_rotated_session':
+        return [vi.spyOn(sessions, 'create').mockImplementationOnce(fail)];
+      case 'revoke_other_sessions':
+        return [vi.spyOn(sessions, 'revokeAllForUser').mockImplementationOnce(fail)];
+      case 'discard_enrollment':
+        return [vi.spyOn(mfa, 'discardEnrollment').mockImplementationOnce(fail)];
+      case 'clear_lockout':
+        return [vi.spyOn(mfa, 'clearLockout').mockImplementationOnce(fail)];
+      case 'clear_enroll_throttle':
+        return [vi.spyOn(faulty.get(RateLimiter), 'clear').mockImplementationOnce(fail)];
+      case 'all_session_steps':
+        // The worst case: no Redis revocation works at all. The old cookie must still be dead.
+        return [
+          vi.spyOn(sessions, 'revoke').mockImplementationOnce(fail),
+          vi.spyOn(sessions, 'revokeAllForUser').mockImplementationOnce(fail),
+        ];
+    }
+  }
+
+  const cases: { step: Step | 'all_session_steps'; rotated: boolean; failed: string[] }[] = [
+    { step: 'revoke_current_session', rotated: false, failed: ['revoke_current_session'] },
+    { step: 'create_rotated_session', rotated: false, failed: ['create_rotated_session'] },
+    { step: 'revoke_other_sessions', rotated: true, failed: ['revoke_other_sessions'] },
+    { step: 'discard_enrollment', rotated: true, failed: ['discard_enrollment'] },
+    { step: 'clear_lockout', rotated: true, failed: ['clear_lockout'] },
+    { step: 'clear_enroll_throttle', rotated: true, failed: ['clear_enroll_throttle'] },
+    {
+      step: 'all_session_steps',
+      rotated: false,
+      failed: ['revoke_current_session', 'revoke_other_sessions'],
+    },
+  ];
+
+  it.each(cases)(
+    'a failing $step still returns 10 codes, enables MFA once and kills the old session',
+    async ({ step, rotated, failed }) => {
+      const user = await createTestUser();
+      const agent = browser(faulty);
+      const other = browser(faulty);
+      const signedIn = await login(agent, user).expect(200);
+      const oldCookie = setCookie(signedIn, 'dv_session')?.split(';')[0] ?? '';
+      await signIn(other, user);
+      const started = await post(agent, 'auth/mfa/enrollment').expect(200);
+      const { secret } = mfaEnrollmentStartResponseSchema.parse(started.body);
+      const code = codeFor(secret);
+
+      const spies = inject(step);
+      let confirmed: Sent;
+      try {
+        confirmed = await post(agent, 'auth/mfa/enrollment/confirm', {
+          currentPassword: TEST_PASSWORD,
+          code,
+        });
+      } finally {
+        for (const spy of spies) spy.mockRestore();
+      }
+
+      expect(confirmed.status, JSON.stringify(confirmed.body)).toBe(200);
+      const body = mfaEnrollmentConfirmResponseSchema.parse(confirmed.body);
+      expect(body.recoveryCodes).toHaveLength(10);
+      expect(new Set(body.recoveryCodes).size).toBe(10);
+      expect(body.reauthenticate).toBe(!rotated);
+      expect(body.user === null).toBe(!rotated);
+
+      // MFA enabled exactly once, with the codes that were returned.
+      const row = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+      expect(row.mfaEnabledAt).not.toBeNull();
+      expect(
+        await testDb().auditLog.count({ where: { action: 'MFA_ENABLED', entityId: user.id } }),
+      ).toBe(1);
+      expect(await testDb().staffMfaRecoveryCode.count({ where: { userId: user.id } })).toBe(10);
+      const again = await post(rotated ? agent : browser(faulty), 'auth/mfa/enrollment');
+      expect([401, 409]).toContain(again.status);
+
+      // The old (un-rotated) session and every other session are unusable.
+      await browser(faulty).get('/api/v1/auth/me').set('Cookie', oldCookie).expect(401);
+      await other.get('/api/v1/auth/me').expect(401);
+      const newCookie = setCookie(confirmed, 'dv_session')?.split(';')[0] ?? '';
+      if (rotated) {
+        expect(newCookie).not.toBe(oldCookie);
+        expect(userOf(await agent.get('/api/v1/auth/me').expect(200))).toMatchObject({
+          mfaEnabled: true,
+          nextStep: null,
+        });
+      } else {
+        // Cookie cleared; the user signs in again — now with the second factor.
+        expect(newCookie).toBe('dv_session=');
+        await agent.get('/api/v1/auth/me').expect(401);
+        const relogin = browser(faulty);
+        expect(userOf(await login(relogin, user).expect(200)).nextStep).toBe('MFA_VERIFY');
+        await post(relogin, 'auth/mfa/verify', { recoveryCode: body.recoveryCodes[0] }).expect(200);
+      }
+
+      // The incomplete cleanup is audited (step names only) and logged without secrets.
+      const warning = await testDb().auditLog.findFirstOrThrow({
+        where: { action: 'MFA_ENROLLMENT_CLEANUP_INCOMPLETE', entityId: user.id },
+      });
+      expect(warning.metadata).toMatchObject({ failedSteps: failed, sessionRotated: rotated });
+      const audit = await testDb().auditLog.findMany({ where: { entityId: user.id } });
+      const haystack = [...logs, ...audit.map((entry) => JSON.stringify(entry.metadata))].join(
+        '\n',
+      );
+      expect(haystack).toContain('MFA enrollment committed; post-commit cleanup incomplete');
+      for (const needle of [
+        secret,
+        code,
+        user.password,
+        oldCookie.replace('dv_session=', ''),
+        ...body.recoveryCodes,
+        ...body.recoveryCodes.map((item) => item.replace('-', '')),
+      ]) {
+        expect(haystack).not.toContain(needle);
+      }
+    },
+  );
+
+  it('returns no codes when the enabling transaction does not commit', async () => {
+    const user = await createTestUser();
+    const agent = browser(faulty);
+    await signIn(agent, user);
+    const started = await post(agent, 'auth/mfa/enrollment').expect(200);
+    const { secret } = mfaEnrollmentStartResponseSchema.parse(started.body);
+    // The MFA_ENABLED audit runs inside the transaction: failing it rolls the whole change back.
+    const spy = vi
+      .spyOn(faulty.get(AuditService), 'writeAuditEvent')
+      .mockImplementationOnce(() => Promise.reject(new Error('injected audit failure')));
+    let response: Sent;
+    try {
+      response = await post(agent, 'auth/mfa/enrollment/confirm', {
+        currentPassword: TEST_PASSWORD,
+        code: codeFor(secret),
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(response.status).toBe(500);
+    expect(JSON.stringify(response.body)).not.toContain('recoveryCodes');
+    const row = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(row.mfaEnabledAt).toBeNull();
+    expect(row.mfaTotpSecretEnc).toBeNull();
+    expect(await testDb().staffMfaRecoveryCode.count({ where: { userId: user.id } })).toBe(0);
+    // The session was not touched: the user can simply try again.
+    expect(userOf(await agent.get('/api/v1/auth/me').expect(200)).mfaEnabled).toBe(false);
   });
 });
 
