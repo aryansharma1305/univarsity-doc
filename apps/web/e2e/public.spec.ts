@@ -9,7 +9,6 @@ const NAVIGATION = [
   ['Student Sign in', '/student/login'],
 ] as const;
 const VERIFICATION = [
-  ['/', 'Verify Admission Letter', 'Enter admission letter number'],
   ['/verify/admission-letter', 'Verify Admission Letter', 'Enter admission letter number'],
   ['/verify/certificate', 'Verify Certificate', 'Enter the code printed on the certificate'],
   ['/verify/registration', 'Verify Registration', 'Enter registration number'],
@@ -61,7 +60,7 @@ for (const width of [1440, 768, 390, 320]) {
       await expect(page.getByRole('link', { name: 'Docversity home' })).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
       await expectNoSeriousA11yViolations(page);
-      await capture(page, `mentor-${path.replaceAll('/', '-') || 'home'}-${width}`);
+      await capture(page, `mentor-${path.replaceAll('/', '-')}-${width}`);
     }
     if (width < 1280) await page.getByRole('button', { name: 'Open menu' }).click();
     const nav = page.getByRole('navigation', {
@@ -82,7 +81,30 @@ for (const width of [1440, 768, 390, 320]) {
     }
     expect(
       requests.filter((url) => new URL(url).pathname.startsWith('/api/v1/public/verify/')),
-    ).toHaveLength(5);
+    ).toHaveLength(4);
+  });
+
+  test(`homepage is the animated hero, not a verification form, at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    const heading = page.getByRole('heading', { level: 1 });
+    await expect(heading).toHaveText(/Verify\.\s*Trust\.\s*Confirm\./);
+    await expect(page.getByRole('img', { name: 'Docversity University' })).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Activate your account', exact: true }),
+    ).toHaveAttribute('href', '/student/register');
+    await expect(page.getByRole('heading', { name: 'Verify Admission Letter' })).toHaveCount(0);
+    await expect(page.getByPlaceholder('Enter admission letter number')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Verify', exact: true })).toHaveCount(0);
+    await expect(page.getByText(/Single-use activation codes|Only your own records/)).toHaveCount(
+      0,
+    );
+    await expectNoHorizontalOverflow(page);
+    await expectNoSeriousA11yViolations(page);
+    await capture(page, `homepage-${width}`);
   });
 }
 

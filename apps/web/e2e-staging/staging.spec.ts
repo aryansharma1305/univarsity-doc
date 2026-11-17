@@ -86,7 +86,7 @@ test('the reviewer gate admits only authorized reviewers and keeps the site out 
   }
 });
 
-test('UI-04 homepage: four unavailable services, no forms, portal links; protected routes need a session', async ({
+test('homepage: animated hero, no verification form, activation link; protected routes need a session', async ({
   page,
 }, info) => {
   const home = await page.goto('/');
@@ -95,25 +95,18 @@ test('UI-04 homepage: four unavailable services, no forms, portal links; protect
   await expect(
     page.getByRole('heading', { level: 1, name: 'Verify. Trust. Confirm.' }),
   ).toBeVisible();
-  // Every verification service is honestly unavailable and the page collects no identifiers.
-  await expect(page.getByRole('tab')).toHaveCount(4);
-  for (const tab of await page.getByRole('tab').all())
-    await expect(tab).toContainText('Not available yet');
+  // The homepage collects no identifiers; verification forms live on their own routes.
   await expect(page.locator('main form,main input,main textarea')).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Student portal', exact: true })).toHaveAttribute(
-    'href',
-    '/student/login',
-  );
-  await expect(page.getByRole('link', { name: 'Staff access', exact: true })).toHaveAttribute(
-    'href',
-    '/admin/login',
-  );
+  await expect(page.getByRole('img', { name: 'Docversity University' })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Activate your account', exact: true }),
+  ).toHaveAttribute('href', '/student/register');
   await expectNoOverflow(page);
   await shot(page, 'home', info.project.name);
-  // The former /verify page redirects to the single homepage.
+  // The former /verify page redirects to the admission-letter form.
   const verify = await page.request.get('/verify', { maxRedirects: 0 });
   expect(verify.status()).toBe(307);
-  expect(verify.headers().location).toBe('/');
+  expect(verify.headers().location).toBe('/verify/admission-letter');
   for (const service of ['result', 'registration', 'certificate', 'admission-letter']) {
     const response = await page.request.post(`/api/v1/public/verify/${service}`, {
       data: { contractVersion: 1, reference: 'SYNTHETIC-14B' },

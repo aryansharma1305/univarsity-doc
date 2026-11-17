@@ -18,15 +18,17 @@ async function postWithinBudget(request: APIRequestContext, path: string, data: 
   return response;
 }
 
-test('/verify redirects to the one homepage and drops unsolicited reference query data', async ({
+test('/verify redirects to the admission-letter page and drops unsolicited reference query data', async ({
   page,
   request,
 }) => {
   const response = await request.get('/verify', { maxRedirects: 0 });
   expect(response.status()).toBe(307);
-  expect(response.headers().location).toBe('/');
+  expect(response.headers().location).toBe('/verify/admission-letter');
   await page.goto('/verify?reference=SYNTHETIC-UNSOLICITED-REFERENCE');
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(
+    (url) => url.pathname === '/verify/admission-letter' && url.search === '',
+  );
   await expect(
     page.getByRole('heading', { level: 1, name: 'Verify Admission Letter' }),
   ).toBeVisible();
@@ -71,7 +73,7 @@ test('all four real API contracts remain fail-closed, no-store and strictly vali
   }
 });
 
-test('without JavaScript the homepage discloses unavailability and keeps references out of URLs', async ({
+test('without JavaScript the admission-letter page discloses unavailability and keeps references out of URLs', async ({
   browser,
 }, testInfo) => {
   const context = await browser.newContext({
@@ -81,7 +83,7 @@ test('without JavaScript the homepage discloses unavailability and keeps referen
   });
   try {
     const page = await context.newPage();
-    await page.goto('/');
+    await page.goto('/verify/admission-letter');
     await expect(
       page.getByRole('heading', { level: 1, name: 'Verify Admission Letter' }),
     ).toBeVisible();
@@ -89,7 +91,9 @@ test('without JavaScript the homepage discloses unavailability and keeps referen
     const input = page.getByPlaceholder('Enter admission letter number');
     await input.fill('SYNTHETIC-LOCAL-ONLY');
     await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page).toHaveURL((url) => url.pathname === '/' && url.search === '');
+    await expect(page).toHaveURL(
+      (url) => url.pathname === '/verify/admission-letter' && url.search === '',
+    );
     await expect(page.getByRole('link', { name: 'Student Sign in', exact: true })).toBeVisible();
     await expect(page.getByRole('status')).toContainText(
       'Only university-approved records can be verified',
