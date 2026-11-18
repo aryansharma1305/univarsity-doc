@@ -99,6 +99,14 @@ for (const width of [1440, 768, 390, 320]) {
     await expect(page.getByRole('heading', { name: 'Verify Admission Letter' })).toHaveCount(0);
     await expect(page.getByPlaceholder('Enter admission letter number')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Verify', exact: true })).toHaveCount(0);
+    const search = page.getByRole('search', { name: 'Verify a record' });
+    await expect(search.locator('select, input, button')).toHaveCount(3);
+    await expect(search.locator('select, input, button').nth(0)).toHaveAccessibleName('Service');
+    await expect(search.locator('select, input, button').nth(1)).toHaveAttribute(
+      'placeholder',
+      'Enter your registration number',
+    );
+    await expect(search.locator('select, input, button').nth(2)).toHaveText('Search');
     await expect(page.getByText(/Single-use activation codes|Only your own records/)).toHaveCount(
       0,
     );

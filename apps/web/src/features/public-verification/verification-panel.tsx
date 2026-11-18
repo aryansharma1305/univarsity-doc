@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type SyntheticEvent } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState, type SyntheticEvent } from 'react';
 import Link from 'next/link';
 import { ArrowRightIcon, LoaderCircleIcon } from 'lucide-react';
 import { Button } from '@docversity/ui/components/button';
@@ -12,11 +12,12 @@ import {
   type PublicVerificationService,
 } from '@docversity/validation';
 import { ApiError, studentRequest } from '@/lib/api';
+import { takeHeroSearch } from './search-handoff';
 import styles from './verification-panel.module.css';
 
 const CHECK_CODE = 'Please check the entered code and try again.';
 
-const SERVICES = {
+export const SERVICES = {
   'admission-letter': {
     title: 'Verify Admission Letter',
     label: 'Admission letter number',
@@ -56,6 +57,23 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
   const requestVersion = useRef(0);
   const privateLookup = service === 'registration' || service === 'result';
 
+  const searchFromHome = useEffectEvent((value: string) => {
+    setToken('');
+    setReference(value);
+    // Too short or long to be valid: prefill only, so the user sees what they typed.
+    const trimmed = value.trim();
+    if (trimmed.length >= 3 && trimmed.length <= 128) void lookup(undefined, value);
+  });
+
+  useEffect(() => {
+    const value = takeHeroSearch(service);
+    // Read-and-remove makes this run once, even when development remounts the effect.
+    if (value !== null)
+      queueMicrotask(() => {
+        searchFromHome(value);
+      });
+  }, [service]);
+
   useEffect(() => {
     const consumeToken = () => {
       const hash = new URLSearchParams(window.location.hash.slice(1));
@@ -92,11 +110,11 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
     await lookup();
   }
 
-  async function lookup(periodNumber?: number) {
+  async function lookup(periodNumber?: number, typed?: string) {
     if (busy) return;
     const input = officialVerificationRequestSchema.safeParse({
       contractVersion: 2,
-      ...(token ? { token } : { reference }),
+      ...(typed !== undefined ? { reference: typed } : token ? { token } : { reference }),
       ...(service === 'result' && periodNumber ? { periodNumber } : {}),
     });
     if (!input.success) {

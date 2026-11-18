@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('next/image', () => ({
   default: ({ alt }: { alt: string }) => <span role="img" aria-label={alt} />,
 }));
-vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ usePathname: () => '/', useRouter: () => ({ push }) }));
 import { VerificationHome } from '@/features/public-verification/verification-home';
 
 const navigation = [
@@ -30,6 +31,8 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  push.mockReset();
+  sessionStorage.clear();
 });
 
 describe('public verification homepage', () => {
@@ -54,8 +57,52 @@ describe('public verification homepage', () => {
     expect(
       screen.queryByRole('heading', { name: 'Verify Admission Letter' }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Verify$/ })).not.toBeInTheDocument();
+  });
+
+  it('orders the hero search as service, then number, then Search', () => {
+    render(<VerificationHome year={2026} />);
+    const form = screen.getByRole('search', { name: 'Verify a record' });
+    const controls = Array.from(form.querySelectorAll('select, input, button'));
+    expect(controls.map((control) => control.tagName)).toEqual(['SELECT', 'INPUT', 'BUTTON']);
+    const options = within(form)
+      .getAllByRole('option')
+      .map((option) => option.textContent);
+    expect(options).toEqual([
+      'Select Service',
+      'Verify Certificate',
+      'Verify Registration',
+      'Verify Admission Letter',
+      'Check Result',
+    ]);
+  });
+
+  it('requires a service and a number, then hands the number to the service page without a URL', () => {
+    render(<VerificationHome year={2026} />);
+    const form = screen.getByRole('search', { name: 'Verify a record' });
+    const service = within(form).getByRole('combobox', { name: 'Service' });
+    fireEvent.click(within(form).getByRole('button', { name: 'Search' }));
+    expect(service).toBeInvalid();
+    expect(push).not.toHaveBeenCalled();
+    fireEvent.change(service, { target: { value: 'certificate' } });
+    const input = within(form).getByRole('textbox', { name: 'Certificate number' });
+    expect(input).toHaveAttribute('placeholder', 'Enter the code printed on the certificate');
+    fireEvent.change(input, { target: { value: ' DV/2026-01 ' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Search' }));
+    expect(push).toHaveBeenCalledWith('/verify/certificate');
+    expect(JSON.parse(sessionStorage.getItem('dv-hero-search') ?? '{}')).toMatchObject({
+      service: 'certificate',
+      reference: 'DV/2026-01',
+    });
+    for (const [value, href] of [
+      ['registration', '/verify/registration'],
+      ['admission-letter', '/verify/admission-letter'],
+      ['result', '/results'],
+    ] as const) {
+      fireEvent.change(service, { target: { value } });
+      fireEvent.click(within(form).getByRole('button', { name: 'Search' }));
+      expect(push).toHaveBeenLastCalledWith(href);
+    }
   });
 
   it('keeps the mentor-removed subtitle and badge row out', () => {

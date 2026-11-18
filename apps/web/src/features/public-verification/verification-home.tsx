@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRef } from 'react';
 import { ArrowRightIcon } from 'lucide-react';
 import { HeroField } from './hero-field';
+import { HeroSearch } from './hero-search';
 import { PublicHeader } from '@/components/public/public-header';
 import { LandingFooter } from './landing-sections';
 import { useLandingMotion } from './use-landing-motion';
@@ -12,8 +13,8 @@ import crest from './university-crest.png';
 import styles from './verification-home.module.css';
 
 /**
- * Public homepage: animated hero and crest. Verification forms live on their own routes in the
- * five-item header; the mentor-removed subtitle and badge row stay out.
+ * Public homepage: animated hero and crest. The hero search (service, then number) opens the
+ * service's own route; the mentor-removed subtitle and badge row stay out.
  */
 export function VerificationHome({ year }: { year: number }) {
   const root = useRef<HTMLDivElement>(null);
@@ -50,6 +51,9 @@ export function VerificationHome({ year }: { year: number }) {
                     </span>
                   </span>
                 </h1>
+                <div data-hero-fade>
+                  <HeroSearch />
+                </div>
                 <div className={styles.actions} data-hero-fade>
                   <Link href="/student/register" className={styles.primaryAction} prefetch={false}>
                     Activate your account

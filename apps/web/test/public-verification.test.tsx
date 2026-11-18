@@ -29,6 +29,7 @@ const services = [
 ] as const;
 
 afterEach(() => {
+  sessionStorage.clear();
   request.mockReset();
   vi.unstubAllGlobals();
   window.history.replaceState(null, '', '/');
@@ -381,3 +382,76 @@ it.each([
     );
   },
 );
+
+const unavailable = (service: string) => ({
+  contractVersion: 2,
+  service,
+  status: 'UNAVAILABLE',
+  message: 'University verification approval is pending.',
+});
+const handoff = (service: string, reference: string, at = Date.now()) => {
+  sessionStorage.setItem('dv-hero-search', JSON.stringify({ service, reference, at }));
+};
+
+it('runs a homepage search exactly once and consumes the handoff', async () => {
+  request.mockResolvedValue(unavailable('registration'));
+  handoff('registration', 'SYN-0001');
+  const { unmount } = render(<VerificationPanel service="registration" />);
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('UNAVAILABLE'));
+  expect(screen.getByRole('textbox', { name: 'Registration number' })).toHaveValue('SYN-0001');
+  expect(sessionStorage.getItem('dv-hero-search')).toBeNull();
+  unmount();
+  render(<VerificationPanel service="registration" />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(request).toHaveBeenCalledWith('POST', 'public/verify/registration', expect.anything(), {
+    body: { contractVersion: 2, reference: 'SYN-0001' },
+  });
+});
+
+it.each([
+  [
+    'another service',
+    () => {
+      handoff('certificate', 'SYN-0001');
+    },
+  ],
+  [
+    'a stale handoff',
+    () => {
+      handoff('registration', 'SYN-0001', Date.now() - 61_000);
+    },
+  ],
+  [
+    'malformed storage',
+    () => {
+      sessionStorage.setItem('dv-hero-search', '{not json');
+    },
+  ],
+  [
+    'an unsolicited link',
+    () => {
+      window.history.replaceState(null, '', '/verify/registration#reference=SYN-0001');
+    },
+  ],
+])('ignores %s', async (_name, arrange) => {
+  arrange();
+  render(<VerificationPanel service="registration" />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(request).not.toHaveBeenCalled();
+  expect(screen.getByRole('textbox', { name: 'Registration number' })).toHaveValue('');
+});
+
+it('prefills a too-short number without sending it', async () => {
+  handoff('registration', 'AB');
+  render(<VerificationPanel service="registration" />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(screen.getByRole('textbox', { name: 'Registration number' })).toHaveValue('AB');
+  expect(request).not.toHaveBeenCalled();
+});

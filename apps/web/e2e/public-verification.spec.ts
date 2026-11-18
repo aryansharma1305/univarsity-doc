@@ -103,3 +103,40 @@ test('without JavaScript the admission-letter page discloses unavailability and 
     await context.close();
   }
 });
+
+test('homepage search opens each service, runs one policy-gated check and keeps the number out of URLs', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  const services = [
+    ['Verify Certificate', '/verify/certificate', 'certificate'],
+    ['Verify Registration', '/verify/registration', 'registration'],
+    ['Verify Admission Letter', '/verify/admission-letter', 'admission-letter'],
+    ['Check Result', '/results', 'result'],
+  ] as const;
+  const reference = 'SYNTHETIC-HOME-SEARCH';
+  const posts: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/api/v1/public/verify/')) {
+      posts.push(new URL(request.url()).pathname);
+    }
+    expect(request.url()).not.toContain(reference);
+  });
+  for (const [label, path, service] of services) {
+    posts.length = 0;
+    await page.goto('/');
+    const search = page.getByRole('search', { name: 'Verify a record' });
+    await search.getByRole('combobox', { name: 'Service' }).selectOption({ label });
+    await search.getByRole('textbox').fill(reference);
+    await search.getByRole('button', { name: 'Search' }).click();
+    await expect(page).toHaveURL((url) => url.pathname === path && !url.href.includes(reference));
+    await expect(page.getByRole('status')).toContainText(/UNAVAILABLE|pending|No verified record/i);
+    await expect(page.getByRole('textbox')).toHaveValue(reference);
+    await page.waitForTimeout(500);
+    expect(posts).toEqual([`/api/v1/public/verify/${service}`]);
+    await page.reload();
+    await page.waitForTimeout(500);
+    expect(posts).toHaveLength(1);
+    await expect(page.getByRole('textbox')).toHaveValue('');
+  }
+});
