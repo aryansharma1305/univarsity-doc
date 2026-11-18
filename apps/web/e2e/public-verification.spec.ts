@@ -136,7 +136,8 @@ test('homepage search opens each service, runs one policy-gated check and keeps 
     await expect.poll(() => posts).toEqual([`/api/v1/public/verify/${service}`]);
     await page.reload();
     await expect(page.getByRole('textbox')).toHaveValue('');
-    await page.waitForLoadState('networkidle');
+    // Bounded settle so a late duplicate lookup (after navigation or reload) would be counted.
+    await page.waitForTimeout(1000);
     expect(posts).toHaveLength(1);
   }
   expect(urls.filter((url) => url.includes(reference))).toEqual([]);

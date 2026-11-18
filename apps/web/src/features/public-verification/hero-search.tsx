@@ -29,9 +29,7 @@ export function HeroSearch() {
     const value = reference.trim();
     const input = event.currentTarget.querySelector('input');
     // minLength counts spaces; validate the number that will actually be sent.
-    input?.setCustomValidity(
-      value.length >= 3 || value === '' ? '' : 'Enter at least 3 characters.',
-    );
+    input?.setCustomValidity(value.length >= 3 ? '' : 'Enter at least 3 characters.');
     if (!option || !event.currentTarget.reportValidity()) return;
     storeHeroSearch(option.service, value);
     router.push(option.href);

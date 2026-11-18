@@ -113,6 +113,10 @@ describe('public verification homepage', () => {
     expect(input).toBeInvalid();
     expect(push).not.toHaveBeenCalled();
     expect(takeHeroSearch('registration')).toBeNull();
+    fireEvent.change(input, { target: { value: '     ' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Search' }));
+    expect(input).toBeInvalid();
+    expect(push).not.toHaveBeenCalled();
     fireEvent.change(input, { target: { value: '  abc  ' } });
     expect(input).toBeValid();
   });

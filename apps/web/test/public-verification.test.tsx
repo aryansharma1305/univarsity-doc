@@ -31,6 +31,7 @@ const services = [
 ] as const;
 
 afterEach(() => {
+  // Clears any leftover handoff for every service (take always empties it).
   takeHeroSearch('registration');
   vi.restoreAllMocks();
   request.mockReset();
