@@ -104,7 +104,7 @@ test('without JavaScript the admission-letter page discloses unavailability and 
   }
 });
 
-test('homepage search opens each service, runs one policy-gated check and keeps the number out of URLs', async ({
+test('homepage search opens each service, runs exactly one server-decided check and keeps the number out of URLs', async ({
   page,
 }) => {
   test.setTimeout(120000);
@@ -129,9 +129,19 @@ test('homepage search opens each service, runs one policy-gated check and keeps 
     const search = page.getByRole('search', { name: 'Verify a record' });
     await search.getByRole('combobox', { name: 'Service' }).selectOption({ label });
     await search.getByRole('textbox').fill(reference);
+    const lookup = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === `/api/v1/public/verify/${service}`,
+    );
     await search.getByRole('button', { name: 'Search' }).click();
     await expect(page).toHaveURL((url) => url.pathname === path && !url.href.includes(reference));
-    await expect(page.getByRole('status')).toContainText(/UNAVAILABLE|pending|No verified record/i);
+    // The server's policy decides the answer (UNAVAILABLE, or NOT FOUND where a policy is enabled);
+    // the public rate limit may also answer 429. Each is shown, never a silent page.
+    expect([200, 429]).toContain((await lookup).status());
+    await expect(page.locator('[role="status"], [role="alert"]').first()).toContainText(
+      /UNAVAILABLE|NOT FOUND|No matching record|Too many checks/i,
+    );
     await expect(page.getByRole('textbox')).toHaveValue(reference);
     await expect.poll(() => posts).toEqual([`/api/v1/public/verify/${service}`]);
     await page.reload();
