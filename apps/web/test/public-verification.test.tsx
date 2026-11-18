@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { OfficialVerificationResponse } from '@docversity/validation';
@@ -10,6 +11,7 @@ vi.mock('@/lib/api', async () => ({
 }));
 import { ApiError } from '@/lib/api';
 import { VerificationPanel } from '@/features/public-verification/verification-panel';
+import { storeHeroSearch, takeHeroSearch } from '@/features/public-verification/search-handoff';
 
 const services = [
   [
@@ -29,6 +31,9 @@ const services = [
 ] as const;
 
 afterEach(() => {
+  // Clears any leftover handoff for every service (take always empties it).
+  takeHeroSearch('registration');
+  vi.restoreAllMocks();
   request.mockReset();
   vi.unstubAllGlobals();
   window.history.replaceState(null, '', '/');
@@ -381,3 +386,74 @@ it.each([
     );
   },
 );
+
+const unavailable = (service: string) => ({
+  contractVersion: 2,
+  service,
+  status: 'UNAVAILABLE',
+  message: 'University verification approval is pending.',
+});
+const settle = () =>
+  act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
+it('runs a homepage search exactly once under StrictMode and consumes the handoff', async () => {
+  request.mockResolvedValue(unavailable('registration'));
+  storeHeroSearch('registration', 'SYN-0001');
+  const { unmount } = render(
+    <StrictMode>
+      <VerificationPanel service="registration" />
+    </StrictMode>,
+  );
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('UNAVAILABLE'));
+  expect(screen.getByRole('textbox', { name: 'Registration number' })).toHaveValue('SYN-0001');
+  unmount();
+  render(<VerificationPanel service="registration" />);
+  await settle();
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(request).toHaveBeenCalledWith('POST', 'public/verify/registration', expect.anything(), {
+    body: { contractVersion: 2, reference: 'SYN-0001' },
+  });
+  expect(takeHeroSearch('registration')).toBeNull();
+});
+
+it('does not run when the panel unmounts before the handoff is read', async () => {
+  storeHeroSearch('registration', 'SYN-0001');
+  const { unmount } = render(<VerificationPanel service="registration" />);
+  unmount();
+  await settle();
+  expect(request).not.toHaveBeenCalled();
+});
+
+it.each([
+  [
+    'another service',
+    () => {
+      storeHeroSearch('certificate', 'SYN-0001');
+    },
+  ],
+  [
+    'a stale handoff',
+    () => {
+      storeHeroSearch('registration', 'SYN-0001');
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 61_000);
+    },
+  ],
+  ['no handoff (a header link or a typed URL)', () => undefined],
+])('ignores %s', async (_name, arrange) => {
+  arrange();
+  render(<VerificationPanel service="registration" />);
+  await settle();
+  expect(request).not.toHaveBeenCalled();
+  expect(screen.getByRole('textbox', { name: 'Registration number' })).toHaveValue('');
+});
+
+it('prefills a too-short number without sending it', async () => {
+  storeHeroSearch('registration', 'AB');
+  render(<VerificationPanel service="registration" />);
+  await settle();
+  expect(screen.getByRole('textbox', { name: 'Registration number' })).toHaveValue('AB');
+  expect(request).not.toHaveBeenCalled();
+});

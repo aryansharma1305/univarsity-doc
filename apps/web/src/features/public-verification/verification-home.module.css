@@ -198,6 +198,100 @@
   transform: translateX(3px);
 }
 
+/* Hero search: service first, then the number, then Search (mentor order). */
+.search {
+  display: grid;
+  /* The service column fits the longest label ("Verify Admission Letter") without clipping. */
+  grid-template-columns: 15.5rem minmax(10rem, 1fr) auto;
+  gap: 10px;
+  max-width: 46rem;
+  margin-top: 32px;
+}
+
+.selectWrap {
+  position: relative;
+  display: flex;
+}
+
+.selectWrap svg {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  width: 18px;
+  height: 18px;
+  color: var(--dv-navy-950);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.searchSelect,
+.searchInput {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: 999px;
+  color: var(--dv-navy-950);
+  background: #fff;
+  font-size: 0.9375rem;
+  box-shadow: 0 10px 30px -16px rgb(0 0 0 / 55%);
+}
+
+.searchSelect {
+  appearance: none;
+  padding: 0 44px 0 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.searchSelect:invalid {
+  color: #5b6478;
+  font-weight: 500;
+}
+
+.searchInput {
+  min-width: 0;
+  padding: 0 20px;
+}
+
+.searchInput::placeholder {
+  color: #5b6478;
+}
+
+.searchSelect:focus-visible,
+.searchInput:focus-visible,
+.searchButton:focus-visible {
+  outline: 3px solid var(--verification-gold);
+  outline-offset: 2px;
+}
+
+.searchButton {
+  display: inline-flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 24px;
+  border-radius: 999px;
+  color: var(--dv-navy-950);
+  background: var(--verification-gold);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  box-shadow: 0 10px 30px -12px rgb(255 201 40 / 60%);
+  transition:
+    transform 260ms var(--page-ease),
+    background-color 200ms ease-out;
+}
+
+.searchButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+.searchButton:hover {
+  transform: translateY(-2px);
+  background: #ffd452;
+}
+
 .secondaryAction {
   border: 1px solid rgb(255 255 255 / 28%);
   color: white;
@@ -480,6 +574,17 @@
 
 /* ---------- Responsive ---------- */
 
+/* Narrow intro column: service on its own row, then number and Search (order unchanged). */
+@media (min-width: 901px) and (max-width: 1180px) {
+  .search {
+    grid-template-columns: minmax(0, 1fr) auto;
+    max-width: 30rem;
+  }
+  .selectWrap {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 900px) {
   .hero {
     min-height: 0;
@@ -499,6 +604,10 @@
   .actions,
   .assurances {
     justify-content: center;
+  }
+  .search {
+    margin-inline: auto;
+    text-align: left;
   }
   .logoStage {
     order: 1;
@@ -535,6 +644,9 @@
   .actions {
     flex-direction: column;
     align-items: stretch;
+  }
+  .search {
+    grid-template-columns: 1fr;
   }
   .primaryAction,
   .secondaryAction {

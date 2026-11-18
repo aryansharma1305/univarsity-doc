@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type SyntheticEvent } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState, type SyntheticEvent } from 'react';
 import Link from 'next/link';
 import { ArrowRightIcon, LoaderCircleIcon } from 'lucide-react';
 import { Button } from '@docversity/ui/components/button';
@@ -12,35 +12,11 @@ import {
   type PublicVerificationService,
 } from '@docversity/validation';
 import { ApiError, studentRequest } from '@/lib/api';
+import { takeHeroSearch } from './search-handoff';
+import { SERVICES } from './services';
 import styles from './verification-panel.module.css';
 
 const CHECK_CODE = 'Please check the entered code and try again.';
-
-const SERVICES = {
-  'admission-letter': {
-    title: 'Verify Admission Letter',
-    label: 'Admission letter number',
-    placeholder: 'Enter admission letter number',
-  },
-  certificate: {
-    title: 'Verify Certificate',
-    label: 'Certificate number',
-    placeholder: 'Enter the code printed on the certificate',
-  },
-  registration: {
-    title: 'Verify Registration',
-    label: 'Registration number',
-    placeholder: 'Enter registration number',
-  },
-  result: {
-    title: 'Check Result',
-    label: 'Registration number',
-    placeholder: 'Enter result code or registration number',
-  },
-} satisfies Record<
-  PublicVerificationService,
-  { title: string; label: string; placeholder: string }
->;
 
 /** The API's approved policy and ownership checks decide whether a lookup is available. */
 export function VerificationPanel({ service }: { service: PublicVerificationService }) {
@@ -55,6 +31,28 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
   const [busy, setBusy] = useState(false);
   const requestVersion = useRef(0);
   const privateLookup = service === 'registration' || service === 'result';
+
+  const searchFromHome = useEffectEvent((value: string) => {
+    setToken('');
+    setReference(value);
+    // Too short or long to be valid: prefill only, so the user sees what they typed.
+    const trimmed = value.trim();
+    if (trimmed.length >= 3 && trimmed.length <= 128) void lookup(undefined, value);
+  });
+
+  useEffect(() => {
+    let live = true;
+    // Taken inside the microtask: a development remount or a fast navigation away cancels this
+    // run before it consumes the handoff, so exactly one mounted panel performs the lookup.
+    queueMicrotask(() => {
+      if (!live) return;
+      const value = takeHeroSearch(service);
+      if (value !== null) searchFromHome(value);
+    });
+    return () => {
+      live = false;
+    };
+  }, [service]);
 
   useEffect(() => {
     const consumeToken = () => {
@@ -92,11 +90,11 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
     await lookup();
   }
 
-  async function lookup(periodNumber?: number) {
+  async function lookup(periodNumber?: number, typed?: string) {
     if (busy) return;
     const input = officialVerificationRequestSchema.safeParse({
       contractVersion: 2,
-      ...(token ? { token } : { reference }),
+      ...(typed !== undefined ? { reference: typed } : token ? { token } : { reference }),
       ...(service === 'result' && periodNumber ? { periodNumber } : {}),
     });
     if (!input.success) {

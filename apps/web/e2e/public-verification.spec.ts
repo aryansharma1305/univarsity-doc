@@ -103,3 +103,52 @@ test('without JavaScript the admission-letter page discloses unavailability and 
     await context.close();
   }
 });
+
+test('homepage search opens each service, runs exactly one server-decided check and keeps the number out of URLs', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  const services = [
+    ['Verify Certificate', '/verify/certificate', 'certificate'],
+    ['Verify Registration', '/verify/registration', 'registration'],
+    ['Verify Admission Letter', '/verify/admission-letter', 'admission-letter'],
+    ['Check Result', '/results', 'result'],
+  ] as const;
+  const reference = 'SYNTHETIC-HOME-SEARCH';
+  const posts: string[] = [];
+  const urls: string[] = [];
+  page.on('request', (request) => {
+    urls.push(request.url());
+    if (request.method() === 'POST' && request.url().includes('/api/v1/public/verify/')) {
+      posts.push(new URL(request.url()).pathname);
+    }
+  });
+  for (const [label, path, service] of services) {
+    posts.length = 0;
+    await page.goto('/');
+    const search = page.getByRole('search', { name: 'Verify a record' });
+    await search.getByRole('combobox', { name: 'Service' }).selectOption({ label });
+    await search.getByRole('textbox').fill(reference);
+    const lookup = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === `/api/v1/public/verify/${service}`,
+    );
+    await search.getByRole('button', { name: 'Search' }).click();
+    await expect(page).toHaveURL((url) => url.pathname === path && !url.href.includes(reference));
+    // The server's policy decides the answer (UNAVAILABLE, or NOT FOUND where a policy is enabled);
+    // the public rate limit may also answer 429. Each is shown, never a silent page.
+    expect([200, 429]).toContain((await lookup).status());
+    await expect(page.locator('[role="status"], [role="alert"]').first()).toContainText(
+      /UNAVAILABLE|NOT FOUND|No matching record|Too many checks/i,
+    );
+    await expect(page.getByRole('textbox')).toHaveValue(reference);
+    await expect.poll(() => posts).toEqual([`/api/v1/public/verify/${service}`]);
+    await page.reload();
+    await expect(page.getByRole('textbox')).toHaveValue('');
+    // Bounded settle so a late duplicate lookup (after navigation or reload) would be counted.
+    await page.waitForTimeout(1000);
+    expect(posts).toHaveLength(1);
+  }
+  expect(urls.filter((url) => url.includes(reference))).toEqual([]);
+});
