@@ -377,6 +377,9 @@ export class MfaService {
     // Only the per-account+IP counter is cleared; the per-account counter keeps running so a
     // success never refills the allowance for guesses from elsewhere.
     await this.rateLimiter.clear('mfa', [this.pairKey(userId, client.ip)]);
+    // Shared campus NAT: a correct code gives back its per-IP unit, so that bucket counts wrong codes
+    // only (spraying). The per-account counter and the lockout are untouched.
+    await this.rateLimiter.refund('mfa', [`ip:${ipHash}`]);
     // The claim is left to expire: a late concurrent request is refused before it can spend a code.
     await this.audit.writeAuditEvent({
       actorUserId: userId,

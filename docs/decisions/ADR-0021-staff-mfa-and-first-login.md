@@ -62,9 +62,9 @@ notifier is configured), so recovery must work without email.
      5, `MFA_MAX_ATTEMPTS_PER_ACCOUNT` 5, `MFA_MAX_ATTEMPTS_PER_IP` 50 per
      `MFA_RATE_LIMIT_WINDOW_SECONDS` 900) in an own `mfa` scope, checked before any code is compared;
      the first throttled attempt per window is audited. A success clears only the account+IP counter,
-     never the per-account counter. _Open proposal (requires review, not implemented):_ successes also
-     consume the per-IP bucket, so staff behind one campus NAT can hit `429`; refunding the per-IP unit
-     on success (failures still count in full) is analysed in
+     never the per-account counter, and gives back its per-IP unit, so staff behind one campus NAT
+     share a bucket of wrong codes only (implemented after security review; failures still count in
+     full), as analysed in
      [authentication.md](../architecture/authentication.md#first-login-password-change-and-authenticator-app-mfa-adr-0021)
      ("Shared client IPs and the MFA per-IP limit").
    - **Escalating lockout:** `MFA_LOCKOUT_THRESHOLD` (10) wrong codes within

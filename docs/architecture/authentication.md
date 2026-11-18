@@ -129,7 +129,10 @@ reach Argon2 or PostgreSQL). Keys are HMAC hashes — never raw emails or IPs.
 | account (any IP)        | **20**             | Distributed guessing against one account            |
 | client IP (any account) | **100**            | Credential stuffing; generous for shared campus NAT |
 
-A successful login clears the account + IP and account buckets. When limited: `429 AUTH_RATE_LIMITED`
+A successful login clears the account + IP and account buckets and gives back the one unit it took
+from the client-IP bucket (`RateLimiter.refund`), so on a shared campus NAT that bucket counts failed
+attempts only. The same refund applies to student sign-in, student activation and the MFA verify step
+(see "Shared client IPs" below). When limited: `429 AUTH_RATE_LIMITED`
 with `Retry-After`; the response is identical for existing and unknown accounts. The first throttled
 attempt in a window is audited (`reason: rate_limited`), not every attempt. Also limited: password change
 (5 / 15 min per user), forgot-password (3 / hour per account, 20 / hour per IP).
@@ -282,9 +285,9 @@ Recovery codes are a full second factor. An image rollback to a release without 
 accepts password-only sign-ins again (see the deployment checklist). Rotating `SESSION_SECRET` ends
 every session.
 
-**Shared client IPs and the MFA per-IP limit (proposal — requires security review, not implemented).**
+**Shared client IPs and the MFA per-IP limit (implemented after security review, Phase 1 release).**
 
-_Finding._ `MFA_MAX_ATTEMPTS_PER_IP` (50 per 15 min) counts **every** verify attempt, including
+_Finding (before the fix)._ `MFA_MAX_ATTEMPTS_PER_IP` (50 per 15 min) counts **every** verify attempt, including
 successful ones, and a success clears only the account+IP counter (`mfa.service.ts`, `throttle('mfa')`
 before the code check, `rateLimiter.clear('mfa', [pair])` after). The per-IP counter is never
 refunded. Staff who sign in from one campus NAT therefore share one bucket: the 51st second-factor
@@ -347,9 +350,16 @@ _Alternatives considered._ Raising `MFA_MAX_ATTEMPTS_PER_IP` weakens spraying pr
 deployment; an allow-list of campus egress addresses with a higher limit needs operator data and still
 counts successes. Neither is proposed.
 
-_Before implementation:_ security review of this section; a regression test that N successful verifies
-from one IP do not consume the IP bucket while N wrong codes do; and a decision whether the same
-refund should apply to the password sign-in per-IP bucket (out of scope here).
+_Implemented._ Reviewed and extended to every per-IP sign-in bucket with the same reasoning (a
+success already requires the password or the activation code): staff sign-in (`login`), MFA verify
+(`mfa`), student sign-in (`student-login`) and student activation (`student-activation`). Only the
+per-IP key is refunded; per-account and per-account+IP buckets, the MFA lockout and all limit values
+are unchanged. The refund never creates a key or goes below zero; a request that straddles a window
+boundary credits the new window at most one unit. Regression tests:
+`apps/api/test/auth/rate-limiter.test.ts` (window rollover, refund floor, rollover refund),
+`login.test.ts`, `staff-mfa.test.ts` and `student-auth/login-boundary.test.ts` ("shared client
+address (campus NAT)"). Residual: wrong attempts from one address are still shared, so one person
+behind a NAT can deliberately exhaust the per-IP bucket for everyone there for one window.
 
 **Recovery codes.** 10 × 50-bit codes `XXXXX-XXXXX` (case, spaces and hyphens ignored), stored only as
 keyed HMACs in `staff_mfa_recovery_codes`, each spent once (`MFA_RECOVERY_CODE_USED` with the remaining

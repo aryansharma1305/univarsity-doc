@@ -63,6 +63,25 @@ export class RateLimiter {
     await this.op((redis) => redis.del(...ruleKeys.map((key) => this.key(scope, key))));
   }
 
+  /**
+   * Gives back the one unit a SUCCESSFUL attempt took from each listed counter, so shared-address
+   * (campus NAT) buckets count failures only. Never creates a key or goes below zero; if the window
+   * rolled over during the request, the new window is credited at most this one unit.
+   */
+  async refund(scope: string, ruleKeys: string[]): Promise<void> {
+    if (ruleKeys.length === 0) return;
+    await this.op((redis) =>
+      redis.eval(
+        `for _, key in ipairs(KEYS) do
+          if tonumber(redis.call('GET', key) or '0') > 0 then redis.call('DECR', key) end
+        end
+        return 0`,
+        ruleKeys.length,
+        ...ruleKeys.map((key) => this.key(scope, key)),
+      ),
+    );
+  }
+
   private key(scope: string, suffix: string): string {
     return `${this.config.REDIS_KEY_PREFIX}rl:${scope}:${suffix}`;
   }

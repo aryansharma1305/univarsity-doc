@@ -240,6 +240,8 @@ export class StudentAuthService {
     if (account) await this.sessions.revokeAllForUser(account.id);
     if (client.existingSessionId) await this.sessions.revoke(client.existingSessionId);
     await this.rateLimiter.clear('student-activation', [`registration:${registrationHash}`]);
+    // Shared campus NAT (activation drives in a lab): the per-IP bucket counts failures only.
+    await this.rateLimiter.refund('student-activation', [`ip:${ipHash}`]);
     const device = summariseUserAgent(client.userAgent);
     const { sessionId } = await this.sessions.create({
       userId: accountId,
@@ -300,6 +302,8 @@ export class StudentAuthService {
       `pair:${pairKey}`,
       `account:${registrationHash}`,
     ]);
+    // Shared campus NAT: the per-IP bucket counts failures only (success needs the password anyway).
+    await this.rateLimiter.refund('student-login', [`ip:${ipHash}`]);
     if (client.existingSessionId) await this.sessions.revoke(client.existingSessionId);
     const device = summariseUserAgent(client.userAgent);
     const { sessionId, record } = await this.sessions.create({

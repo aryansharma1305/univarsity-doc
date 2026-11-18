@@ -163,3 +163,38 @@ describe('staff / student boundary', () => {
 });
 
 export { STUDENT_PASSWORD };
+
+describe('shared client address (campus NAT)', () => {
+  let shared: INestApplication;
+  let sharedRegistrar: Staff;
+  beforeAll(async () => {
+    shared = await createTestApp(realConfig({ LOGIN_MAX_ATTEMPTS_PER_IP: 2 }));
+    sharedRegistrar = await staff(shared, ['REGISTRAR']);
+  });
+  afterAll(async () => {
+    await shared.close();
+  });
+
+  it('a lab full of students can activate and sign in from one address; failures still throttle it', async () => {
+    // More activations than the per-IP activation limit (30), all from one address.
+    const students = [];
+    for (let i = 0; i < 31; i += 1) students.push(await activatedStudent(shared, sharedRegistrar));
+    // More successful sign-ins than LOGIN_MAX_ATTEMPTS_PER_IP (2).
+    for (const student of students.slice(0, 4)) {
+      expectStatus(await studentLogin(browser(shared), student.registrationNumber), 200);
+    }
+    for (const student of students.slice(4, 6)) {
+      expectStatus(
+        await studentLogin(
+          browser(shared),
+          student.registrationNumber,
+          'wrong password entirely 99',
+        ),
+        401,
+      );
+    }
+    const limited = await studentLogin(browser(shared), students[6]?.registrationNumber ?? '');
+    expect(limited.status).toBe(429);
+    expect(errorOf(limited).code).toBe('AUTH_RATE_LIMITED');
+  }, 120_000);
+});

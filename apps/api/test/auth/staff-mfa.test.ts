@@ -1445,6 +1445,40 @@ describe('dedicated MFA limits and escalating lockout', () => {
   });
 });
 
+describe('shared client address (campus NAT) and the MFA per-IP limit', () => {
+  let shared: INestApplication;
+  beforeAll(async () => {
+    shared = await createTestApp(realConfig({ MFA_MAX_ATTEMPTS_PER_IP: 2 }));
+  });
+  afterAll(async () => {
+    await shared.close();
+  });
+
+  it('correct codes from one address do not use up its per-IP allowance; wrong codes do', async () => {
+    const people = [];
+    for (let i = 0; i < 4; i++) people.push(await mfaUser(['REGISTRAR'], shared));
+    // More staff than MFA_MAX_ATTEMPTS_PER_IP (2) finish sign-in from the same address.
+    for (const { user, secret } of people.slice(0, 3)) {
+      const agent = browser(shared);
+      await login(agent, user).expect(200);
+      await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 1) }).expect(200);
+    }
+    // Two wrong codes (spraying) exhaust it for everyone behind the address.
+    const [, , , last] = people;
+    if (!last) throw new Error('missing user');
+    const agent = browser(shared);
+    await login(agent, last.user).expect(200);
+    for (let i = 0; i < 2; i++) {
+      expect((await post(agent, 'auth/mfa/verify', { code: codeFor(last.secret, 7) })).status).toBe(
+        401,
+      );
+    }
+    const limited = await post(agent, 'auth/mfa/verify', { code: codeFor(last.secret, 1) });
+    expect(limited.status).toBe(429);
+    expect(errorOf(limited).code).toBe('AUTH_RATE_LIMITED');
+  });
+});
+
 describe('access reset always replaces the password', () => {
   it('requires a policy-compliant temporary password, so the password hash always changes', async () => {
     const actor = await createTestUser({ roles: ['SUPER_ADMIN'] });

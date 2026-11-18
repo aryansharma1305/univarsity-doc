@@ -105,6 +105,8 @@ export class AuthService {
     // production refuses to start without STAFF_MFA_ENCRYPTION_KEY).
     if (user.mfaEnabled && !this.mfa.isAvailable()) throw Errors.authUnavailable();
     await this.rateLimiter.clear('login', [`pair:${pairKey}`, `account:${emailHash}`]);
+    // Shared campus NAT: the per-IP bucket counts failures only (success needs the password anyway).
+    await this.rateLimiter.refund('login', [`ip:${ipHash}`]);
     if (client.existingSessionId) await this.sessions.revoke(client.existingSessionId);
 
     const device = summariseUserAgent(client.userAgent);
