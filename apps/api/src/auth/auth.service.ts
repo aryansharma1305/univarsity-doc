@@ -75,6 +75,7 @@ export class AuthService {
         { key: `pair:${pairKey}`, limit: this.config.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP },
         { key: `account:${emailHash}`, limit: this.config.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT },
         { key: `ip:${ipHash}`, limit: this.config.LOGIN_MAX_ATTEMPTS_PER_IP },
+        { key: `ip-total:${ipHash}`, limit: this.config.LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP },
       ],
       this.config.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     );
@@ -106,7 +107,7 @@ export class AuthService {
     if (user.mfaEnabled && !this.mfa.isAvailable()) throw Errors.authUnavailable();
     await this.rateLimiter.clear('login', [`pair:${pairKey}`, `account:${emailHash}`]);
     // Shared campus NAT: the per-IP bucket counts failures only (success needs the password anyway).
-    await this.rateLimiter.refund('login', [`ip:${ipHash}`]);
+    await this.rateLimiter.refund('login', limit, [`ip:${ipHash}`]);
     if (client.existingSessionId) await this.sessions.revoke(client.existingSessionId);
 
     const device = summariseUserAgent(client.userAgent);

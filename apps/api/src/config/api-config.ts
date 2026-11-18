@@ -96,6 +96,14 @@ export const apiEnvSchema = z
     LOGIN_MAX_ATTEMPTS_PER_ACCOUNT: positiveInt(10_000).default(20),
     /** Attempts per client IP across all accounts (slows credential stuffing; allows shared NAT). */
     LOGIN_MAX_ATTEMPTS_PER_IP: positiveInt(100_000).default(100),
+    /**
+     * ALL attempts (successful included, never refunded) per client IP per window, for staff and
+     * student sign-in, student activation and MFA verify (each in its own scope and window). The
+     * LOGIN_MAX_ATTEMPTS_PER_IP / MFA_MAX_ATTEMPTS_PER_IP buckets give back a success's unit, so
+     * this is what caps successful sign-ins from one address (credential stuffing with a validated
+     * list). High enough for a campus NAT.
+     */
+    LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP: positiveInt(1_000_000).default(1_000),
     PASSWORD_RESET_TOKEN_TTL_SECONDS: positiveInt(86_400).default(1_800),
     /**
      * Authenticator-code (MFA) throttling, deliberately tighter than password sign-in: a 6-digit code

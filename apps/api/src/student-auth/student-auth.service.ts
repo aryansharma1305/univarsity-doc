@@ -73,6 +73,7 @@ export class StudentAuthService {
       [
         { key: `registration:${registrationHash}`, limit: 5 },
         { key: `ip:${ipHash}`, limit: 30 },
+        { key: `ip-total:${ipHash}`, limit: this.config.LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP },
       ],
       this.config.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     );
@@ -241,7 +242,7 @@ export class StudentAuthService {
     if (client.existingSessionId) await this.sessions.revoke(client.existingSessionId);
     await this.rateLimiter.clear('student-activation', [`registration:${registrationHash}`]);
     // Shared campus NAT (activation drives in a lab): the per-IP bucket counts failures only.
-    await this.rateLimiter.refund('student-activation', [`ip:${ipHash}`]);
+    await this.rateLimiter.refund('student-activation', limit, [`ip:${ipHash}`]);
     const device = summariseUserAgent(client.userAgent);
     const { sessionId } = await this.sessions.create({
       userId: accountId,
@@ -271,6 +272,7 @@ export class StudentAuthService {
         { key: `pair:${pairKey}`, limit: this.config.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP },
         { key: `account:${registrationHash}`, limit: this.config.LOGIN_MAX_ATTEMPTS_PER_ACCOUNT },
         { key: `ip:${ipHash}`, limit: this.config.LOGIN_MAX_ATTEMPTS_PER_IP },
+        { key: `ip-total:${ipHash}`, limit: this.config.LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP },
       ],
       this.config.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     );
@@ -303,7 +305,7 @@ export class StudentAuthService {
       `account:${registrationHash}`,
     ]);
     // Shared campus NAT: the per-IP bucket counts failures only (success needs the password anyway).
-    await this.rateLimiter.refund('student-login', [`ip:${ipHash}`]);
+    await this.rateLimiter.refund('student-login', limit, [`ip:${ipHash}`]);
     if (client.existingSessionId) await this.sessions.revoke(client.existingSessionId);
     const device = summariseUserAgent(client.userAgent);
     const { sessionId, record } = await this.sessions.create({

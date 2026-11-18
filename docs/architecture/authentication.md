@@ -128,11 +128,15 @@ reach Argon2 or PostgreSQL). Keys are HMAC hashes — never raw emails or IPs.
 | account + client IP     | **5**              | Online guessing from one client                     |
 | account (any IP)        | **20**             | Distributed guessing against one account            |
 | client IP (any account) | **100**            | Credential stuffing; generous for shared campus NAT |
+| client IP, all attempts | **1000**           | Caps successes per address (never refunded)         |
 
 A successful login clears the account + IP and account buckets and gives back the one unit it took
 from the client-IP bucket (`RateLimiter.refund`), so on a shared campus NAT that bucket counts failed
 attempts only. The same refund applies to student sign-in, student activation and the MFA verify step
-(see "Shared client IPs" below). When limited: `429 AUTH_RATE_LIMITED`
+(see "Shared client IPs" below). A separate per-IP bucket (`ip-total`,
+`LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP`, default 1000 per window, in each of those four scopes) counts every
+attempt and is never refunded, so successful sign-ins from one address stay capped (credential stuffing
+with an already-validated list). When limited: `429 AUTH_RATE_LIMITED`
 with `Retry-After`; the response is identical for existing and unknown accounts. The first throttled
 attempt in a window is audited (`reason: rate_limited`), not every attempt. Also limited: password change
 (5 / 15 min per user), forgot-password (3 / hour per account, 20 / hour per IP).
@@ -354,8 +358,10 @@ _Implemented._ Reviewed and extended to every per-IP sign-in bucket with the sam
 success already requires the password or the activation code): staff sign-in (`login`), MFA verify
 (`mfa`), student sign-in (`student-login`) and student activation (`student-activation`). Only the
 per-IP key is refunded; per-account and per-account+IP buckets, the MFA lockout and all limit values
-are unchanged. The refund never creates a key or goes below zero; a request that straddles a window
-boundary credits the new window at most one unit. Regression tests:
+are unchanged. The refund never creates a key or goes below zero, and it applies only to the window the
+attempt was counted in (same absolute expiry, `PEXPIRETIME`): after a rollover nothing is refunded.
+Successes remain capped by the non-refunded `ip-total` bucket (`LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP`,
+default 1000 per window). Regression tests:
 `apps/api/test/auth/rate-limiter.test.ts` (window rollover, refund floor, rollover refund),
 `login.test.ts`, `staff-mfa.test.ts` and `student-auth/login-boundary.test.ts` ("shared client
 address (campus NAT)"). Residual: wrong attempts from one address are still shared, so one person

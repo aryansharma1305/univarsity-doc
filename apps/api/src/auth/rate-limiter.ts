@@ -16,6 +16,8 @@ export interface LimitResult {
   retryAfterSeconds: number;
   /** True only on the attempt that first crossed a limit (used to audit once, not per attempt). */
   justExceeded: boolean;
+  /** Absolute expiry (Unix ms) of each rule's window as counted by this hit, by rule key. */
+  windows: Record<string, number>;
 }
 
 /**
@@ -36,26 +38,30 @@ export class RateLimiter {
     const keys = rules.map((rule) => this.key(scope, rule.key));
     const results = await this.op(async (redis) => {
       const pipeline = redis.multi();
-      for (const key of keys) pipeline.incr(key).expire(key, windowSeconds, 'NX').ttl(key);
+      for (const key of keys) {
+        pipeline.incr(key).expire(key, windowSeconds, 'NX').ttl(key).pexpiretime(key);
+      }
       return pipeline.exec();
     });
     // EXEC can resolve with command errors (ACL/OOM), or null when aborted. Never treat these as zero attempts.
-    if (results?.length !== rules.length * 3 || results.some(([error]) => error)) {
+    if (results?.length !== rules.length * 4 || results.some(([error]) => error)) {
       throw Errors.authUnavailable();
     }
     let limited = false;
     let justExceeded = false;
     let retryAfterSeconds = 0;
+    const windows: Record<string, number> = {};
     rules.forEach((rule, index) => {
-      const count = Number(results[index * 3]?.[1] ?? 0);
-      const ttl = Number(results[index * 3 + 2]?.[1] ?? windowSeconds);
+      const count = Number(results[index * 4]?.[1] ?? 0);
+      const ttl = Number(results[index * 4 + 2]?.[1] ?? windowSeconds);
+      windows[rule.key] = Number(results[index * 4 + 3]?.[1] ?? 0);
       if (count > rule.limit) {
         limited = true;
         retryAfterSeconds = Math.max(retryAfterSeconds, ttl > 0 ? ttl : windowSeconds);
         if (count === rule.limit + 1) justExceeded = true;
       }
     });
-    return { limited, retryAfterSeconds, justExceeded };
+    return { limited, retryAfterSeconds, justExceeded, windows };
   }
 
   async clear(scope: string, ruleKeys: string[]): Promise<void> {
@@ -64,20 +70,26 @@ export class RateLimiter {
   }
 
   /**
-   * Gives back the one unit a SUCCESSFUL attempt took from each listed counter, so shared-address
-   * (campus NAT) buckets count failures only. Never creates a key or goes below zero; if the window
-   * rolled over during the request, the new window is credited at most this one unit.
+   * Gives back the one unit a SUCCESSFUL attempt (`hit`) took from each listed counter, so
+   * shared-address (campus NAT) buckets count failures only. Only within the SAME window the hit
+   * counted in (identical absolute expiry): after a rollover nothing is refunded, so a new window is
+   * never credited. Never creates a key or goes below zero.
    */
-  async refund(scope: string, ruleKeys: string[]): Promise<void> {
-    if (ruleKeys.length === 0) return;
+  async refund(scope: string, hit: LimitResult, ruleKeys: string[]): Promise<void> {
+    const keys = ruleKeys.filter((key) => (hit.windows[key] ?? 0) > 0);
+    if (keys.length === 0) return;
     await this.op((redis) =>
       redis.eval(
-        `for _, key in ipairs(KEYS) do
-          if tonumber(redis.call('GET', key) or '0') > 0 then redis.call('DECR', key) end
+        `for i, key in ipairs(KEYS) do
+          if redis.call('PEXPIRETIME', key) == tonumber(ARGV[i])
+            and tonumber(redis.call('GET', key) or '0') > 0 then
+            redis.call('DECR', key)
+          end
         end
         return 0`,
-        ruleKeys.length,
-        ...ruleKeys.map((key) => this.key(scope, key)),
+        keys.length,
+        ...keys.map((key) => this.key(scope, key)),
+        ...keys.map((key) => String(hit.windows[key])),
       ),
     );
   }

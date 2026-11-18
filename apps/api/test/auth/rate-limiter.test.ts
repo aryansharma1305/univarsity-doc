@@ -23,6 +23,7 @@ afterAll(async () => {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 let n = 0;
 const fresh = () => `case-${++n}`;
+const redisKey = (key: string) => `${config.REDIS_KEY_PREFIX}rl:t:${key}`;
 
 describe('RateLimiter fixed windows', () => {
   it('limits after the allowance and starts a fresh window once the TTL ends', async () => {
@@ -37,8 +38,7 @@ describe('RateLimiter fixed windows', () => {
     expect((await limiter.hit('t', rule, 1)).justExceeded).toBe(false);
     await sleep(1_200);
     expect((await limiter.hit('t', rule, 1)).limited).toBe(false);
-    const ttl = await redis.ttl(`${config.REDIS_KEY_PREFIX}rl:t:${key}`);
-    expect(ttl).toBeGreaterThan(0);
+    expect(await redis.ttl(redisKey(key))).toBeGreaterThan(0);
   });
 });
 
@@ -46,36 +46,57 @@ describe('RateLimiter.refund (shared campus NAT)', () => {
   it('lets many successes from one address through while failures still count', async () => {
     const ip = fresh();
     const rule = [{ key: ip, limit: 3 }];
-    // Ten different people sign in successfully from one NAT address.
     for (let i = 0; i < 10; i++) {
-      expect((await limiter.hit('t', rule, 60)).limited).toBe(false);
-      await limiter.refund('t', [ip]);
+      const hit = await limiter.hit('t', rule, 60);
+      expect(hit.limited).toBe(false);
+      await limiter.refund('t', hit, [ip]);
     }
-    // Failures are never refunded: the 4th wrong attempt from the address is throttled.
     for (let i = 0; i < 3; i++) expect((await limiter.hit('t', rule, 60)).limited).toBe(false);
     expect((await limiter.hit('t', rule, 60)).limited).toBe(true);
   });
 
   it('never goes below zero and never creates a key without expiry', async () => {
     const key = fresh();
-    const redisKey = `${config.REDIS_KEY_PREFIX}rl:t:${key}`;
-    await limiter.refund('t', [key]); // window already ended: no-op
-    expect(await redis.exists(redisKey)).toBe(0);
-    await limiter.hit('t', [{ key, limit: 5 }], 60);
-    await limiter.refund('t', [key]);
-    await limiter.refund('t', [key]);
-    expect(await redis.get(redisKey)).toBe('0');
-    expect(await redis.ttl(redisKey)).toBeGreaterThan(0);
+    const hit = await limiter.hit('t', [{ key, limit: 5 }], 60);
+    await limiter.refund('t', hit, [key]);
+    await limiter.refund('t', hit, [key]);
+    expect(await redis.get(redisKey(key))).toBe('0');
+    expect(await redis.ttl(redisKey(key))).toBeGreaterThan(0);
+    await redis.del(redisKey(key));
+    await limiter.refund('t', hit, [key]); // window gone: no-op, nothing created
+    expect(await redis.exists(redisKey(key))).toBe(0);
   });
 
-  it('a refund after the window rolled over credits the new window at most one unit', async () => {
+  it('after a window rollover the refund credits nothing to the new window', async () => {
     const key = fresh();
     const rule = [{ key, limit: 1 }];
-    await limiter.hit('t', rule, 1); // request starts in window 1
+    const stale = await limiter.hit('t', rule, 1); // request starts in window 1
     await sleep(1_200);
-    await limiter.hit('t', rule, 1); // someone else, window 2
-    await limiter.refund('t', [key]); // the first request finishes late
-    expect((await limiter.hit('t', rule, 1)).limited).toBe(false);
+    expect((await limiter.hit('t', rule, 1)).limited).toBe(false); // someone else, window 2
+    await limiter.refund('t', stale, [key]); // the first request finishes late
+    expect(await redis.get(redisKey(key))).toBe('1');
     expect((await limiter.hit('t', rule, 1)).limited).toBe(true);
+  });
+
+  it('concurrent successes and failures never go below zero or allow more than N failures', async () => {
+    const ip = fresh();
+    const rule = [{ key: ip, limit: 5 }];
+    const success = async () => {
+      const hit = await limiter.hit('t', rule, 60);
+      if (!hit.limited) await limiter.refund('t', hit, [ip]);
+      return hit.limited;
+    };
+    const failure = async () => (await limiter.hit('t', rule, 60)).limited;
+    const results = await Promise.all(
+      Array.from({ length: 60 }, (_, i) => (i % 2 === 0 ? success() : failure())),
+    );
+    const failuresAllowed = results.filter((limited, i) => i % 2 === 1 && !limited).length;
+    expect(failuresAllowed).toBeLessThanOrEqual(5);
+    const value = Number(await redis.get(redisKey(ip)));
+    expect(value).toBeGreaterThanOrEqual(0);
+    // Unrefunded units = every failure + every throttled success.
+    expect(value).toBe(results.filter((limited, i) => i % 2 === 1 || limited).length);
+    // The bucket is still closed for further failures this window.
+    expect(await failure()).toBe(true);
   });
 });

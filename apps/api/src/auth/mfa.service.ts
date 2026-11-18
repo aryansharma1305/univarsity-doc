@@ -21,7 +21,7 @@ import { summariseUserAgent } from './device-summary.js';
 import { IdentifierHasher } from './identifier-hasher.js';
 import { generateRecoveryCodes, MfaCrypto } from './mfa-crypto.js';
 import { PasswordService } from './password.service.js';
-import { type LimitRule, RateLimiter } from './rate-limiter.js';
+import { type LimitResult, type LimitRule, RateLimiter } from './rate-limiter.js';
 import { type SessionRecord, SessionStore } from './session.store.js';
 import { describeUser } from './auth-user.js';
 import { staffNextStep } from './staff-steps.js';
@@ -310,7 +310,7 @@ export class MfaService {
     const userId = auth.user.id;
     const ipHash = this.hasher.hash('ip', client.ip);
     await this.assertNotLocked(userId);
-    await this.throttle('mfa', userId, client.ip);
+    const limit = await this.throttle('mfa', userId, client.ip);
 
     // Exclusive claim on this pending session BEFORE any code is spent: concurrent verifies of one
     // pending session cannot each burn a code, and at most one of them can turn it into a session.
@@ -379,7 +379,7 @@ export class MfaService {
     await this.rateLimiter.clear('mfa', [this.pairKey(userId, client.ip)]);
     // Shared campus NAT: a correct code gives back its per-IP unit, so that bucket counts wrong codes
     // only (spraying). The per-account counter and the lockout are untouched.
-    await this.rateLimiter.refund('mfa', [`ip:${ipHash}`]);
+    await this.rateLimiter.refund('mfa', limit, [`ip:${ipHash}`]);
     // The claim is left to expire: a late concurrent request is refused before it can spend a code.
     await this.audit.writeAuditEvent({
       actorUserId: userId,
@@ -483,7 +483,11 @@ export class MfaService {
    * Enrollment confirmation (`mfa-enroll`, which checks the password): the sign-in LOGIN_* limits.
    * Counted before any password or code is compared; the first throttled attempt per window is audited.
    */
-  private async throttle(scope: 'mfa' | 'mfa-enroll', userId: string, ip: string) {
+  private async throttle(
+    scope: 'mfa' | 'mfa-enroll',
+    userId: string,
+    ip: string,
+  ): Promise<LimitResult> {
     const c = this.config;
     const signIn = scope === 'mfa';
     const rules: LimitRule[] = [
@@ -499,13 +503,22 @@ export class MfaService {
         key: `ip:${this.hasher.hash('ip', ip)}`,
         limit: signIn ? c.MFA_MAX_ATTEMPTS_PER_IP : c.LOGIN_MAX_ATTEMPTS_PER_IP,
       },
+      // Never refunded: caps successful verifies per address (the `ip` bucket counts failures only).
+      ...(signIn
+        ? [
+            {
+              key: `ip-total:${this.hasher.hash('ip', ip)}`,
+              limit: c.LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP,
+            },
+          ]
+        : []),
     ];
     const limit = await this.rateLimiter.hit(
       scope,
       rules,
       signIn ? c.MFA_RATE_LIMIT_WINDOW_SECONDS : c.LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     );
-    if (!limit.limited) return;
+    if (!limit.limited) return limit;
     if (limit.justExceeded) {
       // Once per window, like password sign-in, so an attack cannot flood the audit log.
       await this.audit.writeAuditEvent({
