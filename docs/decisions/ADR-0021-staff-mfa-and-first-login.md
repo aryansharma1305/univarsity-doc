@@ -36,9 +36,16 @@ notifier is configured), so recovery must work without email.
    - **Codes are never lost:** once the enabling transaction commits, the recovery codes are always
      returned; session rotation and cleanup are best-effort (audited `MFA_ENROLLMENT_CLEANUP_INCOMPLETE`).
      The current session is revoked _before_ the rotated one is created; if rotation fails the
-     response says `reauthenticate: true` and the user signs in again. The `AuthGuard` refuses any full
-     session created before `users.mfa_enabled_at`, so an un-rotated pre-enrollment session never stays
-     valid, even if Redis revocation failed.
+     response says `reauthenticate: true` and the user signs in again.
+   - **Session binding:** every staff session's credential HMAC also covers `users.mfa_enabled_at`
+     (omitted when MFA is off, so earlier sessions and rollback are unaffected). Sessions authenticated
+     under a different MFA state — un-rotated pre-enrollment sessions, sessions whose Redis revocation
+     failed, and a password-only login racing the enrollment commit — stop matching from the next
+     request; sessions from `POST /auth/mfa/verify` are bound to the authenticator that accepted the
+     code. Endpoints that create or rebind sessions (MFA verification, password change) re-check the
+     session against the freshly read account before doing so. The check is per request: a read-only
+     request already past the guard at commit time still completes.
+     See [authentication.md](../architecture/authentication.md) for the full list of limits.
    - **At rest:** AES-256-GCM, key derived by HKDF from `STAFF_MFA_ENCRYPTION_KEY` (64 hex chars), the
      user ID as associated data (a ciphertext copied to another row does not decrypt).
    - **Login is two steps.** A correct password for an MFA account creates a _pending_ session

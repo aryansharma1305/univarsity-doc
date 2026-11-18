@@ -63,21 +63,12 @@ export class AuthGuard implements CanActivate {
       if (mode === 'required') throw Errors.sessionExpired();
       return true;
     }
+    // The session is bound to the password hash AND the account's MFA state (see
+    // SessionStore.credentialVersion). A session authenticated before MFA was switched on — including
+    // a password-only login that raced the enrollment commit — no longer matches from the next request.
+    // Services that create or rebind sessions re-check this against their own fresh read.
     // A credential update spans SQL and Redis. Deny this request without deleting its live session.
-    if (!this.sessions.matchesCredential(record, user.passwordHash)) {
-      if (mode === 'required') throw Errors.sessionExpired();
-      return true;
-    }
-
-    // A full session older than the account's authenticator never passed the second factor and was
-    // not the session rotated at enrollment: refuse it, even if its Redis revocation failed.
-    if (
-      record.stage === undefined &&
-      user.mfaEnabledAt !== null &&
-      record.createdAt < user.mfaEnabledAt.getTime()
-    ) {
-      await this.sessions.revoke(sessionId);
-      response.clearCookie(names.session, sessionCookieOptions(this.config));
+    if (!this.sessions.matchesCredential(record, user.passwordHash, user.mfaEnabledAt)) {
       if (mode === 'required') throw Errors.sessionExpired();
       return true;
     }

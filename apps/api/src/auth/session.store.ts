@@ -14,7 +14,10 @@ export interface SessionRecord {
   /** Public handle used by the session list / revoke API. Not usable to authenticate. */
   publicId: string;
   userId: string;
-  /** Keyed binding to the verified credential; never the password or its stored hash. */
+  /**
+   * Keyed binding to the verified credential AND (staff) the account's MFA state; never the password
+   * or its stored hash. See `credentialVersion()`.
+   */
   credentialVersion: string;
   createdAt: number;
   lastSeenAt: number;
@@ -69,6 +72,11 @@ export class SessionStore {
     device: string | null;
     ipHash: string | null;
     stage?: SessionStage;
+    /**
+     * Staff: the `users.mfa_enabled_at` the session was authenticated against (null = no MFA). The
+     * session stops matching as soon as the account's MFA state differs. Students omit it.
+     */
+    mfaEnabledAt?: Date | null;
     /** Shorter absolute lifetime (e.g. pending-MFA sessions); never longer than the configured one. */
     absoluteTimeoutSeconds?: number;
   }): Promise<{
@@ -85,7 +93,11 @@ export class SessionStore {
     const record: SessionRecord = {
       publicId: randomToken(12),
       userId: input.userId,
-      credentialVersion: this.credentialVersion(input.passwordHash, input.stage),
+      credentialVersion: this.credentialVersion(
+        input.passwordHash,
+        input.stage,
+        input.mfaEnabledAt ?? null,
+      ),
       createdAt: now,
       lastSeenAt: now,
       absoluteExpiresAt: now + lifetimeSeconds * 1000,
@@ -157,6 +169,7 @@ export class SessionStore {
     sessionId: string,
     record: SessionRecord,
     passwordHash: string,
+    mfaEnabledAt: Date | null = null,
   ): Promise<void> {
     const changed = await this.op((redis) =>
       redis.eval(
@@ -173,7 +186,7 @@ export class SessionStore {
         this.sessionKey(sha256(sessionId)),
         record.userId,
         record.credentialVersion,
-        this.credentialVersion(passwordHash),
+        this.credentialVersion(passwordHash, undefined, mfaEnabledAt),
       ),
     );
     if (changed !== 'OK') throw Errors.sessionExpired();
@@ -230,17 +243,38 @@ export class SessionStore {
     return doomed.length;
   }
 
-  credentialVersion(passwordHash: string, stage?: SessionStage): string {
+  /**
+   * HMAC over the password hash, the session stage and the account's MFA state. A session is valid
+   * only while all three still match the account, re-checked on every request by the guard:
+   * - a password change/reset changes the hash;
+   * - turning MFA on (or a reset turning it off, or re-enrollment) changes `mfaEnabledAt`, so a
+   *   session authenticated under a different MFA state (e.g. a password-only login that raced the
+   *   enrollment commit) stops matching, regardless of whether its Redis revocation ran.
+   * Without MFA the input is unchanged from earlier releases, so their sessions stay valid both ways.
+   */
+  credentialVersion(
+    passwordHash: string,
+    stage?: SessionStage,
+    mfaEnabledAt: Date | null = null,
+  ): string {
     const domain = stage ? `${this.keys.session}:${stage}-pending` : this.keys.session;
+    const mfa = mfaEnabledAt === null ? '' : `\0mfa:${mfaEnabledAt.getTime()}`;
     return createHmac('sha256', this.config.SESSION_SECRET)
-      .update(`credential:${domain}\0${passwordHash}`)
+      .update(`credential:${domain}\0${passwordHash}${mfa}`)
       .digest('hex');
   }
 
-  matchesCredential(record: SessionRecord, passwordHash: string | null): boolean {
+  matchesCredential(
+    record: SessionRecord,
+    passwordHash: string | null,
+    mfaEnabledAt: Date | null = null,
+  ): boolean {
     return (
       passwordHash !== null &&
-      safeEqual(record.credentialVersion, this.credentialVersion(passwordHash, record.stage))
+      safeEqual(
+        record.credentialVersion,
+        this.credentialVersion(passwordHash, record.stage, mfaEnabledAt),
+      )
     );
   }
 

@@ -218,9 +218,11 @@ export class MfaService {
    *    again (`reauthenticate: true`, cookie cleared) — with MFA, which the codes now back up.
    * 3. Revoke every other session (or all of them, if no rotated session exists). This also retries
    *    the removal of the old session if step 1 failed.
-   * Independently of Redis, the AuthGuard rejects every full session created before
-   * `users.mfa_enabled_at` (an un-rotated pre-enrollment session), so even if every Redis step above
-   * failed, the old session cannot be used once MFA is on.
+   * Independently of Redis, every session is bound to the account's MFA state (see
+   * SessionStore.credentialVersion): sessions created while MFA was off — the un-rotated current
+   * session, other sessions, and a password-only login racing this commit — stop matching from the
+   * first request after the commit, even if every Redis step above failed. Only sessions bound to
+   * this `mfa_enabled_at` (the rotated one, or later sign-ins that pass the second factor) work.
    * 4. Drop the enrollment secret, the MFA lockout history and the enrollment throttle counter.
    */
   private async finishEnrollment(
@@ -252,6 +254,7 @@ export class MfaService {
         this.sessions.create({
           userId,
           passwordHash: user.passwordHash,
+          mfaEnabledAt: user.mfaEnabledAt,
           device: summariseUserAgent(client.userAgent),
           ipHash,
         }),
@@ -324,7 +327,8 @@ export class MfaService {
     }
 
     const method = input.code !== undefined ? 'totp' : 'recovery_code';
-    let accepted: boolean;
+    // The `mfa_enabled_at` of the authenticator the code was checked against (null = rejected).
+    let accepted: Date | null;
     try {
       accepted =
         input.code !== undefined
@@ -334,7 +338,7 @@ export class MfaService {
       await this.redisOp((redis) => redis.del(claimKey));
       throw error;
     }
-    if (!accepted) {
+    if (accepted === null) {
       // Release the claim so the user can retry on the same pending session (within the limits).
       await this.redisOp((redis) => redis.del(claimKey));
       await this.audit.writeAuditEvent({
@@ -354,10 +358,19 @@ export class MfaService {
     // consumed by a concurrent request), no full session is created.
     const consumed = await this.sessions.revoke(auth.sessionId);
     if (consumed?.userId !== userId || consumed.stage !== 'mfa') throw Errors.sessionExpired();
+    // The pending session must still match the account as just read — the same password hash and the
+    // authenticator that accepted the code — or a password change/reset or re-enrollment happened
+    // during this request and no full session may be derived from it.
+    if (!this.sessions.matchesCredential(consumed, user.passwordHash, accepted)) {
+      throw Errors.sessionExpired();
+    }
     const device = summariseUserAgent(client.userAgent);
+    // Bound to the authenticator that accepted the code: if MFA was reset or re-enrolled meanwhile,
+    // the new session does not match the account and the guard refuses it.
     const { sessionId, record } = await this.sessions.create({
       userId,
       passwordHash: user.passwordHash,
+      mfaEnabledAt: accepted,
       device,
       ipHash,
     });
@@ -396,12 +409,14 @@ export class MfaService {
     return describeUser(user, nextStep);
   }
 
-  private async consumeTotp(crypto: MfaCrypto, userId: string, code: string): Promise<boolean> {
+  /** Returns the `mfa_enabled_at` the code was verified against, or null if it was not accepted. */
+  private async consumeTotp(crypto: MfaCrypto, userId: string, code: string): Promise<Date | null> {
     const row = await this.prisma.client.user.findUnique({
       where: { id: userId },
-      select: { mfaTotpSecretEnc: true, mfaTotpLastUsedStep: true },
+      select: { mfaTotpSecretEnc: true, mfaTotpLastUsedStep: true, mfaEnabledAt: true },
     });
-    if (!row?.mfaTotpSecretEnc) return false;
+    if (!row?.mfaTotpSecretEnc || !row.mfaEnabledAt) return null;
+    const enabledAt = row.mfaEnabledAt;
     let secret: Buffer;
     try {
       secret = crypto.decrypt(row.mfaTotpSecretEnc, userId, 'secret');
@@ -412,31 +427,39 @@ export class MfaService {
     }
     const last = row.mfaTotpLastUsedStep === null ? null : Number(row.mfaTotpLastUsedStep);
     const step = verifyTotp(secret, code, Date.now(), last);
-    if (step === null) return false;
-    // Compare-and-set: a concurrent request with the same (or a later) step loses.
+    if (step === null) return null;
+    // Compare-and-set: a concurrent request with the same (or a later) step loses, and so does one
+    // racing a reset/re-enrollment (the authenticator must still be the one that was read).
     const updated = await this.prisma.client.user.updateMany({
       where: {
         id: userId,
-        mfaEnabledAt: { not: null },
+        mfaEnabledAt: enabledAt,
         OR: [{ mfaTotpLastUsedStep: null }, { mfaTotpLastUsedStep: { lt: BigInt(step) } }],
       },
       data: { mfaTotpLastUsedStep: BigInt(step) },
     });
-    return updated.count === 1;
+    return updated.count === 1 ? enabledAt : null;
   }
 
+  /** Returns the `mfa_enabled_at` the code belongs to, or null if it was not accepted. */
   private async consumeRecoveryCode(
     crypto: MfaCrypto,
     userId: string,
     normalised: string,
-  ): Promise<boolean> {
+  ): Promise<Date | null> {
     const codeHash = crypto.hashRecoveryCode(userId, normalised);
+    const owner = await this.prisma.client.user.findUnique({
+      where: { id: userId },
+      select: { mfaEnabledAt: true },
+    });
+    const enabledAt = owner?.mfaEnabledAt ?? null;
+    if (enabledAt === null) return null;
     return this.prisma.client.$transaction(async (tx) => {
       const spent = await tx.staffMfaRecoveryCode.updateMany({
-        where: { userId, codeHash, usedAt: null, user: { mfaEnabledAt: { not: null } } },
+        where: { userId, codeHash, usedAt: null, user: { mfaEnabledAt: enabledAt } },
         data: { usedAt: new Date() },
       });
-      if (spent.count !== 1) return false;
+      if (spent.count !== 1) return null;
       const remaining = await tx.staffMfaRecoveryCode.count({ where: { userId, usedAt: null } });
       await this.audit.writeAuditEvent(
         {
@@ -448,7 +471,7 @@ export class MfaService {
         },
         tx,
       );
-      return true;
+      return enabledAt;
     });
   }
 

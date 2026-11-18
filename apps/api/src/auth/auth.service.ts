@@ -112,6 +112,9 @@ export class AuthService {
     const { sessionId, record } = await this.sessions.create({
       userId: user.id,
       passwordHash: user.passwordHash,
+      // Bound to the MFA state read with the password: if MFA is switched on before this session is
+      // next used (e.g. a concurrent enrollment commit), the guard no longer accepts it.
+      mfaEnabledAt: user.mfaEnabledAt,
       device,
       ipHash,
       ...(stage ? { stage, absoluteTimeoutSeconds: MFA_PENDING_SESSION_SECONDS } : {}),
@@ -204,6 +207,12 @@ export class AuthService {
     ) {
       throw Errors.invalidCredentials();
     }
+    // The guard validated this session against the account as it was then. Re-check it against the
+    // state just read: if MFA was switched on in between, this password-only session must not be
+    // rebound to the new MFA state (that would turn it into a full MFA session).
+    if (!this.sessions.matchesCredential(auth.session, user.passwordHash, user.mfaEnabledAt)) {
+      throw Errors.sessionExpired();
+    }
     assertPasswordPolicy(input.newPassword, user);
     if (input.newPassword === input.currentPassword) {
       throw new AppError(
@@ -216,9 +225,16 @@ export class AuthService {
       );
     }
     const passwordHash = await this.passwords.hashPassword(input.newPassword);
-    // Also clears passwordChangeRequired (first login / access reset).
-    await this.users.setPasswordHash(user.id, passwordHash, user.passwordHash);
-    await this.sessions.replaceCredential(auth.sessionId, auth.session, passwordHash);
+    // Also clears passwordChangeRequired (first login / access reset). Compare-and-set on the hash
+    // AND the MFA state checked above, so the rebind below binds exactly the state that was verified;
+    // if MFA is enabled after this write, the rebound session stops matching.
+    await this.users.setPasswordHash(user.id, passwordHash, user.passwordHash, user.mfaEnabledAt);
+    await this.sessions.replaceCredential(
+      auth.sessionId,
+      auth.session,
+      passwordHash,
+      user.mfaEnabledAt,
+    );
     const revoked = await this.sessions.revokeAllForUser(user.id, {
       exceptSessionId: auth.sessionId,
     });

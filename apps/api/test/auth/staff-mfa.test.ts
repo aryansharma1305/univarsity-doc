@@ -1,6 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import {
   authUserSchema,
   mfaEnrollmentConfirmResponseSchema,
@@ -18,6 +18,7 @@ import type { ApiConfig } from '../../src/config/api-config.js';
 import { RedisService } from '../../src/redis/redis.service.js';
 import { StaffUsersService } from '../../src/users/staff-users.service.js';
 import { SessionStore } from '../../src/auth/session.store.js';
+import { StudentSessionStore } from '../../src/student-auth/student-session.store.js';
 import {
   browser,
   createTestApp,
@@ -802,6 +803,385 @@ describe('sign-in with an authenticator', () => {
     const asOldRelease = await browser(app).get('/api/v1/departments').set('Cookie', cookie);
     expect(asOldRelease.status).toBe(401);
     expect(errorOf(asOldRelease).code).toBe('AUTH_SESSION_EXPIRED');
+  });
+});
+
+describe('sessions are bound to the account MFA state', () => {
+  type CreateInput = Parameters<SessionStore['create']>[0];
+
+  /**
+   * Holds the next password-only session creation for `userId` (the login path, MFA off) until
+   * `release()` — so the login verifies the password with MFA off but its session is created after
+   * the enrollment commit, the exact interleaving of the race.
+   */
+  function holdLoginSession(target: INestApplication, userId: string) {
+    const sessions = target.get(SessionStore);
+    const original = sessions.create.bind(sessions);
+    let reached!: () => void;
+    let release!: () => void;
+    const reachedP = new Promise<void>((resolve) => (reached = resolve));
+    const releaseP = new Promise<void>((resolve) => (release = resolve));
+    let held = false;
+    const spy = vi.spyOn(sessions, 'create').mockImplementation(async (input: CreateInput) => {
+      if (!held && input.userId === userId && !input.stage && !input.mfaEnabledAt) {
+        held = true;
+        reached();
+        await releaseP;
+      }
+      return original(input);
+    });
+    return {
+      reached: reachedP,
+      release,
+      restore: () => {
+        spy.mockRestore();
+      },
+    };
+  }
+
+  const liveSessionIds = async (userId: string) =>
+    (await app.get(SessionStore).list(userId)).map((entry) => entry.record.publicId);
+
+  it('a password-only login that races the enrollment commit never authorizes staff access', async () => {
+    const user = await createTestUser({ roles: ['REGISTRAR'] });
+    const enroller = browser(app);
+    await signIn(enroller, user);
+    const started = await post(enroller, 'auth/mfa/enrollment').expect(200);
+    const { secret } = mfaEnrollmentStartResponseSchema.parse(started.body);
+
+    const hold = holdLoginSession(app, user.id);
+    const racer = browser(app);
+    let raced: Sent;
+    try {
+      const pendingLogin = login(racer, user);
+      await hold.reached; // password verified with MFA off; session not created yet
+      await post(enroller, 'auth/mfa/enrollment/confirm', {
+        currentPassword: TEST_PASSWORD,
+        code: codeFor(secret),
+      }).expect(200);
+      hold.release();
+      raced = await pendingLogin;
+    } finally {
+      hold.restore();
+    }
+
+    // The racing login "succeeded" as password-only, and its session exists in Redis (it was created
+    // after the post-commit revocation ran) — but it no longer matches the account.
+    expect(raced.status).toBe(200);
+    expect(userOf(raced).nextStep).toBeNull();
+    const racedCookie = setCookie(raced, 'dv_session')?.split(';')[0] ?? '';
+    expect(racedCookie).not.toBe('');
+    expect((await liveSessionIds(user.id)).length).toBe(2);
+    for (const path of ['/api/v1/auth/me', '/api/v1/departments', '/api/v1/auth/sessions']) {
+      const denied = await browser(app).get(path).set('Cookie', racedCookie);
+      expect(denied.status, path).toBe(401);
+      expect(errorOf(denied).code).toBe('AUTH_SESSION_EXPIRED');
+    }
+    // The enroller's rotated session (bound to the new authenticator) keeps working.
+    expect(userOf(await enroller.get('/api/v1/auth/me').expect(200))).toMatchObject({
+      mfaEnabled: true,
+      nextStep: null,
+    });
+    await enroller.get('/api/v1/departments').expect(200);
+  });
+
+  it('under real concurrency, no login session reaches staff routes without the second factor', async () => {
+    const user = await createTestUser({ roles: ['REGISTRAR'] });
+    const enroller = browser(app);
+    await signIn(enroller, user);
+    const started = await post(enroller, 'auth/mfa/enrollment').expect(200);
+    const { secret } = mfaEnrollmentStartResponseSchema.parse(started.body);
+    // Three racers stay under the per-account sign-in limit (the confirm also spends one attempt).
+    const racers = Array.from({ length: 3 }, () => browser(app));
+    const [confirmed, ...logins] = await Promise.all([
+      post(enroller, 'auth/mfa/enrollment/confirm', {
+        currentPassword: TEST_PASSWORD,
+        code: codeFor(secret),
+      }),
+      ...racers.map((agent) => login(agent, user)),
+    ]);
+    expect(confirmed.status).toBe(200);
+    for (const [index, response] of logins.entries()) {
+      expect(response.status).toBe(200);
+      const denied = await racers[index]?.get('/api/v1/departments');
+      expect([401, 403]).toContain(denied?.status);
+    }
+    await enroller.get('/api/v1/departments').expect(200);
+  });
+
+  it('existing sessions stop working when MFA is enabled even if their Redis records survive', async () => {
+    const user = await createTestUser({ roles: ['REGISTRAR'] });
+    const enroller = browser(app);
+    const existing = browser(app);
+    await signIn(enroller, user);
+    await signIn(existing, user);
+    await existing.get('/api/v1/departments').expect(200);
+    const before = await liveSessionIds(user.id);
+
+    const sessions = app.get(SessionStore);
+    const spy = vi
+      .spyOn(sessions, 'revokeAllForUser')
+      .mockImplementationOnce(() => Promise.reject(new Error('injected store failure')));
+    try {
+      await enroll(enroller);
+    } finally {
+      spy.mockRestore();
+    }
+    // Revocation of the other session failed: its record is still in Redis, yet it is refused.
+    const after = await liveSessionIds(user.id);
+    expect(after).toHaveLength(2); // the rotated session + the surviving pre-enrollment one
+    expect(after.filter((id) => before.includes(id))).toHaveLength(1);
+    const denied = await existing.get('/api/v1/departments');
+    expect(denied.status).toBe(401);
+    expect(errorOf(denied).code).toBe('AUTH_SESSION_EXPIRED');
+  });
+
+  it('keeps accounts without MFA on the previous binding (old sessions and rollback stay valid)', async () => {
+    const user = await createTestUser();
+    const agent = browser(app);
+    await signIn(agent, user);
+    const sessions = app.get(SessionStore);
+    const record = (await sessions.list(user.id))[0]?.record;
+    const row = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+    // The exact formula of earlier releases (no MFA component).
+    const legacy = createHmac('sha256', config.SESSION_SECRET)
+      .update(`credential:session\0${row.passwordHash}`)
+      .digest('hex');
+    expect(record?.credentialVersion).toBe(legacy);
+    expect(sessions.credentialVersion(row.passwordHash ?? '', undefined, new Date())).not.toBe(
+      legacy,
+    );
+  });
+
+  it('session renewal: idle refresh, password change and re-sign-in keep the MFA binding', async () => {
+    const { user, secret } = await mfaUser();
+    const agent = browser(app);
+    await login(agent, user).expect(200);
+    await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 1) }).expect(200);
+    // Idle-window refresh (touch) on every request keeps the session valid.
+    for (let i = 0; i < 3; i += 1) await agent.get('/api/v1/departments').expect(200);
+
+    // Password change rebinds the current session to the new hash AND the current MFA state.
+    await post(agent, 'auth/password', {
+      currentPassword: TEST_PASSWORD,
+      newPassword: NEW_PASSWORD,
+    }).expect(200);
+    await agent.get('/api/v1/departments').expect(200);
+    const record = (await app.get(SessionStore).list(user.id))[0]?.record;
+    const row = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(record?.credentialVersion).toBe(
+      app.get(SessionStore).credentialVersion(row.passwordHash ?? '', undefined, row.mfaEnabledAt),
+    );
+
+    // Re-enrolling (after a reset) moves mfa_enabled_at: the earlier binding no longer matches.
+    await testDb().user.update({
+      where: { id: user.id },
+      data: { mfaEnabledAt: new Date((row.mfaEnabledAt?.getTime() ?? 0) + 1) },
+    });
+    await agent.get('/api/v1/departments').expect(401);
+  });
+
+  it('a password change racing the MFA-enable commit cannot keep a password-only session', async () => {
+    const user = await createTestUser({ roles: ['REGISTRAR'] });
+    const changer = browser(app);
+    await signIn(changer, user);
+
+    // Hold the password change's Redis rebind; meanwhile MFA is committed for the account (the SQL
+    // effect of an enrollment confirmed from another session).
+    const sessions = app.get(SessionStore);
+    const original = sessions.replaceCredential.bind(sessions);
+    let reached!: () => void;
+    let release!: () => void;
+    const reachedP = new Promise<void>((resolve) => (reached = resolve));
+    const releaseP = new Promise<void>((resolve) => (release = resolve));
+    const spy = vi.spyOn(sessions, 'replaceCredential').mockImplementation(async (...args) => {
+      reached();
+      await releaseP;
+      return original(...args);
+    });
+    try {
+      const change = post(changer, 'auth/password', {
+        currentPassword: TEST_PASSWORD,
+        newPassword: NEW_PASSWORD,
+      });
+      await reachedP;
+      await testDb().user.update({
+        where: { id: user.id },
+        data: { mfaEnabledAt: new Date(), mfaTotpSecretEnc: 'synthetic-encrypted-secret' },
+      });
+      release();
+      await change.expect(200);
+    } finally {
+      release();
+      spy.mockRestore();
+    }
+    // Rebound with the MFA state read before the commit: refused from the next request on.
+    const denied = await changer.get('/api/v1/departments');
+    expect(denied.status).toBe(401);
+    expect(errorOf(denied).code).toBe('AUTH_SESSION_EXPIRED');
+  });
+
+  it('MFA committed after the guard but before the password check: the change is refused', async () => {
+    const user = await createTestUser({ roles: ['REGISTRAR'] });
+    const changer = browser(app);
+    await signIn(changer, user);
+    const before = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+    // The password-change throttle runs after the guard and before the service re-reads the user.
+    const limiter = app.get(RateLimiter);
+    const original = limiter.hit.bind(limiter);
+    const spy = vi.spyOn(limiter, 'hit').mockImplementation(async (scope, ...rest) => {
+      if (scope === 'password-change') {
+        await testDb().user.update({
+          where: { id: user.id },
+          data: { mfaEnabledAt: new Date(), mfaTotpSecretEnc: 'synthetic-encrypted-secret' },
+        });
+      }
+      return original(scope, ...rest);
+    });
+    let response: Sent;
+    try {
+      response = await post(changer, 'auth/password', {
+        currentPassword: TEST_PASSWORD,
+        newPassword: NEW_PASSWORD,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(response.status).toBe(401);
+    expect(errorOf(response).code).toBe('AUTH_SESSION_EXPIRED');
+    const after = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(after.passwordHash).toBe(before.passwordHash); // nothing written
+    await changer.get('/api/v1/departments').expect(401);
+  });
+
+  it('MFA committed after the password check but before the write: the write is refused', async () => {
+    const user = await createTestUser({ roles: ['REGISTRAR'] });
+    const changer = browser(app);
+    await signIn(changer, user);
+    const before = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+    // Hashing the new password runs between the session re-check and the compare-and-set write.
+    const passwords = app.get(PasswordService);
+    const original = passwords.hashPassword.bind(passwords);
+    const spy = vi.spyOn(passwords, 'hashPassword').mockImplementationOnce(async (value) => {
+      await testDb().user.update({
+        where: { id: user.id },
+        data: { mfaEnabledAt: new Date(), mfaTotpSecretEnc: 'synthetic-encrypted-secret' },
+      });
+      return original(value);
+    });
+    let response: Sent;
+    try {
+      response = await post(changer, 'auth/password', {
+        currentPassword: TEST_PASSWORD,
+        newPassword: NEW_PASSWORD,
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(response.status).toBe(401);
+    const after = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(after.passwordHash).toBe(before.passwordHash);
+    await changer.get('/api/v1/departments').expect(401);
+  });
+
+  it('a password change during MFA verification yields no full session', async () => {
+    const { user, secret } = await mfaUser();
+    const enrolled = (await app.get(SessionStore).list(user.id)).map((e) => e.record.publicId);
+    const agent = browser(app);
+    await login(agent, user).expect(200);
+    // After the guard accepted the pending session and before the service re-reads the account, the
+    // password is changed elsewhere (e.g. a reset): no full session may be derived from it.
+    const limiter = app.get(RateLimiter);
+    const original = limiter.hit.bind(limiter);
+    const newHash = await app.get(PasswordService).hashPassword(NEW_PASSWORD);
+    const spy = vi.spyOn(limiter, 'hit').mockImplementation(async (scope, ...rest) => {
+      if (scope === 'mfa') {
+        await testDb().user.update({ where: { id: user.id }, data: { passwordHash: newHash } });
+      }
+      return original(scope, ...rest);
+    });
+    let response: Sent;
+    try {
+      response = await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 1) });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(response.status).toBe(401);
+    // Only the helper's enrollment session is left: the pending one was consumed, nothing created.
+    expect((await app.get(SessionStore).list(user.id)).map((e) => e.record.publicId)).toEqual(
+      enrolled,
+    );
+    await agent.get('/api/v1/auth/me').expect(401);
+  });
+
+  it('recovery-code sign-in yields a session bound to the current authenticator', async () => {
+    const { user, recoveryCodes } = await mfaUser();
+    const agent = browser(app);
+    await login(agent, user).expect(200);
+    await agent.get('/api/v1/departments').expect(403); // pending: second factor still required
+    await post(agent, 'auth/mfa/verify', { recoveryCode: recoveryCodes[0] }).expect(200);
+    await agent.get('/api/v1/departments').expect(200);
+    const row = await testDb().user.findUniqueOrThrow({ where: { id: user.id } });
+    const record = (await app.get(SessionStore).list(user.id))[0]?.record;
+    expect(record?.credentialVersion).toBe(
+      app.get(SessionStore).credentialVersion(row.passwordHash ?? '', undefined, row.mfaEnabledAt),
+    );
+
+    // MFA removed (CLI break-glass, which also sets a new password): the session stops working.
+    await resetStaffAccess(testDb(), {
+      email: user.email,
+      temporaryPassword: 'operator break glass phrase 5582',
+    });
+    await agent.get('/api/v1/auth/me').expect(401);
+  });
+
+  it('a code accepted while MFA is reset concurrently does not produce a usable session', async () => {
+    const { user, recoveryCodes } = await mfaUser();
+    const agent = browser(app);
+    await login(agent, user).expect(200);
+    const sessions = app.get(SessionStore);
+    const original = sessions.create.bind(sessions);
+    // Between accepting the recovery code and creating the full session, the authenticator is
+    // replaced (re-enrollment moves mfa_enabled_at). The new session must not match.
+    const spy = vi.spyOn(sessions, 'create').mockImplementationOnce(async (input: CreateInput) => {
+      await testDb().user.update({
+        where: { id: user.id },
+        data: { mfaEnabledAt: new Date(Date.now() + 1000) },
+      });
+      return original(input);
+    });
+    try {
+      await post(agent, 'auth/mfa/verify', { recoveryCode: recoveryCodes[1] }).expect(200);
+    } finally {
+      spy.mockRestore();
+    }
+    const denied = await agent.get('/api/v1/auth/me');
+    expect(denied.status).toBe(401);
+  });
+
+  it('a pending session from before a reset cannot be completed afterwards', async () => {
+    const { user, secret } = await mfaUser();
+    const agent = browser(app);
+    await login(agent, user).expect(200);
+    // Authenticator replaced while this sign-in is pending.
+    await testDb().user.update({
+      where: { id: user.id },
+      data: { mfaEnabledAt: new Date(Date.now() + 1000) },
+    });
+    const refused = await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 1) });
+    expect(refused.status).toBe(401);
+  });
+
+  it('student sign-in is unaffected (student sessions carry no MFA binding)', async () => {
+    const sessions = app.get(StudentSessionStore);
+    const created = await sessions.create({
+      userId: randomUUID(),
+      passwordHash: 'synthetic-hash',
+      device: null,
+      ipHash: null,
+    });
+    expect(sessions.matchesCredential(created.record, 'synthetic-hash')).toBe(true);
+    await sessions.revoke(created.sessionId);
   });
 });
 

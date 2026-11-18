@@ -246,9 +246,41 @@ later step is best-effort (failures are logged by step name and audited once as
 succeeded, create the rotated session; (3) revoke all other sessions (all of them if no rotated session
 exists); (4) drop the enrollment secret, the MFA lockout history and the enrollment counter. If no
 rotated session exists, the response has `reauthenticate: true` and `user: null`, the cookie is cleared,
-and the web app sends the user to sign in again after they have saved the codes. Independently of
-Redis, the `AuthGuard` refuses every full session created before `users.mfa_enabled_at`, so an
-un-rotated pre-enrollment session can never stay usable even if every revocation failed.
+and the web app sends the user to sign in again after they have saved the codes.
+
+**Sessions are bound to the account's MFA state.** A staff session's `credentialVersion` is an HMAC
+(keyed by `SESSION_SECRET`) over the password hash, the session stage and — when the account has an
+authenticator — `users.mfa_enabled_at`. The `AuthGuard` recomputes it from the freshly loaded user on
+every request, so a session only works while the account still has the password hash **and** the MFA
+state it was authenticated under:
+
+- Sessions created while MFA was off (the un-rotated enrollment session, other open sessions, and a
+  password-only login whose password check ran just before the enrollment commit but whose session was
+  created after it) stop matching once `mfa_enabled_at` is set — independently of whether their Redis
+  revocation succeeded. They answer `401 AUTH_SESSION_EXPIRED`; the record is left to expire.
+- The rotated enrollment session and sessions created by `POST /auth/mfa/verify` are bound to the
+  `mfa_enabled_at` of the authenticator that accepted the code (TOTP: compare-and-set on that value;
+  recovery code: consumed only while it is current). Verification also re-checks the consumed pending
+  session against the account as re-read (password hash and that authenticator), so a password change,
+  reset or re-enrollment during the request yields no full session. A reset or re-enrollment moves or
+  clears `mfa_enabled_at` and ends those sessions too; a pending sign-in from before it cannot be
+  completed.
+- A password change first re-checks the session against the account as re-read by the service (a
+  session that no longer matches — e.g. MFA was switched on after the guard ran — gets `401` and nothing
+  is written), then writes the new hash with a compare-and-set on the old hash **and** that MFA state,
+  and rebinds the session to exactly that state. If MFA is enabled after the write, the rebound session
+  stops matching.
+- For accounts **without** MFA the HMAC input is byte-for-byte that of earlier releases, so existing
+  sessions survive this release and a rollback. Student sessions never include an MFA component.
+
+Limits (what this does **not** guarantee): the check runs per request, so a read-only request that
+already passed the guard when MFA is committed still completes (requests that create or rebind
+sessions — sign-in, MFA verification, password change — re-check the account state themselves). It
+does not protect an already-established MFA session whose cookie is stolen (sessions remain bearer
+tokens, protected by `__Host-`/`HttpOnly`/`SameSite` cookies, CSRF and idle/absolute timeouts).
+Recovery codes are a full second factor. An image rollback to a release without MFA (e.g. `e123e35`)
+accepts password-only sign-ins again (see the deployment checklist). Rotating `SESSION_SECRET` ends
+every session.
 
 **Shared client IPs and the MFA per-IP limit (proposal — requires security review, not implemented).**
 

@@ -18,8 +18,8 @@ export interface UserForAuth {
   /** A confirmed authenticator app exists (the TOTP secret itself is never part of this shape). */
   mfaEnabled: boolean;
   /**
-   * When the authenticator was confirmed. Full sessions created before it are un-rotated
-   * pre-enrollment sessions and are refused by the AuthGuard.
+   * When the authenticator was confirmed (null = no MFA). Part of every staff session's credential
+   * binding (SessionStore.credentialVersion): changing it ends sessions bound to the previous value.
    */
   mfaEnabledAt: Date | null;
 }
@@ -49,11 +49,18 @@ export class UsersService {
     userId: string,
     passwordHash: string,
     expectedPasswordHash?: string | null,
+    /** When given, the write also requires this MFA state (compare-and-set; null = no MFA). */
+    expectedMfaEnabledAt?: Date | null,
   ): Promise<void> {
     const data = { passwordHash, passwordChangeRequired: false };
     if (expectedPasswordHash !== undefined) {
       const updated = await this.prisma.client.user.updateMany({
-        where: { id: userId, passwordHash: expectedPasswordHash, status: 'ACTIVE' },
+        where: {
+          id: userId,
+          passwordHash: expectedPasswordHash,
+          status: 'ACTIVE',
+          ...(expectedMfaEnabledAt !== undefined ? { mfaEnabledAt: expectedMfaEnabledAt } : {}),
+        },
         data,
       });
       if (updated.count !== 1) throw Errors.invalidCredentials();
