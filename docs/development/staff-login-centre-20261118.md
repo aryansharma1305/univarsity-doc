@@ -3,7 +3,8 @@
 `/admin/login` now uses the student sign-in layout: the navy brand panel with one centred heading,
 **Welcome to Staff Login Centre**, above the Docversity crest, and the light form side with the
 Student/Staff switch and the form card. The old staff statement, highlights, wordmark, footer, form
-title ("Staff sign in") and description were removed. The heading is the page's only `h1`.
+title ("Staff sign in") and description were removed. The heading text is the page's only `h1`, placed (visually hidden) in `<main>` so the skip link
+lands on it; the brand panel shows the same words as decoration.
 
 The old design came from the page itself (`app/admin/login/page.tsx` passing staff copy to the shared
 `AuthShell`), not from cached assets or a deployed image. `AuthShell` now renders staff pages in the
@@ -22,6 +23,8 @@ the diff touches only `AuthShell`, its CSS, two page files and tests.
   three staff step pages and the student pages; keyboard order switch → Email → Password → Sign in →
   Back; required fields block empty submit; the API error message renders in the form.
 - Student sign-in and activation screenshots are byte-identical before and after.
+- Step pages (with instructions in the brand panel) keep the heading in view at 1440×900, 1366×768,
+  1280×720 and 1024×768: a smaller crest and `justify-content: safe center` on short desktops.
 - e2e `admin-auth.spec.ts` asserts the new heading and the removed copy (CI runs the full stack).
 
 ## Screenshots

@@ -13,6 +13,7 @@ vi.mock('@/lib/server-auth', () => ({
   getSessionState: () => Promise.resolve(session.state),
 }));
 import AdminLoginPage from '@/app/admin/login/page';
+import MfaVerifyPage from '@/app/admin/login/verify/page';
 import { StudentAuthPage } from '@/features/student-portal/auth-page';
 
 beforeEach(() => {
@@ -31,8 +32,11 @@ it('shows only the crest and "Welcome to Staff Login Centre" before the staff lo
     /^Welcome to Staff Login Centre$/,
   );
   expect(screen.getAllByRole('heading')).toHaveLength(1);
+  // The page heading is in main (skip-link target); the brand panel repeats it visually only.
+  expect(within(screen.getByRole('main')).getByRole('heading', { level: 1 })).toBeInTheDocument();
   const visual = screen.getByRole('complementary');
   expect(visual).toHaveTextContent(/^Welcome to Staff Login Centre$/);
+  expect(within(visual).queryByRole('heading')).not.toBeInTheDocument();
   expect(within(visual).getByTestId('crest')).toBeInTheDocument();
   expect(within(visual).queryByRole('list')).not.toBeInTheDocument();
   expect(within(visual).queryByRole('link')).not.toBeInTheDocument();
@@ -61,16 +65,40 @@ it('keeps the availability notice when sign-in is unavailable', async () => {
   expect(screen.getByRole('status')).toHaveTextContent('Sign-in is temporarily unavailable');
 });
 
-it('uses the same layout hook as student sign-in, which keeps its own heading and description', () => {
-  const { container } = render(
-    <StudentAuthPage title="Sign in" description="Existing description" unavailable={false}>
-      <button>Existing login form</button>
+it('keeps the MFA step title, instructions and recovery option under the staff heading', async () => {
+  session.state = {
+    status: 'authenticated',
+    user: { nextStep: 'MFA_VERIFY' },
+  } as unknown as typeof session.state;
+  render(await MfaVerifyPage());
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Two-step verification');
+  expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
+    'Welcome to Staff Login Centre',
+  );
+  expect(
+    screen.getByText('Enter the code from your authenticator app to finish signing in.'),
+  ).toBeInTheDocument();
+  expect(screen.getByText('Lost your phone?')).toBeInTheDocument();
+  expect(screen.getByLabelText('Authenticator code')).toBeInTheDocument();
+});
+
+it('leaves student activation with its wordmark, steps and footer', () => {
+  render(
+    <StudentAuthPage
+      title="Activate"
+      description="Existing"
+      unavailable={false}
+      variant="activation"
+    >
+      <button>Existing activation form</button>
     </StudentAuthPage>,
   );
-  expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
-  expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(
-    'Welcome to Verification Portal',
+  const visual = screen.getByRole('complementary');
+  expect(within(visual).getByRole('link', { name: 'Docversity home' })).toHaveAttribute(
+    'href',
+    '/',
   );
-  expect(screen.getByText('Existing description')).toBeInTheDocument();
-  expect(container.querySelector('[data-audience="student"]')).toBeInTheDocument();
+  expect(within(visual).getByText(/Academic Verification & Records Portal/)).toBeInTheDocument();
+  expect(within(visual).getAllByRole('listitem')).toHaveLength(3);
+  expect(screen.getByRole('heading', { level: 1, name: 'Activate' })).toBeInTheDocument();
 });
