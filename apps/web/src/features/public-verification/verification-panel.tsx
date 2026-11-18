@@ -13,35 +13,10 @@ import {
 } from '@docversity/validation';
 import { ApiError, studentRequest } from '@/lib/api';
 import { takeHeroSearch } from './search-handoff';
+import { SERVICES } from './services';
 import styles from './verification-panel.module.css';
 
 const CHECK_CODE = 'Please check the entered code and try again.';
-
-export const SERVICES = {
-  'admission-letter': {
-    title: 'Verify Admission Letter',
-    label: 'Admission letter number',
-    placeholder: 'Enter admission letter number',
-  },
-  certificate: {
-    title: 'Verify Certificate',
-    label: 'Certificate number',
-    placeholder: 'Enter the code printed on the certificate',
-  },
-  registration: {
-    title: 'Verify Registration',
-    label: 'Registration number',
-    placeholder: 'Enter registration number',
-  },
-  result: {
-    title: 'Check Result',
-    label: 'Registration number',
-    placeholder: 'Enter result code or registration number',
-  },
-} satisfies Record<
-  PublicVerificationService,
-  { title: string; label: string; placeholder: string }
->;
 
 /** The API's approved policy and ownership checks decide whether a lookup is available. */
 export function VerificationPanel({ service }: { service: PublicVerificationService }) {
@@ -66,12 +41,17 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
   });
 
   useEffect(() => {
-    const value = takeHeroSearch(service);
-    // Read-and-remove makes this run once, even when development remounts the effect.
-    if (value !== null)
-      queueMicrotask(() => {
-        searchFromHome(value);
-      });
+    let live = true;
+    // Taken inside the microtask: a development remount or a fast navigation away cancels this
+    // run before it consumes the handoff, so exactly one mounted panel performs the lookup.
+    queueMicrotask(() => {
+      if (!live) return;
+      const value = takeHeroSearch(service);
+      if (value !== null) searchFromHome(value);
+    });
+    return () => {
+      live = false;
+    };
   }, [service]);
 
   useEffect(() => {

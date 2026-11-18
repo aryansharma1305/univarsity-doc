@@ -8,6 +8,7 @@ vi.mock('next/image', () => ({
 const push = vi.hoisted(() => vi.fn());
 vi.mock('next/navigation', () => ({ usePathname: () => '/', useRouter: () => ({ push }) }));
 import { VerificationHome } from '@/features/public-verification/verification-home';
+import { takeHeroSearch } from '@/features/public-verification/search-handoff';
 
 const navigation = [
   ['Verify Admission Letter', '/verify/admission-letter'],
@@ -32,7 +33,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   push.mockReset();
-  sessionStorage.clear();
 });
 
 describe('public verification homepage', () => {
@@ -82,7 +82,6 @@ describe('public verification homepage', () => {
     const form = screen.getByRole('search', { name: 'Verify a record' });
     const service = within(form).getByRole('combobox', { name: 'Service' });
     fireEvent.click(within(form).getByRole('button', { name: 'Search' }));
-    expect(service).toBeInvalid();
     expect(push).not.toHaveBeenCalled();
     fireEvent.change(service, { target: { value: 'certificate' } });
     const input = within(form).getByRole('textbox', { name: 'Certificate number' });
@@ -90,10 +89,7 @@ describe('public verification homepage', () => {
     fireEvent.change(input, { target: { value: ' DV/2026-01 ' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Search' }));
     expect(push).toHaveBeenCalledWith('/verify/certificate');
-    expect(JSON.parse(sessionStorage.getItem('dv-hero-search') ?? '{}')).toMatchObject({
-      service: 'certificate',
-      reference: 'DV/2026-01',
-    });
+    expect(takeHeroSearch('certificate')).toBe('DV/2026-01');
     for (const [value, href] of [
       ['registration', '/verify/registration'],
       ['admission-letter', '/verify/admission-letter'],
@@ -103,6 +99,22 @@ describe('public verification homepage', () => {
       fireEvent.click(within(form).getByRole('button', { name: 'Search' }));
       expect(push).toHaveBeenLastCalledWith(href);
     }
+  });
+
+  it('refuses a number that is shorter than 3 characters once spaces are trimmed', () => {
+    render(<VerificationHome year={2026} />);
+    const form = screen.getByRole('search', { name: 'Verify a record' });
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Service' }), {
+      target: { value: 'registration' },
+    });
+    const input = within(form).getByRole('textbox', { name: 'Registration number' });
+    fireEvent.change(input, { target: { value: '  ab  ' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Search' }));
+    expect(input).toBeInvalid();
+    expect(push).not.toHaveBeenCalled();
+    expect(takeHeroSearch('registration')).toBeNull();
+    fireEvent.change(input, { target: { value: '  abc  ' } });
+    expect(input).toBeValid();
   });
 
   it('keeps the mentor-removed subtitle and badge row out', () => {

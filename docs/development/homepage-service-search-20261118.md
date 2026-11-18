@@ -10,15 +10,16 @@ Registration, Verify Admission Letter, Check Result.
   existing page (`/verify/certificate`, `/verify/registration`, `/verify/admission-letter`,
   `/results`). The page runs its normal lookup once; the API's policy gate still decides the answer,
   so services without university approval keep returning `UNAVAILABLE`.
-- The number never enters a URL. The homepage writes a one-shot `sessionStorage` handoff
-  (`dv-hero-search`: service, number, timestamp). The service page reads and deletes it on mount and
-  accepts it only for the same service within 60 seconds. Links such as `#reference=` or
+- The number never enters a URL. The homepage keeps a one-shot in-memory handoff (service, number,
+  timestamp) across the client-side navigation; nothing goes to a URL or browser storage and a reload
+  clears it. The service page takes it once and accepts it only for the same service within 60
+  seconds. Links such as `#reference=` or
   `?reference=` from elsewhere cannot prefill or trigger a lookup, which keeps the existing
   "unsolicited references are refused" rule.
 - Exactly once: read-and-delete runs before the lookup, so reloads, back/forward and development
   remounts do not repeat it. A too-short value is prefilled without a request.
 - Native `<select>`, labelled controls, DOM order equals visual order at every width. Between 901 and
-  1180 px the service select takes its own row; at 900 px and below the three controls stack.
+  1180 px the service select takes its own row; at 560 px and below the three controls stack.
 
 ## Verification (local, production build)
 

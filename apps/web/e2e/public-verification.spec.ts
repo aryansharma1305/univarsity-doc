@@ -116,11 +116,12 @@ test('homepage search opens each service, runs one policy-gated check and keeps 
   ] as const;
   const reference = 'SYNTHETIC-HOME-SEARCH';
   const posts: string[] = [];
+  const urls: string[] = [];
   page.on('request', (request) => {
+    urls.push(request.url());
     if (request.method() === 'POST' && request.url().includes('/api/v1/public/verify/')) {
       posts.push(new URL(request.url()).pathname);
     }
-    expect(request.url()).not.toContain(reference);
   });
   for (const [label, path, service] of services) {
     posts.length = 0;
@@ -132,11 +133,11 @@ test('homepage search opens each service, runs one policy-gated check and keeps 
     await expect(page).toHaveURL((url) => url.pathname === path && !url.href.includes(reference));
     await expect(page.getByRole('status')).toContainText(/UNAVAILABLE|pending|No verified record/i);
     await expect(page.getByRole('textbox')).toHaveValue(reference);
-    await page.waitForTimeout(500);
-    expect(posts).toEqual([`/api/v1/public/verify/${service}`]);
+    await expect.poll(() => posts).toEqual([`/api/v1/public/verify/${service}`]);
     await page.reload();
-    await page.waitForTimeout(500);
-    expect(posts).toHaveLength(1);
     await expect(page.getByRole('textbox')).toHaveValue('');
+    await page.waitForLoadState('networkidle');
+    expect(posts).toHaveLength(1);
   }
+  expect(urls.filter((url) => url.includes(reference))).toEqual([]);
 });

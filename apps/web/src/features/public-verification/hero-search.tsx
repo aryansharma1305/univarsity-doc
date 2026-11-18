@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronDownIcon, SearchIcon } from 'lucide-react';
 import type { PublicVerificationService } from '@docversity/validation';
 import { storeHeroSearch } from './search-handoff';
-import { SERVICES } from './verification-panel';
+import { SERVICES } from './services';
 import styles from './verification-home.module.css';
 
 const OPTIONS = [
@@ -27,6 +27,11 @@ export function HeroSearch() {
     event.preventDefault();
     const option = OPTIONS.find((item) => item.service === service);
     const value = reference.trim();
+    const input = event.currentTarget.querySelector('input');
+    // minLength counts spaces; validate the number that will actually be sent.
+    input?.setCustomValidity(
+      value.length >= 3 || value === '' ? '' : 'Enter at least 3 characters.',
+    );
     if (!option || !event.currentTarget.reportValidity()) return;
     storeHeroSearch(option.service, value);
     router.push(option.href);
@@ -67,6 +72,7 @@ export function HeroSearch() {
         placeholder={placeholder}
         value={reference}
         onChange={(event) => {
+          event.target.setCustomValidity('');
           setReference(event.target.value);
         }}
         required
