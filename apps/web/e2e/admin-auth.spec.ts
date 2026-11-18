@@ -4,7 +4,11 @@ import { fixtures, signIn } from './support';
 test('unauthenticated /admin redirects to the login page', async ({ page }) => {
   await page.goto('/admin');
   await expect(page).toHaveURL(/\/admin\/login$/);
-  await expect(page.getByRole('heading', { name: 'Staff sign in' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Welcome to Staff Login Centre' }),
+  ).toBeVisible();
+  await expect(page.getByText('For authorised university staff only.')).toHaveCount(0);
+  await expect(page.getByText('Permissions by role')).toHaveCount(0);
 });
 
 test('wrong credentials show the generic error and stay on the login page', async ({ page }) => {

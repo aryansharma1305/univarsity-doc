@@ -19,7 +19,8 @@ export interface AuthHighlight {
  * Shared frame for staff sign-in, student sign-in and student activation (UI-06). Presentation only:
  * the page passes its existing form, heading, description and availability notice unchanged. The
  * brand panel carries the homepage's navy/gold world; the form side stays on the light product
- * surface used inside the portals.
+ * surface used inside the portals. Staff pages use the student sign-in layout (centred heading over
+ * the crest); without a `title`, the brand statement is the page heading (Staff Login Centre).
  */
 export function AuthShell({
   audience,
@@ -31,8 +32,8 @@ export function AuthShell({
   children,
 }: {
   audience: 'student' | 'staff' | 'activation';
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   unavailable: boolean;
   /** Main statement in the brand panel. */
   statement: ReactNode;
@@ -40,6 +41,8 @@ export function AuthShell({
   children: ReactNode;
 }) {
   const student = audience !== 'staff';
+  const activation = audience === 'activation';
+  const Statement = title ? 'h2' : 'h1';
   return (
     <div className={styles.shell} data-audience={audience}>
       <aside
@@ -73,15 +76,13 @@ export function AuthShell({
             alt=""
             priority
             sizes={
-              audience === 'student'
-                ? '(max-width: 1023px) 170px, 280px'
-                : '(max-width: 1023px) 96px, 220px'
+              activation ? '(max-width: 1023px) 96px, 220px' : '(max-width: 1023px) 170px, 280px'
             }
             className={styles.crest}
           />
         </AuthAmbient>
 
-        {audience !== 'student' && (
+        {activation && (
           <div className={styles.brandTop}>
             <Link href="/" className={styles.homeLink} aria-label="Docversity home">
               <Wordmark inverted />
@@ -90,10 +91,10 @@ export function AuthShell({
         )}
 
         <div className={styles.story}>
-          {audience === 'student' ? (
-            <h2 className={styles.statement}>{statement}</h2>
-          ) : (
+          {activation ? (
             <p className={styles.statement}>{statement}</p>
+          ) : (
+            <Statement className={styles.statement}>{statement}</Statement>
           )}
           {highlights.length > 0 && (
             <ul className={styles.highlights}>
@@ -112,7 +113,7 @@ export function AuthShell({
           )}
         </div>
 
-        {audience !== 'student' && (
+        {activation && (
           <p className={styles.brandFoot}>
             Docversity · Academic Verification &amp; Records Portal
           </p>
@@ -139,8 +140,8 @@ export function AuthShell({
             <span className={styles.switchThumb} aria-hidden="true" />
           </nav>
 
-          <h1 className={styles.title}>{title}</h1>
-          <p className={styles.description}>{description}</p>
+          {title && <h1 className={styles.title}>{title}</h1>}
+          {description && <p className={styles.description}>{description}</p>}
 
           {unavailable && (
             <p role="status" className={styles.unavailable}>

@@ -40,11 +40,7 @@ export default async function MfaVerifyPage() {
       title="Two-step verification"
       description="Enter the code from your authenticator app to finish signing in."
       unavailable={state.status === 'unavailable'}
-      statement={
-        <>
-          One more step, <em>then you are in.</em>
-        </>
-      }
+      statement="Welcome to Staff Login Centre"
       highlights={HIGHLIGHTS}
     >
       <MfaVerifyForm />
