@@ -27,19 +27,23 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 it('shows only the crest and "Welcome to Staff Login Centre" before the staff login form', async () => {
-  render(await AdminLoginPage());
+  const { container } = render(await AdminLoginPage());
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
     /^Welcome to Staff Login Centre$/,
   );
   expect(screen.getAllByRole('heading')).toHaveLength(1);
   // The page heading is in main (skip-link target); the brand panel repeats it visually only.
   expect(within(screen.getByRole('main')).getByRole('heading', { level: 1 })).toBeInTheDocument();
-  const visual = screen.getByRole('complementary');
+  // The brand panel is decorative here: hidden from assistive technology, so no empty landmark.
+  expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+  const visual = container.querySelector('aside');
+  if (!visual) throw new Error('brand panel missing');
+  expect(visual).toHaveAttribute('aria-hidden', 'true');
+  expect(visual.querySelector('a, button, input, [tabindex]')).toBeNull();
   expect(visual).toHaveTextContent(/^Welcome to Staff Login Centre$/);
-  expect(within(visual).queryByRole('heading')).not.toBeInTheDocument();
   expect(within(visual).getByTestId('crest')).toBeInTheDocument();
-  expect(within(visual).queryByRole('list')).not.toBeInTheDocument();
-  expect(within(visual).queryByRole('link')).not.toBeInTheDocument();
+  expect(within(visual).queryByRole('list', { hidden: true })).not.toBeInTheDocument();
+  expect(within(visual).queryByRole('link', { hidden: true })).not.toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'Staff sign in' })).not.toBeInTheDocument();
   for (const removed of [
     /For authorised university staff only/,

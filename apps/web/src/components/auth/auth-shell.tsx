@@ -46,7 +46,11 @@ export function AuthShell({
     <div className={styles.shell} data-audience={audience}>
       <aside
         className={styles.brand}
-        aria-label={student ? 'About the student portal' : 'About staff access'}
+        // Without a title the panel only repeats the main h1 beside the decorative crest: hide it
+        // from assistive technology instead of exposing an empty, named landmark.
+        {...(title
+          ? { 'aria-label': student ? 'About the student portal' : 'About staff access' }
+          : { 'aria-hidden': true })}
       >
         <AuthAmbient className={styles.ambient}>
           <div className={styles.glow} />
