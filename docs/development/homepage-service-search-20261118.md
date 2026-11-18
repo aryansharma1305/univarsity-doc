@@ -33,12 +33,12 @@ Registration, Verify Admission Letter, Check Result.
 
 ## Screenshots
 
-| | |
-|---|---|
-| Desktop | ![Desktop homepage](assets/homepage-service-search/home-desktop.jpg) |
-| Desktop, filled | ![Desktop filled](assets/homepage-service-search/home-filled-desktop.jpg) |
-| Desktop, after Search | ![Desktop result](assets/homepage-service-search/result-desktop.jpg) |
-| 1024 px | ![Tablet homepage](assets/homepage-service-search/home-tablet.jpg) |
-| Mobile 390 px | ![Mobile homepage](assets/homepage-service-search/home-mobile.jpg) |
-| Mobile, filled | ![Mobile filled](assets/homepage-service-search/home-filled-mobile.jpg) |
-| Mobile, after Search | ![Mobile result](assets/homepage-service-search/result-mobile.jpg) |
+|                       |                                                                           |
+| --------------------- | ------------------------------------------------------------------------- |
+| Desktop               | ![Desktop homepage](assets/homepage-service-search/home-desktop.jpg)      |
+| Desktop, filled       | ![Desktop filled](assets/homepage-service-search/home-filled-desktop.jpg) |
+| Desktop, after Search | ![Desktop result](assets/homepage-service-search/result-desktop.jpg)      |
+| 1024 px               | ![Tablet homepage](assets/homepage-service-search/home-tablet.jpg)        |
+| Mobile 390 px         | ![Mobile homepage](assets/homepage-service-search/home-mobile.jpg)        |
+| Mobile, filled        | ![Mobile filled](assets/homepage-service-search/home-filled-mobile.jpg)   |
+| Mobile, after Search  | ![Mobile result](assets/homepage-service-search/result-mobile.jpg)        |
