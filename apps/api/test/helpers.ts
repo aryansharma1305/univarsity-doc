@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 import type { DynamicModule, INestApplication, LogLevel, Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -44,6 +44,8 @@ export function realConfig(overrides: Partial<ApiConfig> = {}): ApiConfig {
     S3_BUCKET: testStorageBucket(process.env),
     SWAGGER_ENABLED: true,
     HEALTH_CHECK_TIMEOUT_MS: 2_000,
+    // A throwaway staff-MFA key per app (production requires a real one; see api-config.ts).
+    STAFF_MFA_ENCRYPTION_KEY: randomBytes(32).toString('hex'),
     ...overrides,
   };
 }
@@ -114,7 +116,12 @@ export interface TestUser {
 
 /** Creates a staff user with the given roles directly in the test database. */
 export async function createTestUser(
-  options: { roles?: RoleName[]; status?: 'ACTIVE' | 'DISABLED'; password?: string | null } = {},
+  options: {
+    roles?: RoleName[];
+    status?: 'ACTIVE' | 'DISABLED';
+    password?: string | null;
+    passwordChangeRequired?: boolean;
+  } = {},
 ): Promise<TestUser> {
   const db = testDb();
   await ensureRoles(db);
@@ -126,6 +133,7 @@ export async function createTestUser(
       email,
       displayName: 'Test Staff Member',
       status: options.status ?? 'ACTIVE',
+      passwordChangeRequired: options.passwordChangeRequired ?? false,
       passwordHash: password === null ? null : await passwords.hashPassword(password),
       roles: { create: roles.map((role) => ({ roleId: role.id })) },
     },

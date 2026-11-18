@@ -31,7 +31,8 @@ describe('admin bootstrap (pnpm admin:create)', () => {
       const audit = await testDb().auditLog.findFirst({
         where: { action: 'ADMIN_CREATED', entityId: user.id },
       });
-      expect(audit?.metadata).toEqual({ via: 'cli', role });
+      expect(audit?.metadata).toEqual({ via: 'cli', role, passwordChangeRequired: true });
+      expect(user.passwordChangeRequired).toBe(true);
     },
   );
   it('creates a SUPER_ADMIN with an Argon2id hash and an ADMIN_CREATED audit entry', async () => {
@@ -52,7 +53,15 @@ describe('admin bootstrap (pnpm admin:create)', () => {
     const audit = await testDb().auditLog.findFirst({
       where: { action: 'ADMIN_CREATED', entityId: user.id },
     });
-    expect(audit?.metadata).toEqual({ via: 'cli', role: 'SUPER_ADMIN' });
+    expect(audit?.metadata).toEqual({
+      via: 'cli',
+      role: 'SUPER_ADMIN',
+      passwordChangeRequired: true,
+    });
+    // CLI-created accounts must replace the bootstrap password at first sign-in; no MFA yet.
+    expect(user.passwordChangeRequired).toBe(true);
+    expect(user.mfaEnabledAt).toBeNull();
+    expect(user.mfaTotpSecretEnc).toBeNull();
   });
 
   it('refuses weak passwords', async () => {

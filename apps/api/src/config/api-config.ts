@@ -97,6 +97,36 @@ export const apiEnvSchema = z
     /** Attempts per client IP across all accounts (slows credential stuffing; allows shared NAT). */
     LOGIN_MAX_ATTEMPTS_PER_IP: positiveInt(100_000).default(100),
     PASSWORD_RESET_TOKEN_TTL_SECONDS: positiveInt(86_400).default(1_800),
+    /**
+     * Authenticator-code (MFA) throttling, deliberately tighter than password sign-in: a 6-digit code
+     * has only 10^6 values. Every verify attempt counts before the code is compared; a success clears
+     * only the per-account+IP counter, never the per-account one.
+     */
+    MFA_RATE_LIMIT_WINDOW_SECONDS: positiveInt(86_400).default(900),
+    /** Verify attempts per (account, client IP) per window. */
+    MFA_MAX_ATTEMPTS_PER_ACCOUNT_IP: positiveInt(100).default(5),
+    /** Verify attempts per account across all IPs per window (never reset by a success). */
+    MFA_MAX_ATTEMPTS_PER_ACCOUNT: positiveInt(100).default(5),
+    /** Verify attempts per client IP across all accounts per window. */
+    MFA_MAX_ATTEMPTS_PER_IP: positiveInt(10_000).default(50),
+    /**
+     * Escalating lockout: this many WRONG codes within MFA_LOCKOUT_WINDOW_SECONDS lock MFA verification
+     * for the account for MFA_LOCKOUT_SECONDS, or until a SUPER_ADMIN access reset.
+     */
+    MFA_LOCKOUT_THRESHOLD: positiveInt(1_000).default(10),
+    MFA_LOCKOUT_WINDOW_SECONDS: positiveInt(30 * 86_400).default(86_400),
+    MFA_LOCKOUT_SECONDS: positiveInt(30 * 86_400).default(86_400),
+    /**
+     * 32-byte AES-256-GCM key (64 hex characters) encrypting staff TOTP secrets at rest. Required in
+     * production. Without it (development/test only) staff MFA is unavailable. Never log it; rotating it
+     * makes enrolled authenticators unreadable (staff must re-enroll after an access reset).
+     */
+    STAFF_MFA_ENCRYPTION_KEY: z
+      .string()
+      .regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hexadecimal characters (32 random bytes)')
+      .optional(),
+    /** When true, every staff member must enroll an authenticator before reaching anything else. */
+    STAFF_MFA_ENFORCED: envBoolean.default(false),
     /** Validity of student activation codes (Phase 6). */
     STUDENT_ACTIVATION_CODE_TTL_DAYS: positiveInt(365).default(30),
     /** Wrong codes entered for a registration before its open code is revoked. */
@@ -130,6 +160,42 @@ export const apiEnvSchema = z
           message: 'may be false only when WEB_URL is localhost (local http development)',
         });
       }
+    }
+    if (
+      !env.STAFF_MFA_ENCRYPTION_KEY &&
+      (env.NODE_ENV === 'production' || env.STAFF_MFA_ENFORCED)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['STAFF_MFA_ENCRYPTION_KEY'],
+        message: 'is required in production and whenever STAFF_MFA_ENFORCED=true',
+      });
+    }
+    if (
+      env.STAFF_MFA_ENCRYPTION_KEY &&
+      /^(.)\1*$/.test(env.STAFF_MFA_ENCRYPTION_KEY) &&
+      env.NODE_ENV === 'production'
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['STAFF_MFA_ENCRYPTION_KEY'],
+        message: 'must be a real random key in production',
+      });
+    }
+    if (env.STAFF_MFA_ENCRYPTION_KEY?.toLowerCase() === env.SESSION_SECRET.toLowerCase()) {
+      // Independent secrets: a leak of one (e.g. via HMAC-hashed identifiers) must not expose the other.
+      ctx.addIssue({
+        code: 'custom',
+        path: ['STAFF_MFA_ENCRYPTION_KEY'],
+        message: 'must not equal SESSION_SECRET (use a separate random key)',
+      });
+    }
+    if (env.MFA_LOCKOUT_WINDOW_SECONDS < env.MFA_RATE_LIMIT_WINDOW_SECONDS) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MFA_LOCKOUT_WINDOW_SECONDS'],
+        message: 'must be greater than or equal to MFA_RATE_LIMIT_WINDOW_SECONDS',
+      });
     }
     if (env.NODE_ENV === 'production' && /^dev-only/i.test(env.SESSION_SECRET)) {
       ctx.addIssue({

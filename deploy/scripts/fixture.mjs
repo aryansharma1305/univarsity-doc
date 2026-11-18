@@ -16,6 +16,8 @@ try {
     email: fixture.email,
     displayName: 'SYNTHETIC Staging Administrator',
     password: fixture.staffPassword,
+    // Synthetic smoke fixture: signs in programmatically, so no first-login password change.
+    requirePasswordChange: false,
   });
   const department = await db.department.create({
     data: { code: 'STAGING-DEPT', name: 'SYNTHETIC Staging Department' },

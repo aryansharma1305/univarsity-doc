@@ -1,5 +1,6 @@
 import { errorResponseSchema } from '@docversity/validation';
 import type { z } from 'zod';
+import { STEP_ERROR_CODES, STEP_PATHS } from '@/lib/staff-steps';
 
 /**
  * Typed browser client for the Docversity API (same-origin `/api/v1`, proxied by Next.js).
@@ -63,6 +64,15 @@ async function getCsrfToken(principal: Principal, refresh = false): Promise<stri
   }
   csrfTokens.set(principal, body.csrfToken);
   return body.csrfToken;
+}
+
+/**
+ * A restricted staff session (pending authenticator code, required password change or MFA setup) got
+ * 403 for a normal route: send the browser to the step it must complete. UX only — the API decides.
+ */
+function redirectToStaffStep(error: ApiError): void {
+  const step = error.status === 403 ? STEP_ERROR_CODES[error.code] : undefined;
+  if (step && typeof window !== 'undefined') window.location.assign(STEP_PATHS[step]);
 }
 
 /** Clears cached request state (call after sign-in/out). */
@@ -133,7 +143,11 @@ export async function apiRequest<TSchema extends z.ZodType>(
     );
   }
 
-  if (!response.ok) throw await toApiError(response);
+  if (!response.ok) {
+    const error = await toApiError(response);
+    if (principal === 'staff') redirectToStaffStep(error);
+    throw error;
+  }
   const parsed = schema.safeParse(response.status === 204 ? undefined : await response.json());
   if (!parsed.success) {
     throw new ApiError(

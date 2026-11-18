@@ -226,6 +226,18 @@ Do not downgrade schema or overwrite live databases automatically. Incompatible 
 approved isolated restore/cutover accounting for records written after the backup. On uncertain
 integrity or gate failure, keep the proxy stopped and preserve evidence.
 
+### Staff MFA / first-login release (ADR-0021) and rollback to 70b11d2
+
+- Keep `STAFF_MFA_ENFORCED=false` until a rollback to 70b11d2 is no longer expected. 70b11d2 does not
+  know about MFA, so a rollback silently drops the second factor.
+- After **any** rollback to 70b11d2, and before reopening the proxy, reset or disable every active
+  account with `password_change_required = true`: 70b11d2 ignores the flag, so those accounts would
+  sign in with an operator-issued first-login or temporary password as full sessions. List them with
+  `SELECT id, email FROM users WHERE password_change_required AND status = 'ACTIVE';` (read-only), then
+  have each account holder set a new password in person or disable the account. Record the outcome.
+- Production also needs `STAFF_MFA_ENCRYPTION_KEY` (64 hex characters, different from
+  `SESSION_SECRET`). The `MFA_*` throttling/lockout variables are optional; their defaults are safe.
+
 ## Evidence and remaining activation requirements
 
 Runbook preparation and the native recovery checkpoint are complete. Fresh image builds, launcher

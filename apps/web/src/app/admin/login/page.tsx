@@ -4,6 +4,7 @@ import { connection } from 'next/server';
 import { ClipboardCheckIcon, ScrollTextIcon, TimerResetIcon } from 'lucide-react';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { LoginForm } from '@/features/auth/login-form';
+import { pathAfterSignIn } from '@/lib/staff-steps';
 import { getSessionState } from '@/lib/server-auth';
 
 export const metadata: Metadata = { title: 'Staff sign in' };
@@ -29,7 +30,7 @@ const HIGHLIGHTS = [
 export default async function AdminLoginPage() {
   await connection();
   const state = await getSessionState();
-  if (state.status === 'authenticated') redirect('/admin');
+  if (state.status === 'authenticated') redirect(pathAfterSignIn(state.user.nextStep));
 
   return (
     <AuthShell

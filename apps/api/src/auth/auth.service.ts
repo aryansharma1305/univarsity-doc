@@ -1,5 +1,5 @@
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
-import { AUDIT_ACTIONS, permissionsForRoles } from '@docversity/types';
+import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   type AuthUser,
   type ChangePasswordRequest,
@@ -14,13 +14,18 @@ import { AppError, Errors } from '../common/app-error.js';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 import { UsersService, type UserForAuth } from '../users/users.service.js';
 import type { AuthContext } from './auth.decorators.js';
+import { describeUser } from './auth-user.js';
 import { summariseUserAgent } from './device-summary.js';
 import { IdentifierHasher } from './identifier-hasher.js';
+import { MFA_PENDING_SESSION_SECONDS, MfaService } from './mfa.service.js';
 import { PASSWORD_RESET_NOTIFIER, type PasswordResetNotifier } from './password-reset.notifier.js';
 import { PasswordResetStore } from './password-reset.store.js';
 import { PasswordService } from './password.service.js';
 import { RateLimiter } from './rate-limiter.js';
 import { SessionStore } from './session.store.js';
+import { staffNextStep } from './staff-steps.js';
+
+export { toAuthUser } from './auth-user.js';
 
 export interface ClientInfo {
   ip: string;
@@ -43,6 +48,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly resets: PasswordResetStore,
     @Inject(PASSWORD_RESET_NOTIFIER) private readonly resetNotifier: PasswordResetNotifier,
+    private readonly mfa: MfaService,
   ) {}
 
   /**
@@ -50,6 +56,11 @@ export class AuthService {
    * disabled account, missing password — produces the same AUTH_INVALID_CREDENTIALS response, and
    * unknown emails still pay the Argon2 cost, so neither the response nor its timing reveals which
    * accounts exist.
+   *
+   * For an account with an authenticator the new session is only a short-lived PENDING session
+   * (stage `mfa`) that can do nothing but complete POST /auth/mfa/verify; the response's `nextStep`
+   * says so. Accounts flagged for a password change (or, under enforcement, without MFA) get a full
+   * session that the AuthGuard restricts until that step is done.
    */
   async login(
     input: LoginRequest,
@@ -90,24 +101,33 @@ export class AuthService {
       throw Errors.invalidCredentials();
     }
 
+    // Fail before creating anything if a second factor is needed but cannot be checked (dev only:
+    // production refuses to start without STAFF_MFA_ENCRYPTION_KEY).
+    if (user.mfaEnabled && !this.mfa.isAvailable()) throw Errors.authUnavailable();
     await this.rateLimiter.clear('login', [`pair:${pairKey}`, `account:${emailHash}`]);
     if (client.existingSessionId) await this.sessions.revoke(client.existingSessionId);
 
     const device = summariseUserAgent(client.userAgent);
+    const stage = user.mfaEnabled ? ('mfa' as const) : undefined;
     const { sessionId, record } = await this.sessions.create({
       userId: user.id,
       passwordHash: user.passwordHash,
+      // Bound to the MFA state read with the password: if MFA is switched on before this session is
+      // next used (e.g. a concurrent enrollment commit), the guard no longer accepts it.
+      mfaEnabledAt: user.mfaEnabledAt,
       device,
       ipHash,
+      ...(stage ? { stage, absoluteTimeoutSeconds: MFA_PENDING_SESSION_SECONDS } : {}),
     });
+    const nextStep = staffNextStep(record, user, this.config);
     await this.audit.writeAuditEvent({
       actorUserId: user.id,
       action: AUDIT_ACTIONS.authLoginSuccess,
       entityType: 'User',
       entityId: user.id,
-      metadata: { sessionHandle: record.publicId, device, ipHash },
+      metadata: { sessionHandle: record.publicId, device, ipHash, nextStep },
     });
-    return { sessionId, user: toAuthUser(user) };
+    return { sessionId, user: describeUser(user, nextStep) };
   }
 
   async logout(auth: AuthContext | undefined): Promise<void> {
@@ -123,13 +143,7 @@ export class AuthService {
   }
 
   currentUser(auth: AuthContext): AuthUser {
-    return {
-      id: auth.user.id,
-      email: auth.user.email,
-      displayName: auth.user.displayName,
-      roles: auth.user.roles,
-      permissions: [...auth.user.permissions].sort(),
-    };
+    return describeUser({ ...auth.user, mfaEnabled: auth.mfaEnabled }, auth.nextStep);
   }
 
   async listSessions(auth: AuthContext): Promise<SessionSummary[]> {
@@ -193,10 +207,34 @@ export class AuthService {
     ) {
       throw Errors.invalidCredentials();
     }
+    // The guard validated this session against the account as it was then. Re-check it against the
+    // state just read: if MFA was switched on in between, this password-only session must not be
+    // rebound to the new MFA state (that would turn it into a full MFA session).
+    if (!this.sessions.matchesCredential(auth.session, user.passwordHash, user.mfaEnabledAt)) {
+      throw Errors.sessionExpired();
+    }
     assertPasswordPolicy(input.newPassword, user);
+    if (input.newPassword === input.currentPassword) {
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        ERROR_CODES.authPasswordPolicy,
+        'Choose a stronger password.',
+        {
+          details: [{ path: 'newPassword', message: 'Password must differ from the current one.' }],
+        },
+      );
+    }
     const passwordHash = await this.passwords.hashPassword(input.newPassword);
-    await this.users.setPasswordHash(user.id, passwordHash, user.passwordHash);
-    await this.sessions.replaceCredential(auth.sessionId, auth.session, passwordHash);
+    // Also clears passwordChangeRequired (first login / access reset). Compare-and-set on the hash
+    // AND the MFA state checked above, so the rebind below binds exactly the state that was verified;
+    // if MFA is enabled after this write, the rebound session stops matching.
+    await this.users.setPasswordHash(user.id, passwordHash, user.passwordHash, user.mfaEnabledAt);
+    await this.sessions.replaceCredential(
+      auth.sessionId,
+      auth.session,
+      passwordHash,
+      user.mfaEnabledAt,
+    );
     const revoked = await this.sessions.revokeAllForUser(user.id, {
       exceptSessionId: auth.sessionId,
     });
@@ -205,7 +243,7 @@ export class AuthService {
       action: AUDIT_ACTIONS.authPasswordChanged,
       entityType: 'User',
       entityId: user.id,
-      metadata: { otherSessionsRevoked: revoked },
+      metadata: { otherSessionsRevoked: revoked, wasRequired: user.passwordChangeRequired },
     });
   }
 
@@ -301,18 +339,6 @@ export class AuthService {
       metadata: { reason, emailHash, ipHash },
     });
   }
-}
-
-export function toAuthUser(
-  user: Pick<UserForAuth, 'id' | 'email' | 'displayName' | 'roles'>,
-): AuthUser {
-  return {
-    id: user.id,
-    email: user.email,
-    displayName: user.displayName,
-    roles: user.roles,
-    permissions: [...permissionsForRoles(user.roles)].sort(),
-  };
 }
 
 function assertPasswordPolicy(

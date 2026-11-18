@@ -68,7 +68,7 @@ class RenderToolTests(unittest.TestCase):
         self.assertEqual(self.base.stat().st_mode & 0o777, 0o700)
         generated = json.loads((self.base / 'generated.json').read_text())
         reviewers = json.loads((self.base / 'reviewers.json').read_text())
-        self.assertEqual(len(set(generated.values())), 3)
+        self.assertEqual(len(set(generated.values())), 4)
         for value in [*generated.values(), reviewers['gate']['password']]:
             self.assertNotIn(value, output)
         before = (self.base / 'generated.json').read_text()

@@ -47,6 +47,11 @@ const approver = {
   password: randomBytes(24).toString('base64url'),
   displayName: 'E2E Payment Verifier',
 };
+const staffMfa = {
+  email: `e2e.mfa.${randomUUID().slice(0, 8)}@example.test`,
+  password: randomBytes(24).toString('base64url'),
+  displayName: 'E2E MFA Registrar',
+};
 let certificateRequestId;
 let eligibilityStudent;
 const eligibilityPrograms = {};
@@ -59,7 +64,10 @@ let examProgram;
 let examSessionId;
 const db = createPrismaClient({ connectionString: databaseUrl });
 try {
-  await createAdmin(db, credentials);
+  // The shared admin fixture signs in directly; the first-login flow has its own fixture below.
+  await createAdmin(db, { ...credentials, requirePasswordChange: false });
+  // Staff MFA e2e (staff-mfa.spec.ts): a CLI-style REGISTRAR that must change its password first.
+  await createAdmin(db, { ...staffMfa, role: 'REGISTRAR' });
 
   // A read-only staff member (test fixture, created directly — no admin bootstrap involved).
   await ensureRoles(db);
@@ -400,6 +408,7 @@ writeFileSync(
     sampleStudent,
     singleSampleStudent,
     examAdmin,
+    staffMfa,
     paymentChecker,
     approver,
     examStudents,

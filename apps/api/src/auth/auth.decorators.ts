@@ -1,5 +1,6 @@
 import { createParamDecorator, type ExecutionContext, SetMetadata } from '@nestjs/common';
 import type { Permission } from '@docversity/types';
+import type { StaffNextStep } from '@docversity/validation';
 import type { Request } from 'express';
 import { Errors } from '../common/app-error.js';
 import type { SessionRecord } from './session.store.js';
@@ -15,6 +16,7 @@ export type CsrfMode = 'session' | 'pre-auth';
 export const AUTH_MODE_KEY = 'docversity:auth-mode';
 export const CSRF_MODE_KEY = 'docversity:csrf-mode';
 export const PERMISSIONS_KEY = 'docversity:permissions';
+export const ALLOWED_STEPS_KEY = 'docversity:allowed-staff-steps';
 
 /** No session required (e.g. health, login). `optional` still attaches a session if one is present. */
 export const Public = (mode: Exclude<AuthMode, 'required'> = 'none') =>
@@ -23,6 +25,18 @@ export const CsrfPreAuth = () => SetMetadata(CSRF_MODE_KEY, 'pre-auth' satisfies
 /** Requires ALL listed permissions. Implies an authenticated session. */
 export const RequirePermissions = (...permissions: Permission[]) =>
   SetMetadata(PERMISSIONS_KEY, permissions);
+
+/**
+ * Lets a RESTRICTED staff session (pending password change, MFA verification or MFA enrollment) reach
+ * this route. Every other route answers 403 with PASSWORD_CHANGE_REQUIRED / MFA_REQUIRED /
+ * MFA_ENROLLMENT_REQUIRED (enforced by the AuthGuard, never by the frontend).
+ */
+export const AllowDuringStep = (...steps: StaffNextStep[]) => SetMetadata(ALLOWED_STEPS_KEY, steps);
+export const ALL_STAFF_STEPS: readonly StaffNextStep[] = [
+  'PASSWORD_CHANGE',
+  'MFA_VERIFY',
+  'MFA_ENROLL',
+];
 
 export interface AuthenticatedUser {
   id: string;
@@ -37,6 +51,9 @@ export interface AuthContext {
   sessionId: string;
   session: SessionRecord;
   user: AuthenticatedUser;
+  /** Null for a full session. Otherwise the only step this session may complete (permissions are empty). */
+  nextStep: StaffNextStep | null;
+  mfaEnabled: boolean;
 }
 
 export type AuthenticatedRequest = Request & { auth?: AuthContext };

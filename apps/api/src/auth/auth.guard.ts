@@ -1,19 +1,31 @@
 import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { permissionsForRoles } from '@docversity/types';
+import { type Permission, permissionsForRoles } from '@docversity/types';
+import type { StaffNextStep } from '@docversity/validation';
 import type { Response } from 'express';
 import { Errors } from '../common/app-error.js';
 import { currentRequestContext } from '../common/request-context.js';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 import { UsersService } from '../users/users.service.js';
-import { AUTH_MODE_KEY, type AuthenticatedRequest, type AuthMode } from './auth.decorators.js';
+import {
+  ALLOWED_STEPS_KEY,
+  AUTH_MODE_KEY,
+  type AuthenticatedRequest,
+  type AuthMode,
+} from './auth.decorators.js';
 import { cookieNames, readCookie, sessionCookieOptions } from './cookies.js';
 import { SessionStore } from './session.store.js';
+import { staffNextStep, stepRequiredError } from './staff-steps.js';
 
 /**
  * Global guard #1 — authentication. Every route requires a valid session unless marked
  * `@Public()`. The user (status + roles) is reloaded from the database on every request, so
  * disabling a user or changing roles takes effect immediately. Redis failures fail closed (503).
+ *
+ * Restricted sessions (pending MFA verification, required password change, required MFA enrollment —
+ * see staff-steps.ts) reach only routes marked `@AllowDuringStep(step)`. Anywhere else a required
+ * route answers 403 with the step's error code and an optional route treats the caller as anonymous.
+ * Restricted sessions carry no permissions at all.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -51,22 +63,41 @@ export class AuthGuard implements CanActivate {
       if (mode === 'required') throw Errors.sessionExpired();
       return true;
     }
+    // The session is bound to the password hash AND the account's MFA state (see
+    // SessionStore.credentialVersion). A session authenticated before MFA was switched on — including
+    // a password-only login that raced the enrollment commit — no longer matches from the next request.
+    // Services that create or rebind sessions re-check this against their own fresh read.
     // A credential update spans SQL and Redis. Deny this request without deleting its live session.
-    if (!this.sessions.matchesCredential(record, user.passwordHash)) {
+    if (!this.sessions.matchesCredential(record, user.passwordHash, user.mfaEnabledAt)) {
       if (mode === 'required') throw Errors.sessionExpired();
       return true;
+    }
+
+    const nextStep = staffNextStep(record, user, this.config);
+    if (nextStep) {
+      const allowed =
+        this.reflector.getAllAndOverride<StaffNextStep[] | undefined>(ALLOWED_STEPS_KEY, [
+          context.getHandler(),
+          context.getClass(),
+        ]) ?? [];
+      if (!allowed.includes(nextStep)) {
+        if (mode === 'required') throw stepRequiredError(nextStep);
+        return true;
+      }
     }
 
     const session = await this.sessions.touch(sessionId, record);
     request.auth = {
       sessionId,
       session,
+      nextStep,
+      mfaEnabled: user.mfaEnabled,
       user: {
         id: user.id,
         email: user.email,
         displayName: user.displayName,
         roles: user.roles,
-        permissions: permissionsForRoles(user.roles),
+        permissions: nextStep ? new Set<Permission>() : permissionsForRoles(user.roles),
       },
     };
     const requestContext = currentRequestContext();

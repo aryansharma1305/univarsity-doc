@@ -60,7 +60,11 @@ Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
 - **Maker–checker:** apart from SUPER_ADMIN, no role can both prepare and approve the same thing
   (`results.write` + `results.publish`; `certificates.generate` + `certificates.issue`).
 - **VIEWER is read-only.**
-- **Only SUPER_ADMIN manages users and settings.**
+- **Only SUPER_ADMIN manages users and settings.** `users.manage` guards the staff administration
+  endpoints (`/api/v1/staff-users`: list, MFA/password access reset, disable) — ADR-0021.
+- **Restricted staff sessions hold no permissions.** While a session must verify MFA, change its
+  password or enroll MFA, the `AuthGuard` attaches an empty permission set and admits only the step's
+  own endpoints (403 `MFA_REQUIRED` / `PASSWORD_CHANGE_REQUIRED` / `MFA_ENROLLMENT_REQUIRED`).
 - **Academic masters and student records (Phase 4):** every role reads; only SUPER_ADMIN and REGISTRAR change them.
 - **Imports (Phase 5):** `imports.run` was split per import type. Only SUPER_ADMIN and REGISTRAR run student
   imports and read import history (`imports.students.run`, `imports.read`); committing additionally
