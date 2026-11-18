@@ -1482,7 +1482,12 @@ describe('shared client address (campus NAT) and the MFA per-IP limit', () => {
 describe('the non-refunded per-IP total cap applies to MFA verify', () => {
   it('stops correct codes from one address after LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP', async () => {
     const capped = await createTestApp(
-      realConfig({ TRUST_PROXY: 'loopback', LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP: 2 }),
+      realConfig({
+        TRUST_PROXY: 'loopback',
+        LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP: 2,
+        // Same key as `app`, where the authenticators below are enrolled.
+        STAFF_MFA_ENCRYPTION_KEY: config.STAFF_MFA_ENCRYPTION_KEY,
+      }),
     );
     try {
       const people = [];
