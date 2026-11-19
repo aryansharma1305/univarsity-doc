@@ -45,8 +45,10 @@ Keep the report-uri. Rollback of stage 2: redeploy the stage-1 web image (web-on
 
 ## Not covered
 
-- No Vercel deployment exists (docs/development/phase-14b-live-staging-deployment.md); `vercel.live`
-  is intentionally not allowed. Add it only if a Vercel preview is ever introduced.
+- Vercel: the GitHub repository has a Vercel integration (PR checks "Vercel" / "Vercel Preview
+  Comments"), i.e. PR preview builds; production never runs on Vercel. The `vercel.live` comment
+  toolbar is intentionally not allowed, so it is blocked (report-only: reported) on previews. Allow
+  `https://vercel.live` only if the team wants preview comments, and only for `VERCEL_ENV=preview`.
 - `style-src 'unsafe-inline'` stays (React style props, motion/GSAP, sonner). Low risk without script
   injection; revisit only with a style-nonce design.
 - `/csp-report` is unauthenticated by nature; it logs one short line per report, bodies ≤ 8 KB, and

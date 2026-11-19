@@ -12,8 +12,9 @@
  * origin (no Google CDN at runtime); the homepage MOTION_GUARD inline script and GSAP/motion from the
  * bundle; same-origin API calls through the `/api/v1` proxy; images from `/api/v1/*`, `data:` (MFA QR)
  * and `blob:` (photo previews); PDF previews in `blob:` iframes; the Razorpay test payment button
- * script (`https://checkout.razorpay.com`) and its checkout frames. No Vercel deployment exists
- * (docs/development/phase-14b-live-staging-deployment.md), so no vercel.live toolbar is allowed.
+ * script (`https://checkout.razorpay.com`) and its checkout frames. The repository has a Vercel GitHub
+ * integration that builds PR previews only (production is the Hostinger VPS); its vercel.live comment
+ * toolbar is deliberately not allowed, so it is blocked on previews and nothing else changes.
  */
 
 export const CSP_REPORT_PATH = '/csp-report';
