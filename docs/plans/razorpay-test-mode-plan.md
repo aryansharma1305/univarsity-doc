@@ -106,7 +106,7 @@ test-mode pilot on staging cannot start until the gap is closed.
 | A4  | The verifier accepts only `payment.captured` / `payment.failed` and ignores `order_id`. Any other signed event (for example `order.paid`, `refund.*`) is refused with 400. Razorpay treats non-2xx as a failure, retries for 24 hours, and then **disables the webhook** ([best practices][rp-wh-bp]). | `packages/payments/src/razorpay.ts:4-19`, `:44-49`; `payment-buttons.service.ts:133-137` | S      | High: one subscribed but unhandled event can disable the whole webhook | **Yes**                              |
 | A5  | Reconciliation `buttonId` is pinned to the mentor's re-exam button (contract and DB CHECK), while the test embed must use a different button.                                                                                                                                                          | `packages/validation/src/payment-buttons.ts:46`; `migration.sql:65`                      | S      | Medium: test reconciliation records the wrong button                   | **Yes** for button-based reconciling |
 | A6  | The reviewer gate wraps every path, so Razorpay cannot reach the webhook on staging.                                                                                                                                                                                                                   | `deploy/review-site.caddy:17-18`                                                         | S      | High if the bypass is too wide                                         | **Yes**                              |
-| A7  | It is not proven that the Next.js rewrite proxy keeps the body bytes unchanged.                                                                                                                                                                                                                        | `apps/web/src/proxy.ts:15-23`; `deploy/Caddyfile.production:12-14`                       | S      | Medium: every signature fails                                          | **Yes** until verified               |
+| A7  | **Resolved (section 8.1):** the bytes are preserved through Caddy, the Next.js proxy and `raw()`, shown by a local check. Remaining hardening: accept any Content-Type on this route, and add a 64 KB cap at Caddy.                                                                                    | `apps/web/src/proxy.ts:9-24`; `apps/api/src/app.setup.ts:42-43`                          | S      | Low                                                                    | No (hardening in P3)                 |
 | A8  | The per-IP limit (60/min) returns 429, and the limiter fails closed when Redis is down. Both are non-2xx, so Razorpay retries, and if they persist for 24 hours it disables the webhook.                                                                                                               | `payment-buttons.service.ts:118-123`                                                     | S      | Medium                                                                 | No (monitor)                         |
 | A9  | No refund or dispute states on the obligation. Six dispute events and four refund events exist upstream.                                                                                                                                                                                               | `packages/database/prisma/schema.prisma:139-145`                                         | M      | Medium                                                                 | No (blocks only verification step 9) |
 | A10 | No authenticated re-fetch of the payment or order before acting. Staff reconcile against a stored snapshot.                                                                                                                                                                                            | `payment-buttons.service.ts:200-227`                                                     | S      | Medium: stale refund state                                             | No                                   |
@@ -115,9 +115,10 @@ test-mode pilot on staging cannot start until the gap is closed.
 | A13 | No web Content-Security-Policy was found that allows `checkout.razorpay.com`. If one is added later, Checkout will break. The current CSP state is UNVERIFIED.                                                                                                                                         | `apps/web` (no CSP match found)                                                          | S      | Low                                                                    | No                                   |
 | A14 | `packages/payments/README.md` still says the branch is uncommitted.                                                                                                                                                                                                                                    | `packages/payments/README.md`                                                            | S      | Low                                                                    | No                                   |
 
-**Pilot readiness verdict: NOT READY.** Six gaps block a Razorpay test-mode pilot on staging: A1, A2,
-A4, A6 and A7, plus A3 for an Orders pilot or A5 for a button pilot. Reaching a minimal Orders-based
-pilot needs phases P1–P3 and P6, about 11 engineer-days. The signature verification, event-id dedupe
+**Pilot readiness verdict: NOT READY.** Five gaps still block a Razorpay test-mode pilot on staging: A1,
+A2, A4 and A6, plus A3 for an Orders pilot or A5 for a button pilot. A7 is resolved (no change is needed
+to preserve the bytes). Each remaining gap has a design in section 8. Reaching a minimal Orders-based
+pilot needs phases P1–P3 and P6, about 14 engineer-days (revised in section 9.1). Section 9 lists the implementation steps. The signature verification, event-id dedupe
 and append-only evidence already on `main` match current Razorpay documentation and can be kept.
 
 ---
@@ -391,11 +392,11 @@ following the `retotaling_events` pattern.
 
 ### 4.1 Flags that keep production disabled
 
-Add these to the API env schema (`apps/api/src/config/api-config.ts`, Zod, fail fast at startup):
+Add these to the API env schema (`apps/api/src/config/api-config.ts`, Zod, fail fast at startup). The full schema is in section 8.4:
 
 | Variable                               | Values                               | Rule                                                                                                                                                          |
 | -------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PAYMENTS_RAZORPAY_MODE`               | `disabled` (default) \| `test`       | There is **no `live` value**. Live mode needs a code change, a review and a university sign-off.                                                              |
+| `PAYMENTS_RAZORPAY_MODE`               | `off` (default) \| `test` \| `live`  | `live` always refuses to start until a reviewed code change sets the approval constant (section 8.4).                                                         |
 | `PAYMENTS_ALLOWED_DEPLOYMENT`          | free text, for example `staging-14c` | Required when the mode is `test`. Must match `DOCVERSITY_DEPLOYMENT` (a new variable, set per instance). The production instance never sets an allowed value. |
 | `RAZORPAY_KEY_ID`                      | string                               | Required when the mode is `test`, and must start with `rzp_test_`. Startup refuses `rzp_live_`. The spelling is a guard, not proof; see section 5, step 1.    |
 | `RAZORPAY_KEY_SECRET`                  | secret                               | Required when the mode is `test`. 16–256 bytes. Never logged.                                                                                                 |
@@ -406,7 +407,7 @@ Add these to the API env schema (`apps/api/src/config/api-config.ts`, Zod, fail 
 Startup refuses to boot when:
 
 - the mode is `test` and `DOCVERSITY_DEPLOYMENT` is unset or does not equal `PAYMENTS_ALLOWED_DEPLOYMENT`;
-- any `RAZORPAY_*` variable is set while the mode is `disabled`, which catches misconfiguration;
+- any `RAZORPAY_*` variable is set while the mode is `off`, which catches misconfiguration;
 - the key id looks like a live key.
 
 The contract literals `liveTransactionsEnabled: false` and `checkout.mode: 'TEST'` stay in
@@ -478,7 +479,7 @@ registrations are synthetic.
     exceeds the capture.
 11. **Reconciliation run:** trigger the daily job by hand. Confirm 0 drift, or an explicit "no test
     settlement" note, and that a deliberately orphaned capture is reported.
-12. **Disabled check:** on the same build with `PAYMENTS_RAZORPAY_MODE=disabled`, the webhook returns
+12. **Disabled check:** on the same build with `PAYMENTS_RAZORPAY_MODE=off`, the webhook returns
     404 and the panels return `UNAVAILABLE`. A grep of the **production** environment shows no
     `RAZORPAY_*` variables.
 13. **Logs:** search the staging logs for the key secret, the webhook secret and signature values.
@@ -538,6 +539,387 @@ separate, later change and is not estimated here.
 | Double payment through the manual QR flow and Razorpay                                                     | Medium         | Refund work and student complaints       | D9. Disable QR start while a Razorpay order is open, and the reverse.                                                                                                                      |
 | Razorpay behaviour differs from the docs checked on 2026-11-19 (receipt uniqueness, test-mode settlements) | Low–Medium     | Rework                                   | Section 3.0 marks the UNVERIFIED items; staging steps 9 and 11 test them. Re-check the docs in P0.                                                                                         |
 | Currency exponent mistakes for currencies other than INR                                                   | Low (INR only) | Charges 100× too much or too little      | D2. Only INR at first. Write an exponent table test before adding any other currency.                                                                                                      |
+
+## 8. Resolution of the pilot-blocking gaps
+
+### 8.1 A7: are the webhook bytes preserved? Yes, with three caveats
+
+The path on staging is Caddy, then Next.js, then the API. Production is the same (see
+`deploy/Caddyfile.production:12-14` for the production edge).
+
+| Hop           | Code                                               | What it does to the body                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Caddy         | `deploy/review-site.caddy:7-11`, `:32-36`          | `request_body max_size 16MiB`. `reverse_proxy` streams the body without changing it. The `encode` directive applies to responses only.                                                                                                                                                                                                                                                                                                                   |
+| Next.js proxy | `apps/web/src/proxy.ts:9-24`                       | `NextResponse.rewrite` passes only headers (it copies all of them and drops `x-forwarded-for` / `x-real-ip` when it is the edge). Next 16.3.8 clones the body stream chunk by chunk (`next/dist/server/body-streams.js`, `cloneBodyStream`), with no decoding or JSON parsing. The limit is `experimental.proxyClientMaxBodySize` (`apps/web/next.config.ts:38-41`, 16 MiB). **Over the limit, Next only logs a warning and forwards a truncated body.** |
+| API           | `apps/api/src/app.setup.ts:42-43`; `main.ts:15-18` | `express.raw({ type: 'application/json', limit: '64kb' })` is mounted in `configureApp`. Nest's own `json()` and `urlencoded()` parsers are registered later, in `NestApplication.init()` → `registerParserMiddleware`, so `raw()` reads the stream first and `json()` then skips it. The handler receives a `Buffer`.                                                                                                                                   |
+
+Evidence: a local check (`apps/api/.local/raw-body-check.mjs`, kept outside Git under the ignored
+`.local/` directory; no Docker and no network beyond loopback) used the installed Next 16.3.8
+`getCloneableBody` and Express 5.2.1 / body-parser 2.3.0, mounted in the same order as the API. It
+sent a body with irregular spacing, `\u` escapes, raw multi-byte UTF-8, an integer larger than 2^53
+and a trailing newline, split mid-codepoint across chunks. Results:
+
+- Next clone under the limit: **byte-identical** to the input.
+- Next clone over the limit: truncated silently, so the HMAC then fails (fails closed).
+- API, `application/json`: `Buffer`, and the HMAC matches.
+- API, `application/json; charset=utf-8`: `Buffer`, and the HMAC matches.
+- API, `text/plain`: **not** raw-parsed (`req.body` is not a Buffer), so the handler refuses it with 400.
+- API, a body over 64 KB: 413.
+
+Where the bytes could still be changed, and the fix for each:
+
+1. **JSON re-serialization.** This happens only if somebody adds a global `express.json()` or Nest
+   `rawBody`/`bodyParser` option _before_ `configureApp`, or moves the webhook under a parsed route.
+   Fix: keep the existing route-scoped `raw()`, and add an integration test that signs an
+   irregular-whitespace body like the one above. The current tests sign `JSON.stringify` output,
+   which would also survive a parse-and-re-stringify round trip, so they would not catch this
+   regression.
+2. **Content type.** A Content-Type that is not JSON skips `raw()` and returns 400. Razorpay retries
+   any 4xx, and after 24 hours of failures the webhook is disabled. Razorpay's Content-Type is
+   UNVERIFIED. Fix: on this route only, use `raw({ type: () => true, limit: '64kb' })` and let the
+   HMAC decide.
+3. **Size.** Next truncates silently over 16 MiB, but the 64 KB API limit and the Caddy cap come
+   first. Fix: add a 64 KB `request_body` cap on the webhook route at Caddy (section 8.2).
+4. **Content-Encoding.** body-parser inflates gzip by default. Whether Razorpay compresses request
+   bodies is UNVERIFIED; record the header in staging step 3. If it is ever present, the HMAC must be
+   computed over the bytes Razorpay signed, which the docs call the "raw request body".
+
+### 8.2 A6: getting webhooks through the reviewer gate on staging
+
+The gate is a private snippet `(reviewer_gate) { basic_auth @gated {...} }` (generated by
+`staging.py review-init`), applied by `@gated not path /robots.txt` (`review-site.caddy:17-18`).
+Razorpay cannot send Basic credentials. Design (staging only, opt-in):
+
+```caddy
+# deploy/razorpay-webhook.caddy — imported only when staging.py runs with --razorpay-test-webhook
+@razorpay_webhook {
+	method POST
+	path /api/v1/payment-buttons/webhook
+}
+# review-site.caddy: the gate matcher excludes exactly this method+path
+@gated {
+	not path /robots.txt
+	not {
+		method POST
+		path /api/v1/payment-buttons/webhook
+	}
+}
+handle @razorpay_webhook {
+	request_body {
+		max_size 64KB
+	}
+	reverse_proxy {$WEB_UPSTREAM:web:3000} {
+		header_up X-Forwarded-For {client_ip}
+	}
+}
+```
+
+- Route the webhook **through `web`**, as all other `/api` traffic goes. Proxying straight to the API
+  would change the hop count that `TRUST_PROXY=2` assumes, and the rate-limit key would then become
+  an internal IP. Section 8.1 shows the web hop is byte-safe.
+- Without the flag, `@gated` keeps its current form, so the file and the route are absent. The
+  production edge (`Caddyfile.production`) has no gate and is not changed.
+- `gate_regression.py` (`public_route_order`, `:149-160`) and `edge_regression.py` gain one explicit
+  exception, and assert that:
+  - `GET` on the webhook path, and any other path, still get 401;
+  - `POST /api/v1/payment-buttons/webhookX` and `/api/v1/payment-buttons/webhook/../x` are still gated;
+  - the exception exists only when the flag is set.
+- Optional: add a `remote_ip` allow-list built from Razorpay's published webhook IPs. The list is
+  UNVERIFIED and must be fetched from the docs at setup time.
+
+Security trade-offs:
+
+| Trade-off                                                                    | Effect                                                                                                                            | Mitigation                                                                                                                                                                   |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One unauthenticated POST endpoint becomes reachable on a gated reviewer host | The HMAC is the only authentication on that path. Anyone can make the API do a bounded amount of work (64 KB read plus one HMAC). | 64 KB cap at Caddy and in the API. The HMAC check comes before any database or Redis work (section 8.3). Per-IP limit on _unverified_ requests only. Optional IP allow-list. |
+| A leaked webhook secret lets an attacker forge "captured" events             | In test mode the only effect is that synthetic obligations are marked paid.                                                       | Order-bound matching plus amount/currency/account checks, re-fetching the payment with the API key before fulfilment (P3), and rotating the secret after the test window.    |
+| The reviewer host becomes discoverable through Razorpay's webhook config     | The hostname is shared with Razorpay.                                                                                             | Use the staging host only. Disable the webhook in the dashboard after the window.                                                                                            |
+| Responses leak information                                                   | Error bodies could reveal whether test mode is on.                                                                                | Return identical `{received:true}` bodies for every verified outcome, and the generic 400 for a bad signature. With the mode off, the API returns 404 as it does today.      |
+| The bypass could leak into production config                                 | Production would expose an extra route.                                                                                           | The snippet is imported only by `staging.py` behind the flag, and the regression scripts assert that it is absent by default.                                                |
+
+### 8.3 A4: handling events that are signed but not recognized
+
+Rule: **once the signature verifies, Razorpay always gets a 2xx**, unless there is a transient
+failure on our side (5xx), which should be retried. Order of steps in the handler (replacing
+`payment-buttons.service.ts:116-162`):
+
+1. If the mode is `off`, return 404 (unchanged).
+2. Check the size and headers, then the HMAC over the `Buffer`. On failure: increment the per-IP
+   unverified-request counter, return **400**, and log a metric with no body. Rate-limit **only** this
+   branch. Verified requests are never answered with 429, which removes gap A8.
+3. Parse only the envelope (`entity`, `account_id`, `event`, `created_at`), and read the event id
+   from the header.
+4. Under `pg_advisory_xact_lock(hashtext(eventId))`, check both `razorpay_webhook_receipts` and the
+   new `razorpay_webhook_ignored` for that event id.
+   - Same id and same body digest: return **200** (replay).
+   - Same id, different digest: return **200**, store a `DIGEST_CONFLICT` ignored row, write the audit
+     event `RAZORPAY_WEBHOOK_IGNORED` with reason `DIGEST_CONFLICT`, and raise an alert. This replaces
+     today's 409 at `:145`, because a signed body is authentic and a 409 would retry for 24 hours and
+     then disable the webhook.
+5. Decide the outcome:
+   - An `account_id` that does not match the configured account: store an ignored row with reason
+     `ACCOUNT_MISMATCH`, alert, and return 200.
+   - An `event` not in the handled set, or a payload that fails the strict schema for a handled event:
+     store an ignored row with reason `UNHANDLED_EVENT` or `UNPARSEABLE`. Keep `event_type`
+     (≤ 64 characters, `[a-z._]`), the body SHA-256 and `created_at`, and **no payload**. Audit it
+     and return 200.
+   - A handled event: process it in the same transaction and return 200.
+6. A database, Redis or audit failure returns 5xx so that Razorpay retries. Razorpay disables the
+   webhook only after 24 hours of continuous failure ([best practices][rp-wh-bp]). Alert on the
+   Razorpay "webhook disabled" email, and on more than 5 % non-2xx responses per hour.
+
+Handled set for the pilot: `payment.captured`, `payment.failed`, `order.paid`. The test webhook is
+subscribed to exactly these. Adding `refund.*` or `payment.dispute.*` later is a code change plus a
+dashboard change, and while the code lags the dashboard those events are safely ignored.
+
+### 8.4 A1, A2, A3: configuration, data model and API surface
+
+**Configuration.** This replaces the table in section 4.1. It is parsed in `apps/api/src/config/api-config.ts`:
+
+```ts
+// shortcut: live approval is a code constant, so enabling live mode is always a reviewed commit.
+const RAZORPAY_LIVE_APPROVAL_REF: string | null = null; // e.g. 'ADR-00xx' once the university signs off
+
+const razorpayEnv = z
+  .object({
+    PAYMENTS_RAZORPAY_MODE: z.enum(['off', 'test', 'live']).default('off'),
+    PAYMENTS_RAZORPAY_LIVE_APPROVAL: z.string().optional(), // must equal RAZORPAY_LIVE_APPROVAL_REF
+    PAYMENTS_ALLOWED_DEPLOYMENT: z
+      .string()
+      .regex(/^[a-z0-9-]{3,40}$/)
+      .optional(),
+    DOCVERSITY_DEPLOYMENT: z
+      .string()
+      .regex(/^[a-z0-9-]{3,40}$/)
+      .optional(),
+    RAZORPAY_KEY_ID: z
+      .string()
+      .regex(/^rzp_(test|live)_[A-Za-z0-9]{8,32}$/)
+      .optional(),
+    RAZORPAY_KEY_SECRET: z.string().min(16).max(256).optional(),
+    RAZORPAY_WEBHOOK_SECRET: z.string().min(32).max(256).optional(),
+    RAZORPAY_ACCOUNT_ID: z
+      .string()
+      .regex(/^acc_[A-Za-z0-9]{1,50}$/)
+      .optional(),
+    PAYMENTS_TEST_REGISTRATION_ALLOWLIST: z.string().optional(), // comma-separated UUIDs
+  })
+  .superRefine((e, ctx) => {
+    const set = [
+      'RAZORPAY_KEY_ID',
+      'RAZORPAY_KEY_SECRET',
+      'RAZORPAY_WEBHOOK_SECRET',
+      'RAZORPAY_ACCOUNT_ID',
+    ] as const;
+    if (e.PAYMENTS_RAZORPAY_MODE === 'off') {
+      if (set.some((k) => e[k]))
+        ctx.addIssue({ code: 'custom', message: 'RAZORPAY_* set while mode is off' });
+      return;
+    }
+    if (set.some((k) => !e[k]))
+      ctx.addIssue({ code: 'custom', message: 'missing RAZORPAY_* for enabled mode' });
+    if (!e.DOCVERSITY_DEPLOYMENT || e.DOCVERSITY_DEPLOYMENT !== e.PAYMENTS_ALLOWED_DEPLOYMENT)
+      ctx.addIssue({ code: 'custom', message: 'deployment not allowed for payments' });
+    if (e.RAZORPAY_WEBHOOK_SECRET && [e.RAZORPAY_KEY_SECRET].includes(e.RAZORPAY_WEBHOOK_SECRET))
+      ctx.addIssue({ code: 'custom', message: 'webhook secret must differ from key secret' });
+    const live = e.RAZORPAY_KEY_ID?.startsWith('rzp_live_');
+    if (e.PAYMENTS_RAZORPAY_MODE === 'test' && live)
+      ctx.addIssue({ code: 'custom', message: 'live key in test mode' });
+    if (
+      e.PAYMENTS_RAZORPAY_MODE === 'live' &&
+      (RAZORPAY_LIVE_APPROVAL_REF === null ||
+        e.PAYMENTS_RAZORPAY_LIVE_APPROVAL !== RAZORPAY_LIVE_APPROVAL_REF)
+    )
+      ctx.addIssue({ code: 'custom', message: 'live mode is not approved' });
+  });
+```
+
+The same superRefine also enforces these rules:
+
+- `RAZORPAY_WEBHOOK_SECRET` must differ from `SESSION_SECRET` and `STAFF_MFA_ENCRYPTION_KEY`.
+- `live` refuses a `rzp_test_` key.
+- While `RAZORPAY_LIVE_APPROVAL_REF` is `null`, `live` **always** fails at startup. The contract
+  literals `liveTransactionsEnabled: z.literal(false)` and `checkout.mode: z.literal('TEST')` stay
+  until the same reviewed change.
+- `PaymentButtonPolicyService.definition()` is deleted. `fixture()` becomes `policy()`, which builds
+  from `ApiConfig` (mode, account id, secrets, allowlist). Unit tests inject config through the
+  existing `API_CONFIG` token instead of spying on `definition()`.
+- The `test`-only `reExamTestButtonId` is dropped from the policy; buttons are not used in the
+  Orders pilot.
+- `.env.example` and `deploy/env/api.env.example` gain the names with empty values and
+  `PAYMENTS_RAZORPAY_MODE=off`.
+
+**Migration outline. Not written; to be generated with `prisma migrate diff`.**
+
+```text
+enum RazorpayOrderStatus { RESERVED CREATED PAID ABANDONED CREATE_FAILED }
+
+razorpay_orders
+  id                 uuid  pk default uuidv7
+  payment_id         uuid  not null fk re_exam_payments(id) on delete restrict
+  attempt            int   not null check (attempt between 1 and 99)
+  receipt            varchar(40) not null unique      -- 'rx_' || replace(payment_id,'-','') || '_' || attempt
+  mode               varchar(4) not null check (mode = 'TEST')   -- widened only by the live-approval change
+  account_id         varchar(64) not null
+  provider_order_id  varchar(64) unique null          -- 'order_…', write-once
+  amount_minor       int   not null check (amount_minor >= 100)
+  currency           char(3) not null
+  status             RazorpayOrderStatus not null default 'RESERVED'
+  student_account_id uuid  not null fk student_accounts(id) on delete restrict
+  created_at, updated_at timestamptz(3)
+  unique (payment_id, attempt)
+  partial unique index (payment_id) where status = ANY (ARRAY['RESERVED','CREATED'])  -- one open order
+  trigger DV001: amount_minor/currency must equal re_exam_payments row; provider_order_id write-once;
+                 status forward-only (RESERVED→CREATED|CREATE_FAILED, CREATED→PAID|ABANDONED); no DELETE
+
+razorpay_order_events   (append-only, DV001 on UPDATE/DELETE)
+  id, order_id fk, kind ('RESERVED'|'CREATED'|'CHECKOUT_RETURNED'|'PAID'|'ABANDONED'|'CREATE_FAILED'),
+  receipt_id fk razorpay_webhook_receipts null, actor_user_id null, actor_account_id null, created_at
+
+razorpay_webhook_ignored   (append-only)
+  id, event_id varchar(128) not null, event_type varchar(64), body_sha256 char(64),
+  reason ('UNHANDLED_EVENT'|'UNPARSEABLE'|'ACCOUNT_MISMATCH'|'DIGEST_CONFLICT'), created_at
+  index (event_id)   -- not unique: a DIGEST_CONFLICT row shares the id of the first delivery
+
+alter razorpay_webhook_receipts add provider_order_id varchar(64) null, index
+  (append-only trigger already blocks updates; new rows only)
+alter razorpay_webhook_receipts: allow event_type 'order.paid' (application-level enum)
+drop + recreate razorpay_reconciliation_button CHECK → button_id ~ '^pl_[A-Za-z0-9]{1,50}$' (A5)
+enum ReExamPaymentSubmissionSource gains 'RAZORPAY_TEST' (or audit-metadata only; decide in P2 review)
+```
+
+**API surface.**
+
+| Route                                                       | Guard                                                                | Behaviour                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/student/re-exam-payments/:id/razorpay-order`  | `@StudentRoute()`, CSRF, own payment, rate limit (5/min per account) | Mode `test` only, otherwise 404. The obligation must be `AWAITING_PAYMENT` with a usable destination and its registration on the allowlist. Reserve, then create at Razorpay, then store. Replays return the same order. Response: `{ orderId, keyId, amountMinor, currency, mode: 'TEST' }`, with no secret and no PII prefill. |
+| `POST /api/v1/student/re-exam-payments/:id/razorpay-return` | `@StudentRoute()`, CSRF                                              | Body `{ razorpay_order_id, razorpay_payment_id, razorpay_signature }`. Verifies the checkout HMAC and appends a `CHECKOUT_RETURNED` event. **Never** changes payment status. Returns `{ status: 'AWAITING_CONFIRMATION' }`.                                                                                                      |
+| `GET /api/v1/student/payment-buttons/re-exam/:id` (exists)  | unchanged                                                            | `checkout` becomes a discriminated union: `{ mode:'TEST', kind:'ORDER' }`, or the existing button shape, which is retained only for the unit tests.                                                                                                                                                                              |
+| `POST /api/v1/payment-buttons/webhook` (exists)             | `@Public()`, HMAC                                                    | Section 8.3. Order-bound fulfilment moves the obligation to `VERIFIED`; the academic application is unchanged.                                                                                                                                                                                                                   |
+| `GET /api/v1/payment-buttons/re-exam/:id/receipts` (exists) | `reExamPayments.verify`                                              | Adds `orders[]` with status and `providerOrderId`.                                                                                                                                                                                                                                                                               |
+| Outbound client `packages/payments/src/razorpay-client.ts`  | server only                                                          | `createOrder`, `findOrdersByReceipt`, `fetchPayment`. Fixed base URL `https://api.razorpay.com/v1` (not configurable), Basic auth from config, `AbortSignal.timeout(8000)`, `redirect: 'error'`, strict Zod response parsing, and no logging of the request or response bodies.                                                  |
+
+---
+
+## 9. Implementation checklist (P1–P3 and P6)
+
+Each step is one reviewable commit. A step is done only when its acceptance tests pass, together
+with all of CLAUDE.md §4. Estimates are revised in section 9.1.
+
+**P1: configuration and secrets**
+
+1. **Env schema (section 8.4).** Acceptance: unit tests that
+   - (a) `off` with any `RAZORPAY_*` set refuses to start;
+   - (b) `test` with a missing secret refuses;
+   - (c) `test` with `rzp_live_` refuses;
+   - (d) `live` refuses while `RAZORPAY_LIVE_APPROVAL_REF` is null, even with
+     `PAYMENTS_RAZORPAY_LIVE_APPROVAL` set;
+   - (e) a deployment mismatch refuses;
+   - (f) a webhook secret equal to the key secret or `SESSION_SECRET` refuses;
+   - (g) the default (`off`) boots, and the webhook returns 404, as in the existing test at
+     `re-exam-payments.test.ts:1312`.
+2. **Config-backed policy.** Delete `definition()` and inject `ApiConfig`. Acceptance: the existing
+   Razorpay API tests pass with config injection instead of `vi.spyOn(..., 'definition')`, and
+   `grep -R "webhookSecret:" apps/api/src` returns nothing.
+3. **Logger redaction (A12).** Add `signature` to `SENSITIVE_KEY`. Acceptance: a logger unit test
+   shows that `{ 'x-razorpay-signature': 'ab', razorpay_signature: 'cd', keySecret: 'x' }` is redacted.
+4. **Secret scan.** Acceptance: CI fails on a fixture file containing a `rzp_test_` +14-character
+   token, and passes on the current tree.
+5. **Example env files and docs.** Acceptance: `deploy/scripts/check-config.py` accepts
+   `PAYMENTS_RAZORPAY_MODE=off` with no `RAZORPAY_*` variables.
+
+**P2: orders**
+
+6. **Migration (section 8.4).** Acceptance: `pnpm db:check` is clean. DB tests show that:
+   - a second open order for the same payment hits a unique violation;
+   - an amount or currency different from the obligation raises DV001;
+   - changing `provider_order_id` a second time raises DV001;
+   - a backwards status change raises DV001;
+   - DELETE raises DV001;
+   - the relaxed button CHECK accepts a synthetic `pl_` id.
+7. **Outbound client.** Acceptance: unit tests against a local `http.createServer` stub cover a
+   timeout (rejects after 8 s, using a fake clock), a 3xx (rejected), a malformed JSON response
+   (rejected), a duplicate-receipt error (mapped to `DUPLICATE_RECEIPT`), and no secret appearing in
+   error messages.
+8. **Order endpoint.** Acceptance: API tests prove that:
+   - an owner creates an order;
+   - a replay returns the same `orderId`;
+   - 10 concurrent calls produce exactly one Razorpay create on the stub and one row;
+   - another student gets 404;
+   - a crash between the create and the store is recovered through `findOrdersByReceipt`, without a
+     second create;
+   - mode `off` returns 404;
+   - a registration not on the allowlist gets 404;
+   - CSRF is required.
+9. **Checkout return endpoint.** Acceptance: a valid HMAC appends a `CHECKOUT_RETURNED` event and
+   the payment status is unchanged; an invalid HMAC returns 400; a replay is idempotent.
+10. **Web launcher.** Acceptance:
+    - The Vitest component test loads `checkout.js` only when `checkout.kind === 'ORDER'`.
+    - `apps/web/e2e/payment-buttons.spec.ts` still proves that no script is requested when the mode
+      is off.
+    - axe passes and there is no horizontal overflow at 390 px.
+
+**P3: webhook matching**
+
+11. **Verifier extension.** Read `order_id`, add `order.paid`, and split envelope parsing from strict
+    payload parsing. Acceptance: package tests for each handled event, for an unknown event (envelope
+    parsed, payload not), for a larger-than-2^53 integer body (signature still valid), and for an
+    irregular-whitespace body.
+12. **Handler order and the 2xx rule (section 8.3).** Acceptance: API tests prove that:
+    - an unknown signed event → 200, an ignored row, an audit row, and no receipt;
+    - a signed account mismatch → 200 plus an ignored row;
+    - the same event id with a different digest → 200 plus a `DIGEST_CONFLICT` row;
+    - a bad signature → 400, and the 61st bad-signature request from one IP → 429;
+    - 100 verified requests from one IP are never answered with 429;
+    - a database failure → 5xx.
+13. **Order-bound fulfilment (section 3.4).** Acceptance: API tests prove that:
+    - `payment.captured`, `order.paid`, or both in either order → exactly one `VERIFIED`, one
+      `PAID` order event, one audit row, and an unchanged application status;
+    - a 1-paise difference, a currency difference, an `authorized` status, or an unknown `order_id`
+      → receipt stored, not fulfilled, and the order stays `CREATED`;
+    - 20 parallel deliveries → one fulfilment;
+    - a capture on a VOID obligation → flagged as a refund candidate, not fulfilled.
+14. **Re-fetch before fulfilment (A10).** Acceptance: when the stubbed `fetchPayment` returns
+    `refunded`, fulfilment is refused and flagged.
+15. **Raw-content-type hardening (section 8.1, item 2).** Acceptance: a `text/plain` body with a
+    valid signature is accepted, and a body over 64 KB returns 413.
+
+**P6: staging verification**
+
+16. **Caddy snippet behind a `staging.py` flag (section 8.2).** Acceptance:
+    - `gate_regression.py` and `edge_regression.py` pass with the flag both off and on;
+    - the new assertions in section 8.2 pass;
+    - `caddy adapt` output shows that without the flag every reverse proxy except `/robots.txt` is
+      behind `basic_auth`.
+17. **Deploy to staging with `PAYMENTS_RAZORPAY_MODE=test`**, using the secrets from section 4.2.
+    Acceptance: the boot log shows `payments: razorpay mode=test deployment=<name>` and no secret.
+18. **Run section 5, steps 1–13**, keeping the evidence privately. Acceptance: every step passes, the
+    Content-Encoding and Content-Type that Razorpay sends are recorded, and the duplicate-receipt
+    behaviour is observed.
+19. **Tear down.** Set the mode back to `off`, disable the webhook in the dashboard, rotate both
+    secrets, and remove the flag. Acceptance: the webhook returns 404 and the gate is back to its
+    default form.
+
+### 9.1 Revised estimate (pilot scope)
+
+| Phase           | Was | Now                  | Why                                                                                |
+| --------------- | --- | -------------------- | ---------------------------------------------------------------------------------- |
+| P1              | 2   | 2.5                  | Policy refactor touches the existing tests; secret scan.                           |
+| P2              | 4   | 5                    | Outbound client with a stub server; crash-recovery path; checkout-return endpoint. |
+| P3              | 3   | 4                    | Ignored-events table, handler reorder, digest-conflict change, re-fetch.           |
+| P6              | 2   | 2.5                  | Caddy snippet, a flag in `staging.py`, and changes to two regression scripts.      |
+| **Pilot total** | 11  | **14 engineer-days** | P4, P5 and P7 are unchanged (7–9 days) and not needed for the pilot.               |
+
+### 9.2 Decisions needed before P6
+
+- **Ops:**
+  - Authorize the staging-only gate exception and decide whether to add the Razorpay IP allow-list.
+  - Name the person who holds the test keys and the alert inbox for Razorpay's "webhook disabled"
+    email.
+  - Decide which staging hostname is registered in the dashboard, and the test window.
+- **University:** D2 (INR amounts for the synthetic pilot can be placeholders, but the real fee
+  source must be named), D5 (which account the test keys come from) and D7 (Orders API instead of
+  buttons).
 
 ---
 
