@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EnvValidationError } from '@docversity/validation';
-import { loadApiConfig } from '../src/config/api-config.js';
+import { loadApiConfig, RAZORPAY_LIVE_APPROVAL_REF } from '../src/config/api-config.js';
 
 const validEnv = {
   DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
@@ -182,5 +182,125 @@ describe('loadApiConfig', () => {
         SESSION_ABSOLUTE_TIMEOUT_SECONDS: '60',
       }),
     ).toThrow(/SESSION_ABSOLUTE_TIMEOUT_SECONDS/);
+  });
+});
+
+describe('Razorpay payment configuration (synthetic values only)', () => {
+  const testMode = {
+    ...validEnv,
+    PAYMENTS_RAZORPAY_MODE: 'test',
+    DOCVERSITY_DEPLOYMENT: 'staging-14c',
+    PAYMENTS_ALLOWED_DEPLOYMENT: 'staging-14c',
+    RAZORPAY_KEY_ID: 'rzp_test_SYNTHETIC',
+    RAZORPAY_KEY_SECRET: 'synthetic-key-secret-0000',
+    RAZORPAY_WEBHOOK_SECRET: 'synthetic-webhook-secret-00000000000000',
+    RAZORPAY_ACCOUNT_ID: 'acc_Synthetic',
+    PAYMENTS_TEST_REGISTRATION_ALLOWLIST: '0193a8f0-1111-7222-8333-444455556666',
+  };
+
+  it('defaults to off and boots without any Razorpay variable', () => {
+    const config = loadApiConfig(validEnv);
+    expect(config.PAYMENTS_RAZORPAY_MODE).toBe('off');
+    expect(config.RAZORPAY_WEBHOOK_SECRET).toBeUndefined();
+    expect(config.PAYMENTS_TEST_REGISTRATION_ALLOWLIST).toEqual([]);
+    expect(loadApiConfig({ ...validEnv, RAZORPAY_KEY_ID: '' }).PAYMENTS_RAZORPAY_MODE).toBe('off');
+  });
+
+  it.each([
+    'RAZORPAY_KEY_ID',
+    'RAZORPAY_KEY_SECRET',
+    'RAZORPAY_WEBHOOK_SECRET',
+    'RAZORPAY_ACCOUNT_ID',
+  ])('(a) refuses to start when mode is off and %s is set', (key) => {
+    const env = { ...validEnv, [key]: testMode[key as keyof typeof testMode] };
+    expect(() => loadApiConfig(env)).toThrow(new RegExp(`${key}: must not be set`));
+  });
+
+  it('accepts a complete test-mode configuration', () => {
+    const config = loadApiConfig(testMode);
+    expect(config.PAYMENTS_RAZORPAY_MODE).toBe('test');
+    expect(config.PAYMENTS_TEST_REGISTRATION_ALLOWLIST).toEqual([
+      '0193a8f0-1111-7222-8333-444455556666',
+    ]);
+  });
+
+  it.each([
+    'RAZORPAY_KEY_ID',
+    'RAZORPAY_KEY_SECRET',
+    'RAZORPAY_WEBHOOK_SECRET',
+    'RAZORPAY_ACCOUNT_ID',
+    'PAYMENTS_TEST_REGISTRATION_ALLOWLIST',
+  ])('(b) refuses test mode without %s', (key) => {
+    const env = Object.fromEntries(Object.entries(testMode).filter(([name]) => name !== key));
+    expect(() => loadApiConfig(env)).toThrow(key);
+  });
+
+  it('(c) refuses a live key id in test mode', () => {
+    expect(() => loadApiConfig({ ...testMode, RAZORPAY_KEY_ID: 'rzp_live_SYNTHETIC' })).toThrow(
+      /RAZORPAY_KEY_ID: a live key id is refused in test mode/,
+    );
+  });
+
+  it('(d) refuses live mode while no approval reference exists, even with an approval value set', () => {
+    expect(RAZORPAY_LIVE_APPROVAL_REF).toBeNull();
+    for (const approval of [undefined, 'ADR-0099', 'null'])
+      expect(() =>
+        loadApiConfig({
+          ...testMode,
+          PAYMENTS_RAZORPAY_MODE: 'live',
+          RAZORPAY_KEY_ID: 'rzp_live_SYNTHETIC',
+          PAYMENTS_RAZORPAY_LIVE_APPROVAL: approval,
+        }),
+      ).toThrow(/live mode is not approved/);
+  });
+
+  it('(e) refuses a deployment that is not explicitly allowed', () => {
+    expect(() => loadApiConfig({ ...testMode, DOCVERSITY_DEPLOYMENT: 'production' })).toThrow(
+      /DOCVERSITY_DEPLOYMENT/,
+    );
+    const { DOCVERSITY_DEPLOYMENT: _d, ...unset } = testMode;
+    expect(() => loadApiConfig(unset)).toThrow(/DOCVERSITY_DEPLOYMENT/);
+  });
+
+  it('(f) refuses a webhook secret reused from the key secret, SESSION_SECRET or the MFA key', () => {
+    const mfa = 'ab'.repeat(32);
+    for (const secret of [
+      testMode.RAZORPAY_KEY_SECRET.padEnd(32, '0'),
+      validEnv.SESSION_SECRET,
+      mfa,
+    ])
+      expect(() =>
+        loadApiConfig({
+          ...testMode,
+          RAZORPAY_KEY_SECRET: testMode.RAZORPAY_KEY_SECRET.padEnd(32, '0'),
+          STAFF_MFA_ENCRYPTION_KEY: mfa,
+          RAZORPAY_WEBHOOK_SECRET: secret,
+        }),
+      ).toThrow(/RAZORPAY_WEBHOOK_SECRET: must differ/);
+  });
+
+  it('rejects malformed key ids, account ids and allowlist entries', () => {
+    expect(() => loadApiConfig({ ...testMode, RAZORPAY_KEY_ID: 'sk_test_x' })).toThrow(
+      /RAZORPAY_KEY_ID/,
+    );
+    expect(() => loadApiConfig({ ...testMode, RAZORPAY_ACCOUNT_ID: 'merchant' })).toThrow(
+      /RAZORPAY_ACCOUNT_ID/,
+    );
+    expect(() =>
+      loadApiConfig({ ...testMode, PAYMENTS_TEST_REGISTRATION_ALLOWLIST: 'not-a-uuid' }),
+    ).toThrow(/PAYMENTS_TEST_REGISTRATION_ALLOWLIST/);
+  });
+
+  it('never echoes a secret value in the startup error', () => {
+    const error = (() => {
+      try {
+        loadApiConfig({ ...validEnv, RAZORPAY_WEBHOOK_SECRET: testMode.RAZORPAY_WEBHOOK_SECRET });
+      } catch (e) {
+        return e as Error;
+      }
+      return null;
+    })();
+    expect(error?.message).toMatch(/RAZORPAY_WEBHOOK_SECRET/);
+    expect(error?.message).not.toContain(testMode.RAZORPAY_WEBHOOK_SECRET);
   });
 });
