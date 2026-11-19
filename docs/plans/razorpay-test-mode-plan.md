@@ -93,6 +93,33 @@ Two more reasons it could not work in staging even if the gate opened:
 | G7  | Exam and hard-copy certificate have no server-side fee obligation.                                                                                                                                  | Nothing to charge against. Both stay `UNAVAILABLE`.                                                                       |
 | G8  | Policy is code-defined and allowed only under `NODE_ENV=test`.                                                                                                                                      | Staging, which runs `NODE_ENV=production`, cannot enable test mode without a reviewed config change.                      |
 
+### 1.4 Gap assessment against current Razorpay documentation (checked 2026-11-19)
+
+Effort: S is up to 1 day, M is 1–3 days, L is more than 3 days. "Blocks pilot" means a Razorpay
+test-mode pilot on staging cannot start until the gap is closed.
+
+| #   | Gap                                                                                                                                                                                                                                                                                                    | Location                                                                                 | Effort | Risk if ignored                                                        | Blocks pilot                         |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------- | ------------------------------------ |
+| A1  | The policy is defined in code, carries `webhookSecret`, and is accepted only under `NODE_ENV=test`. A real test secret would have to be committed.                                                                                                                                                     | `apps/api/src/payment-buttons/payment-button-policy.service.ts:7-29`                     | M      | High: secret in Git                                                    | **Yes**                              |
+| A2  | No Razorpay variables in the API env schema, so there is no fail-closed mode flag and no live-key refusal.                                                                                                                                                                                             | `apps/api/src/config/api-config.ts:60` (env object)                                      | S      | High: misconfiguration could enable collection                         | **Yes**                              |
+| A3  | No Orders API client, order table or Checkout launcher. The only seam returns `null`.                                                                                                                                                                                                                  | `apps/api/src/re-exams/re-exam-payments.service.ts:182-189`; no `razorpay_orders` table  | L      | Medium: only manual attribution is possible                            | **Yes** for an Orders pilot          |
+| A4  | The verifier accepts only `payment.captured` / `payment.failed` and ignores `order_id`. Any other signed event (for example `order.paid`, `refund.*`) is refused with 400. Razorpay treats non-2xx as a failure, retries for 24 hours, and then **disables the webhook** ([best practices][rp-wh-bp]). | `packages/payments/src/razorpay.ts:4-19`, `:44-49`; `payment-buttons.service.ts:133-137` | S      | High: one subscribed but unhandled event can disable the whole webhook | **Yes**                              |
+| A5  | Reconciliation `buttonId` is pinned to the mentor's re-exam button (contract and DB CHECK), while the test embed must use a different button.                                                                                                                                                          | `packages/validation/src/payment-buttons.ts:46`; `migration.sql:65`                      | S      | Medium: test reconciliation records the wrong button                   | **Yes** for button-based reconciling |
+| A6  | The reviewer gate wraps every path, so Razorpay cannot reach the webhook on staging.                                                                                                                                                                                                                   | `deploy/review-site.caddy:17-18`                                                         | S      | High if the bypass is too wide                                         | **Yes**                              |
+| A7  | It is not proven that the Next.js rewrite proxy keeps the body bytes unchanged.                                                                                                                                                                                                                        | `apps/web/src/proxy.ts:15-23`; `deploy/Caddyfile.production:12-14`                       | S      | Medium: every signature fails                                          | **Yes** until verified               |
+| A8  | The per-IP limit (60/min) returns 429, and the limiter fails closed when Redis is down. Both are non-2xx, so Razorpay retries, and if they persist for 24 hours it disables the webhook.                                                                                                               | `payment-buttons.service.ts:118-123`                                                     | S      | Medium                                                                 | No (monitor)                         |
+| A9  | No refund or dispute states on the obligation. Six dispute events and four refund events exist upstream.                                                                                                                                                                                               | `packages/database/prisma/schema.prisma:139-145`                                         | M      | Medium                                                                 | No (blocks only verification step 9) |
+| A10 | No authenticated re-fetch of the payment or order before acting. Staff reconcile against a stored snapshot.                                                                                                                                                                                            | `payment-buttons.service.ts:200-227`                                                     | S      | Medium: stale refund state                                             | No                                   |
+| A11 | No settlement reconciliation job against `GET /v1/settlements/recon/combined`.                                                                                                                                                                                                                         | none                                                                                     | M      | Low in test mode; high before live                                     | No                                   |
+| A12 | The logger redacts keys containing `secret` (which covers `keySecret` and `webhookSecret`), but not `signature`. A logged `x-razorpay-signature` or `razorpay_signature` would appear in clear.                                                                                                        | `apps/api/src/common/json-logger.ts:6`                                                   | S      | Low–Medium                                                             | No (fix in P1)                       |
+| A13 | No web Content-Security-Policy was found that allows `checkout.razorpay.com`. If one is added later, Checkout will break. The current CSP state is UNVERIFIED.                                                                                                                                         | `apps/web` (no CSP match found)                                                          | S      | Low                                                                    | No                                   |
+| A14 | `packages/payments/README.md` still says the branch is uncommitted.                                                                                                                                                                                                                                    | `packages/payments/README.md`                                                            | S      | Low                                                                    | No                                   |
+
+**Pilot readiness verdict: NOT READY.** Six gaps block a Razorpay test-mode pilot on staging: A1, A2,
+A4, A6 and A7, plus A3 for an Orders pilot or A5 for a button pilot. Reaching a minimal Orders-based
+pilot needs phases P1–P3 and P6, about 11 engineer-days. The signature verification, event-id dedupe
+and append-only evidence already on `main` match current Razorpay documentation and can be kept.
+
 ---
 
 ## 2. Earlier branches
@@ -137,6 +164,69 @@ Uncommitted work may exist in those branches' local worktrees. It was not inspec
 
 ## 3. Test-mode integration design
 
+### 3.0 Razorpay documentation check (2026-11-19)
+
+Each detail below was read from the official page on 2026-11-19. VERIFIED means the page states it.
+UNVERIFIED means the page is silent or could not be fetched; do not rely on an UNVERIFIED item
+without testing it in staging.
+
+| Topic                        | Finding                                                                                                                                                                                                                                                                                                                                                   | Status                                                                       | Source                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Order amount and currency    | `amount` is an integer in the smallest currency sub-unit (paise for INR); the minimum is 100. `currency` is an ISO code, and the currency must be enabled on the account.                                                                                                                                                                                 | VERIFIED                                                                     | [Create order][rp-order-create]                              |
+| Order `receipt`              | At most 40 characters, "has to be unique". The page says that `receipt` is treated as an idempotency key and that a second create with the same value is rejected ("Duplicate request. This request has already been processed.").                                                                                                                        | VERIFIED on the page; behaviour to be confirmed in staging step 8            | [Create order][rp-order-create]                              |
+| Order `notes`                | At most 15 key-value pairs, 256 characters each.                                                                                                                                                                                                                                                                                                          | VERIFIED                                                                     | [Create order][rp-order-create]                              |
+| Order states                 | `created` → `attempted` → `paid`.                                                                                                                                                                                                                                                                                                                         | VERIFIED                                                                     | [Create order][rp-order-create]                              |
+| Find an order by receipt     | `GET /v1/orders?receipt=…` (also `from`, `to`, `count` up to 100, `skip`, `expand[]=payments`).                                                                                                                                                                                                                                                           | VERIFIED                                                                     | [Fetch all orders][rp-order-list]                            |
+| Payments of an order         | `GET /v1/orders/{id}/payments`.                                                                                                                                                                                                                                                                                                                           | VERIFIED                                                                     | [Fetch payments for an order][rp-order-pays]                 |
+| Fetch one order by id        | `GET /v1/orders/{id}`: not on the page that was fetched.                                                                                                                                                                                                                                                                                                  | UNVERIFIED                                                                   | —                                                            |
+| Checkout signature           | `hmac_sha256(order_id + "\|" + razorpay_payment_id, key_secret)`, compared with `razorpay_signature`. The page says to verify it on the server "before fulfilling the order".                                                                                                                                                                             | VERIFIED                                                                     | [Standard Checkout steps][rp-checkout]                       |
+| Webhook signature            | Header `X-Razorpay-Signature`: HMAC-SHA256 with the webhook secret as key and the **raw** request body as message ("Do not parse or cast").                                                                                                                                                                                                               | VERIFIED                                                                     | [Validate and test webhooks][rp-wh-validate]                 |
+| Webhook event id             | Header `x-razorpay-event-id`, "unique per event", for detecting duplicates. The page does not say the header is signed.                                                                                                                                                                                                                                   | VERIFIED (that it is not signed is inferred)                                 | [Validate and test webhooks][rp-wh-validate]                 |
+| Delivery order               | Webhooks may arrive out of order; handlers must not depend on the order.                                                                                                                                                                                                                                                                                  | VERIFIED                                                                     | [Validate and test webhooks][rp-wh-validate]                 |
+| Retries and timeout          | Any non-2xx is a delivery failure. There is a 5-second timeout. Retries use exponential backoff for 24 hours from event creation; after 24 hours of continuous failure the webhook is **disabled** and the alert email is notified. IP allow-listing is recommended. Ports 80 and 443 only. Test and Live mode have separate webhook URLs.                | VERIFIED                                                                     | [Best practices][rp-wh-bp], [Webhooks][rp-wh]                |
+| Payment events               | `payment.authorized`, `payment.captured`, `payment.failed`, `payment.pending`, `payment.downtime.*`, `order.paid`. The payment entity includes `order_id`, `amount`, `currency`, `status`, `captured`, `amount_refunded` and `notes`; the top level includes `account_id`. `order.paid` carries both the order and the payment entity.                    | VERIFIED                                                                     | [Payment webhooks][rp-wh-pay]                                |
+| Refund events                | `refund.created`, `refund.processed`, `refund.failed`, `refund.speed_changed`.                                                                                                                                                                                                                                                                            | VERIFIED                                                                     | [Refund webhooks][rp-wh-refund]                              |
+| Dispute events               | `payment.dispute.created`, `.won`, `.lost`, `.closed`, `.under_review`, `.action_required`.                                                                                                                                                                                                                                                               | VERIFIED                                                                     | [Dispute webhooks][rp-wh-dispute]                            |
+| Auto-capture                 | Captured automatically by default. Capture settings apply only to Orders API payments. Payments left `authorized` and not captured within the capture window are auto-refunded (the page cites 3 days).                                                                                                                                                   | VERIFIED                                                                     | [Capture settings][rp-capture]                               |
+| Refunds API                  | `POST /v1/payments/{id}/refund`. `amount` in the smallest unit; partial refunds are allowed; omitting `amount` refunds in full. `speed` is `normal` or `optimum`. `receipt` and `notes` (15 pairs). Idempotency through the `X-Refund-Idempotency` header (at least 10 characters: letters, digits, `-`, `_`). Status `pending` / `processed` / `failed`. | VERIFIED                                                                     | [Create normal refund][rp-refund]                            |
+| Settlement reconciliation    | `GET /v1/settlements/recon/combined?year=&month=[&day=&count=&skip=]`. Each row has a type (`payment`, `refund`, `transfer`, `adjustment`), `amount`, `fee`, `tax`, `payment_id`, `order_id`, `settlement_id`, `settlement_utr`, `dispute_id` and `on_hold`.                                                                                              | VERIFIED                                                                     | [Settlement recon][rp-recon]                                 |
+| Settlements in test mode     | Whether test-mode payments produce settlement or recon rows: not stated on the pages that were fetched. The test-mode overview page returned 404.                                                                                                                                                                                                         | UNVERIFIED                                                                   | —                                                            |
+| Test keys                    | Generated per mode under Settings → API Keys. The key secret is shown only at generation time. Regeneration can deactivate the old key immediately or within 24 hours. The `rzp_test_` prefix appears on Razorpay's US docs, not on the India page that was fetched.                                                                                      | VERIFIED, except the prefix (UNVERIFIED for India; treat it as a guard only) | [API keys][rp-keys]                                          |
+| Test cards                   | The domestic success and failure cards are listed on the test-card page (any future expiry, random CVV). Card numbers are not copied here; use the page.                                                                                                                                                                                                  | VERIFIED                                                                     | [Test cards][rp-cards]                                       |
+| Test UPI                     | `success@razorpay` and `failure@razorpay`.                                                                                                                                                                                                                                                                                                                | VERIFIED                                                                     | [Test UPI][rp-upi]                                           |
+| Test-mode webhook setup      | The page gives a default OTP for creating or editing webhooks in test mode, and says test events have the same payload structure as live ones.                                                                                                                                                                                                            | VERIFIED                                                                     | [Validate and test webhooks][rp-wh-validate]                 |
+| Payment Button events        | `payment.authorized`, `payment.captured`, `payment.failed`, `order.paid`.                                                                                                                                                                                                                                                                                 | VERIFIED                                                                     | [Payment Button webhooks][rp-pb-wh]                          |
+| Per-student data on a button | Whether a static Payment Button can carry a per-student reference or notes, and whether the webhook names the button: not documented on the button pages. Even if the student types a reference into a field, it is customer-entered and untrusted, so it cannot bind a payment to an obligation.                                                         | UNVERIFIED (and not trustworthy even if available)                           | [Payment Button][rp-pb], [Payment Button webhooks][rp-pb-wh] |
+
+[rp-order-create]: https://razorpay.com/docs/api/orders/create/
+[rp-order-list]: https://razorpay.com/docs/api/orders/fetch-all/
+[rp-order-pays]: https://razorpay.com/docs/api/orders/fetch-payments/
+[rp-checkout]: https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps/
+[rp-wh-validate]: https://razorpay.com/docs/webhooks/validate-test/
+[rp-wh-bp]: https://razorpay.com/docs/webhooks/best-practices/
+[rp-wh]: https://razorpay.com/docs/webhooks/
+[rp-wh-pay]: https://razorpay.com/docs/webhooks/payments/
+[rp-wh-refund]: https://razorpay.com/docs/webhooks/refunds/
+[rp-wh-dispute]: https://razorpay.com/docs/webhooks/disputes/
+[rp-capture]: https://razorpay.com/docs/payments/payments/capture-settings/
+[rp-refund]: https://razorpay.com/docs/api/refunds/create-normal/
+[rp-recon]: https://razorpay.com/docs/api/settlements/fetch-recon/
+[rp-keys]: https://razorpay.com/docs/payments/dashboard/account-settings/api-keys/
+[rp-cards]: https://razorpay.com/docs/payments/payments/test-card-details/
+[rp-upi]: https://razorpay.com/docs/payments/payments/test-upi-details/
+[rp-pb]: https://razorpay.com/docs/payments/payment-button/
+[rp-pb-wh]: https://razorpay.com/docs/payments/payment-button/subscribe-to-webhooks/
+
+Consequences for this design:
+
+- Subscribe the test webhook **only** to events the handler accepts. Store signed events that are
+  valid but unhandled, and answer them with 2xx; never answer them with 4xx. Otherwise 24 hours of
+  failures disables the webhook (gap A4).
+- Keep the handler under 5 seconds. It is one transaction today. Push any API re-fetch to the worker
+  if latency grows.
+- Use `order.paid` as the primary fulfilment event, because it carries both the order and the payment.
+  `payment.captured` with an `order_id` is an equivalent trigger, and both must fulfil at most once.
+
 ### 3.1 Payment Buttons vs Orders API
 
 |                                                  | Payment Buttons (current)                                             | Orders API + Standard Checkout (recommended)                                                          |
@@ -179,9 +269,9 @@ Payment never decides the academic application. This rule is unchanged from Phas
   parsed JSON.
 - The webhook secret is the one set in the dashboard webhook configuration. It is **not** the API
   key secret. Test mode and live mode have separate secrets.
-- **Checkout handler (browser return):** compute `HMAC_SHA256(order_id + "|" + razorpay_payment_id,
-RAZORPAY_KEY_SECRET)` and compare it with `razorpay_signature`. Use this check only to show
-  "awaiting confirmation". **Fulfil only from the webhook**, because the student can close the tab
+- **Checkout handler (browser return):** compute
+  `HMAC_SHA256(order_id + "|" + razorpay_payment_id, RAZORPAY_KEY_SECRET)` and compare it with
+  `razorpay_signature` ([docs][rp-checkout]). Use this check only to show "awaiting confirmation". **Fulfil only from the webhook**, because the student can close the tab
   before the handler runs.
 - Refuse a body larger than 64 KB, a missing or malformed signature, or an unknown `account_id`
   (already in place). Freshness: Razorpay does not sign a timestamp header. Rely on the event-id
@@ -199,9 +289,12 @@ RAZORPAY_KEY_SECRET)` and compare it with `razorpay_signature`. Use this check o
   state `RESERVED` with `UNIQUE(payment_id, attempt)`, then call the Orders API, then store `order_id`.
   - If the same student retries, return the stored `order_id`.
   - If the process crashes between the API call and the store, the next attempt looks for an existing
-    order with that `receipt` before it creates one. Confirm whether the current Razorpay Orders API
-    accepts an idempotency header. Until that is confirmed, do not rely on one.
-- **Refunds (section 3.6):** derive the key from the refund request id, and store it before the API call.
+    order with `GET /v1/orders?receipt=…` before it creates one. The docs state that `receipt` must be
+    unique and that a duplicate is rejected ([create][rp-order-create], [list][rp-order-list]).
+    Treat that as a second safety net, not the only one, until staging step 8 confirms it. The
+    Orders API documents no separate idempotency header.
+- **Refunds (section 3.6):** send `X-Refund-Idempotency: refund-<refundRequestId>`, which must be at
+  least 10 characters, and store the key before the API call ([refund API][rp-refund]).
 - **Ordering:** never apply deltas from event order. On each event, re-read the stored order and
   obligation under `SELECT … FOR UPDATE`. In test mode, also fetch the current payment from the API
   (`GET /v1/payments/:id`) and act on its current state. This addresses G4.
@@ -233,8 +326,8 @@ for staff:
   1. Razorpay payments and refunds (API list, test mode).
   2. `razorpay_orders` + `razorpay_webhook_receipts`.
   3. `re_exam_payments` in `VERIFIED`, plus refund states.
-     Then compare against the settlement report: gross, minus Razorpay fee, minus GST, equals net
-     settled. Write one `razorpay_reconciliation_runs` row per day with counts and drift in minor units.
+     Then compare against `GET /v1/settlements/recon/combined` ([docs][rp-recon]): for each row,
+     `amount` minus `fee` minus `tax` must equal the net amount settled. Write one `razorpay_reconciliation_runs` row per day with counts and drift in minor units.
      Alert when drift ≠ 0, when a capture is unmatched, or when a verified obligation has no capture.
      Test-mode settlements may be simulated or absent. Record that in the run rather than reporting a
      false zero.
@@ -254,9 +347,12 @@ WHERE (p.status = 'VERIFIED' AND r.id IS NULL)
 ### 3.6 Refunds and disputes
 
 - Phase 1 (test mode): refunds are **issued in the Razorpay dashboard by finance**. Docversity ingests
-  `refund.created`, `refund.processed` and `refund.failed`, and the dispute events
-  (`payment.dispute.created` / `.won` / `.lost` / `.closed`; confirm the names against the current
-  webhook catalogue).
+  `refund.created`, `refund.processed`, `refund.failed` and `refund.speed_changed`
+  ([refund webhooks][rp-wh-refund]). It also ingests the dispute events `payment.dispute.created`,
+  `.under_review`, `.action_required`, `.won`, `.lost` and `.closed` ([dispute webhooks][rp-wh-dispute]).
+- Capture: keep the dashboard default of automatic capture ([capture settings][rp-capture]). An
+  `authorized` payment is never treated as paid; if it is not captured in time, Razorpay refunds it
+  automatically.
 - New obligation states, added through a new migration:
   - `REFUND_PENDING`, `PARTIALLY_REFUNDED`, `REFUNDED` and `DISPUTED`.
   - Transitions: from `VERIFIED` only, driven by signed events or an authorized staff action, and
@@ -315,8 +411,9 @@ Startup refuses to boot when:
 
 The contract literals `liveTransactionsEnabled: false` and `checkout.mode: 'TEST'` stay in
 `payment-buttons.ts`, so even a misconfigured server cannot send a live checkout to the browser. The
-redacting logger (`common/json-logger.ts`) must list `keySecret`, `webhookSecret`, `signature`,
-`razorpay_signature` and the `x-razorpay-signature` header.
+redacting logger (`common/json-logger.ts:6`) already redacts any key containing `secret`. It must
+also cover `signature`, which includes `razorpay_signature` and the `x-razorpay-signature` header
+(gap A12).
 
 ### 4.2 Supplying test-mode keys
 
@@ -355,31 +452,36 @@ registrations are synthetic.
    (`gate_regression.py` and `edge_regression.py` must pass).
 3. **Raw-body integrity:** send a dashboard "test webhook" and confirm the signature verifies. This
    proves that Caddy and the Next.js proxy keep the bytes unchanged.
-4. **Happy path:** a synthetic student creates an order and pays with a Razorpay test card or a test
-   UPI success id. Expected: `payment.captured` and `order.paid` arrive, one obligation becomes
+4. **Happy path:** a synthetic student creates an order and pays with a success card from the
+   [test-card page][rp-cards] or the UPI id `success@razorpay` ([test UPI][rp-upi]). Expected: `payment.captured` and `order.paid` arrive, one obligation becomes
    `VERIFIED`, two audit rows are written, and the application status is unchanged.
 5. **Failure catalogue:** run each case using Razorpay's published test instruments.
-   - Card declined, and UPI failure: the obligation stays `AWAITING_PAYMENT`, the receipt is stored and
+   - A declined card from the test-card page, and the UPI id `failure@razorpay`: the obligation stays `AWAITING_PAYMENT`, the receipt is stored and
      the student sees "Failed".
    - 3DS / OTP challenge abandoned: no capture, no state change.
    - Student closes the tab after paying: the webhook alone fulfils the obligation.
-6. **Replay and order:** re-deliver the same event from the dashboard and confirm a 200 with no second
+6. **Delivery failure:** make the endpoint return 503 for a few minutes. Confirm that Razorpay retries
+   and that the event is processed once after recovery. Stop well before 24 hours, because the webhook
+   is disabled after 24 hours of continuous failure ([best practices][rp-wh-bp]).
+7. **Replay and order:** re-deliver the same event from the dashboard and confirm a 200 with no second
    fulfilment. Post the same `X-Razorpay-Event-Id` with a different body and confirm a 409. Deliver
    `payment.captured` before `order.paid` and the reverse, and confirm one fulfilment either way.
-7. **Tampering:** send a wrong signature (400), a wrong `account_id` (400), and an amount that
+8. **Tampering:** send a wrong signature (400), a wrong `account_id` (400), and an amount that
    differs by 1 paise. For the last one, the receipt is stored, the obligation is not fulfilled and it
    is flagged.
-8. **Concurrency:** two browsers click Pay at the same moment and must receive one `order_id`. Fire
+9. **Concurrency:** two browsers click Pay at the same moment and must receive one `order_id`.
+   Create an order twice with the same `receipt` directly against the API and confirm the documented
+   duplicate rejection. Fire
    20 parallel deliveries of one event and confirm one fulfilment.
-9. **Refund:** finance issues a full refund, then a partial refund on another payment, both in the
-   dashboard. Confirm the `refund.*` events, the obligation states and that the refunded total never
-   exceeds the capture.
-10. **Reconciliation run:** trigger the daily job by hand. Confirm 0 drift, or an explicit "no test
+10. **Refund:** finance issues a full refund, then a partial refund on another payment, both in the
+    dashboard. Confirm the `refund.*` events, the obligation states and that the refunded total never
+    exceeds the capture.
+11. **Reconciliation run:** trigger the daily job by hand. Confirm 0 drift, or an explicit "no test
     settlement" note, and that a deliberately orphaned capture is reported.
-11. **Disabled check:** on the same build with `PAYMENTS_RAZORPAY_MODE=disabled`, the webhook returns
+12. **Disabled check:** on the same build with `PAYMENTS_RAZORPAY_MODE=disabled`, the webhook returns
     404 and the panels return `UNAVAILABLE`. A grep of the **production** environment shows no
     `RAZORPAY_*` variables.
-12. **Logs:** search the staging logs for the key secret, the webhook secret and signature values.
+13. **Logs:** search the staging logs for the key secret, the webhook secret and signature values.
     Expect 0 hits.
 
 Exit criteria: every step passes, the evidence is stored privately, and a reviewer signs off. Live
@@ -414,7 +516,7 @@ docs, and exclude waiting on university answers.
 | **P0: decisions and account** | Collect answers to D1–D7. Owner creates test-mode keys and the webhook in the dashboard. Write an ADR for "Orders API, test mode, fail-closed config".                                                                                                                                                                                                                                         | 1 + university time    | none                         |
 | **P1: config and secrets**    | Env schema (section 4.1) with refusal rules and tests. Logger redaction. Replace `PaymentButtonPolicyService.definition()` with a config-backed policy; keep the test fixture path for unit tests. Secret scan in CI. Render and VPS secret wiring docs.                                                                                                                                       | 2                      | P0 ADR                       |
 | **P2: orders**                | Migration for `razorpay_orders` and `razorpay_order_events` (append-only, unique `(payment_id, attempt)` and `order_id`). HTTP client for Razorpay with timeouts and no key logging. Student endpoint to create an order, with ownership and rate limit. Web Checkout launcher; extend `payment-button.tsx`, keep the e2e test showing no script loads when disabled. Handler signature check. | 4                      | P1, D2, D7                   |
-| **P3: webhook matching**      | Extend `verifyRazorpayWebhook` to read `order_id` and accept `order.paid` and the refund and dispute events. Order-bound automatic fulfilment with the checks in section 3.4. Re-fetch the payment from the API. Unmatched receipts go to the existing manual flow. Fix G2 with a migration that relaxes the `button_id` CHECK.                                                                | 3                      | P2                           |
+| **P3: webhook matching**      | Extend `verifyRazorpayWebhook` to read `order_id` and accept `order.paid` and the refund and dispute events. Store verified but unhandled events and return 2xx (gap A4). Order-bound automatic fulfilment with the checks in section 3.4. Re-fetch the payment from the API. Unmatched receipts go to the existing manual flow. Fix G2 with a migration that relaxes the `button_id` CHECK.   | 3                      | P2                           |
 | **P4: refunds and disputes**  | Migration for the new obligation states and the refund ceiling. Event ingestion. Staff view. Optional API refund with requester ≠ approver.                                                                                                                                                                                                                                                    | 3 (+2 for API refunds) | P3, D4, D6                   |
 | **P5: reconciliation**        | Worker job, run table, staff report page, alerts.                                                                                                                                                                                                                                                                                                                                              | 3                      | P3                           |
 | **P6: staging verification**  | Edge bypass for the webhook path, with regression scripts. Run section 5 end to end and keep the evidence.                                                                                                                                                                                                                                                                                     | 2                      | P1–P5, staging authorisation |
@@ -425,20 +527,20 @@ separate, later change and is not estimated here.
 
 ### Risks
 
-| Risk                                                                                                                 | Likelihood     | Effect                                   | Mitigation                                                                                                                                                          |
-| -------------------------------------------------------------------------------------------------------------------- | -------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| University answers (D1–D6) are slow                                                                                  | High           | The plan stalls at P0/P2                 | P1 needs no answers. Start there.                                                                                                                                   |
-| The webhook bypass of the reviewer gate widens the attack surface                                                    | Medium         | Unauthenticated requests reach the API   | Bypass one path and method only; the HMAC is the authentication there. Keep the rate limit and the 64 KB body cap. Run the regression scripts.                      |
-| The Next.js proxy changes the body bytes or headers                                                                  | Low–Medium     | Every signature fails                    | Verify in step 3. If it fails, have Caddy route the webhook path directly to the API.                                                                               |
-| Test keys leak into logs, CI or Git                                                                                  | Medium         | Credential rotation, loss of trust       | Section 4.2: secret scan, redaction, no CI secrets, rotation after the test window.                                                                                 |
-| Someone adds a `live` value under time pressure                                                                      | Medium         | Real money is collected without approval | The schema has no `live` value, the contract literals stay false, and a key-prefix guard refuses `rzp_live_`. An ADR states that live mode needs a separate review. |
-| The mentor's button IDs belong to an account the university does not control                                         | Unknown        | Money settles to the wrong entity        | D5 must be answered before any further use of those IDs.                                                                                                            |
-| Double payment through the manual QR flow and Razorpay                                                               | Medium         | Refund work and student complaints       | D9. Disable QR start while a Razorpay order is open, and the reverse.                                                                                               |
-| Razorpay API behaviour assumed in this plan (idempotency, event names, settlement reports) differs from current docs | Medium         | Rework                                   | Check each assumption against the current Razorpay docs in P0 and record the doc version in the ADR.                                                                |
-| Currency exponent mistakes for currencies other than INR                                                             | Low (INR only) | Charges 100× too much or too little      | D2. Only INR at first. Write an exponent table test before adding any other currency.                                                                               |
+| Risk                                                                                                       | Likelihood     | Effect                                   | Mitigation                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------- | -------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| University answers (D1–D6) are slow                                                                        | High           | The plan stalls at P0/P2                 | P1 needs no answers. Start there.                                                                                                                                                          |
+| The webhook bypass of the reviewer gate widens the attack surface                                          | Medium         | Unauthenticated requests reach the API   | Bypass one path and method only; optionally allow-list Razorpay webhook IPs; the HMAC is the authentication there. Keep the rate limit and the 64 KB body cap. Run the regression scripts. |
+| The Next.js proxy changes the body bytes or headers                                                        | Low–Medium     | Every signature fails                    | Verify in step 3. If it fails, have Caddy route the webhook path directly to the API.                                                                                                      |
+| Test keys leak into logs, CI or Git                                                                        | Medium         | Credential rotation, loss of trust       | Section 4.2: secret scan, redaction, no CI secrets, rotation after the test window.                                                                                                        |
+| Someone adds a `live` value under time pressure                                                            | Medium         | Real money is collected without approval | The schema has no `live` value, the contract literals stay false, and a key-prefix guard refuses `rzp_live_`. An ADR states that live mode needs a separate review.                        |
+| The mentor's button IDs belong to an account the university does not control                               | Unknown        | Money settles to the wrong entity        | D5 must be answered before any further use of those IDs.                                                                                                                                   |
+| Double payment through the manual QR flow and Razorpay                                                     | Medium         | Refund work and student complaints       | D9. Disable QR start while a Razorpay order is open, and the reverse.                                                                                                                      |
+| Razorpay behaviour differs from the docs checked on 2026-11-19 (receipt uniqueness, test-mode settlements) | Low–Medium     | Rework                                   | Section 3.0 marks the UNVERIFIED items; staging steps 9 and 11 test them. Re-check the docs in P0.                                                                                         |
+| Currency exponent mistakes for currencies other than INR                                                   | Low (INR only) | Charges 100× too much or too little      | D2. Only INR at first. Write an exponent table test before adding any other currency.                                                                                                      |
 
 ---
 
-Not verified here: the branches' local worktrees, any Razorpay dashboard or account, the live API, and
-current Razorpay documentation (event names, idempotency headers and settlement endpoints must be
-confirmed in P0).
+Not verified here: the branches' local worktrees, any Razorpay dashboard or account, and any real API
+call. The Razorpay documentation was read on 2026-11-19 (section 3.0). Items marked UNVERIFIED there
+must be confirmed in staging before anyone relies on them.
