@@ -196,3 +196,32 @@ describe('POST /api/v1/auth/login', () => {
     expect(ids[0]).not.toBe(firstId);
   });
 });
+
+describe('shared client address (campus NAT)', () => {
+  let shared: INestApplication;
+  beforeAll(async () => {
+    shared = await createTestApp(realConfig({ LOGIN_MAX_ATTEMPTS_PER_IP: 3 }));
+  });
+  afterAll(async () => {
+    await shared.close();
+  });
+
+  it('successful sign-ins from one address do not use up its per-IP allowance; failures do', async () => {
+    // More colleagues than the per-IP limit sign in correctly from the same address.
+    for (let i = 0; i < 5; i += 1) {
+      const user = await createTestUser();
+      expect((await attempt(browser(shared), user.email, user.password)).status).toBe(200);
+    }
+    const victim = await createTestUser();
+    for (let i = 0; i < 3; i += 1) {
+      const other = await createTestUser();
+      expect((await attempt(browser(shared), other.email, 'wrong password entirely')).status).toBe(
+        401,
+      );
+    }
+    // Three failures exhaust the per-IP bucket: everyone behind this address now waits.
+    const limited = await attempt(browser(shared), victim.email, victim.password);
+    expect(limited.status).toBe(429);
+    expect(errorOf(limited).code).toBe('AUTH_RATE_LIMITED');
+  });
+});

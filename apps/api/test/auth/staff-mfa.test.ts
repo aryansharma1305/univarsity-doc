@@ -1445,6 +1445,80 @@ describe('dedicated MFA limits and escalating lockout', () => {
   });
 });
 
+describe('shared client address (campus NAT) and the MFA per-IP limit', () => {
+  let shared: INestApplication;
+  beforeAll(async () => {
+    shared = await createTestApp(realConfig({ MFA_MAX_ATTEMPTS_PER_IP: 2 }));
+  });
+  afterAll(async () => {
+    await shared.close();
+  });
+
+  it('correct codes from one address do not use up its per-IP allowance; wrong codes do', async () => {
+    const people = [];
+    for (let i = 0; i < 4; i++) people.push(await mfaUser(['REGISTRAR'], shared));
+    // More staff than MFA_MAX_ATTEMPTS_PER_IP (2) finish sign-in from the same address.
+    for (const { user, secret } of people.slice(0, 3)) {
+      const agent = browser(shared);
+      await login(agent, user).expect(200);
+      await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 1) }).expect(200);
+    }
+    // Two wrong codes (spraying) exhaust it for everyone behind the address.
+    const [, , , last] = people;
+    if (!last) throw new Error('missing user');
+    const agent = browser(shared);
+    await login(agent, last.user).expect(200);
+    for (let i = 0; i < 2; i++) {
+      expect((await post(agent, 'auth/mfa/verify', { code: codeFor(last.secret, 7) })).status).toBe(
+        401,
+      );
+    }
+    const limited = await post(agent, 'auth/mfa/verify', { code: codeFor(last.secret, 1) });
+    expect(limited.status).toBe(429);
+    expect(errorOf(limited).code).toBe('AUTH_RATE_LIMITED');
+  });
+});
+
+describe('the non-refunded per-IP total cap applies to MFA verify', () => {
+  it('stops correct codes from one address after LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP', async () => {
+    const capped = await createTestApp(
+      realConfig({
+        TRUST_PROXY: 'loopback',
+        LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP: 2,
+        // Same key as `app`, where the authenticators below are enrolled.
+        STAFF_MFA_ENCRYPTION_KEY: config.STAFF_MFA_ENCRYPTION_KEY,
+      }),
+    );
+    try {
+      const people = [];
+      for (let i = 0; i < 3; i++) people.push(await mfaUser(['REGISTRAR'], app));
+      const statuses = [];
+      for (const [index, { user, secret }] of people.entries()) {
+        const agent = browser(capped);
+        // Passwords from different addresses (the login scope has its own cap) ...
+        const loginToken = await csrfToken(agent);
+        const signedIn = await agent
+          .post('/api/v1/auth/login')
+          .set('X-Forwarded-For', `198.51.100.${index + 1}`)
+          .set('X-CSRF-Token', loginToken)
+          .send({ email: user.email, password: user.password });
+        expect(signedIn.status).toBe(200);
+        // ... and every correct code from the same one.
+        const token = await csrfToken(agent);
+        const verified = await agent
+          .post('/api/v1/auth/mfa/verify')
+          .set('X-Forwarded-For', '203.0.113.50')
+          .set('X-CSRF-Token', token)
+          .send({ code: codeFor(secret, 1) });
+        statuses.push(verified.status);
+      }
+      expect(statuses).toEqual([200, 200, 429]);
+    } finally {
+      await capped.close();
+    }
+  });
+});
+
 describe('access reset always replaces the password', () => {
   it('requires a policy-compliant temporary password, so the password hash always changes', async () => {
     const actor = await createTestUser({ roles: ['SUPER_ADMIN'] });
