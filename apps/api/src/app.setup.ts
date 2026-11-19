@@ -40,7 +40,15 @@ export function configureApp(app: INestApplication, config: ApiConfig): void {
   app.setGlobalPrefix(API_ROUTE_PREFIX, { exclude: ['health'] });
   app.use(helmet());
   // Original bytes are required for Razorpay HMAC; no change to other endpoints' JSON parsing.
-  app.use('/api/v1/payment-buttons/webhook', raw({ type: 'application/json', limit: '64kb' }));
+  // When collection is enabled any Content-Type is read raw (the HMAC decides, never the header);
+  // with the mode off the parser is exactly as before, so the disabled 404 path is unchanged.
+  app.use(
+    '/api/v1/payment-buttons/webhook',
+    raw({
+      type: config.PAYMENTS_RAZORPAY_MODE === 'off' ? 'application/json' : () => true,
+      limit: '64kb',
+    }),
+  );
   // Explicit allow-list; credentials allowed, so a wildcard origin is never used.
   app.enableCors({
     origin: config.CORS_ORIGINS,

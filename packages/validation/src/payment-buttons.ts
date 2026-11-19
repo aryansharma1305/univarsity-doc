@@ -85,3 +85,28 @@ export const razorpayReconciliationSchema = z
 export const razorpayWebhookResponseSchema = z
   .object({ received: z.literal(true), attributed: z.literal(false) })
   .strict();
+
+/** Test-mode Orders API checkout for a re-exam obligation (key id only; never a secret or PII). */
+export const razorpayOrderViewSchema = z
+  .object({
+    orderId: z.string().regex(/^order_[A-Za-z0-9]{1,50}$/),
+    keyId: z.string().regex(/^rzp_test_[A-Za-z0-9]{8,32}$/),
+    amountMinor: z.number().int().min(100),
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    mode: z.literal('TEST'),
+  })
+  .strict();
+export type RazorpayOrderView = z.infer<typeof razorpayOrderViewSchema>;
+/** Values Standard Checkout passes to the browser handler after a payment attempt. */
+export const razorpayCheckoutReturnSchema = z
+  .object({
+    razorpay_order_id: z.string().regex(/^order_[A-Za-z0-9]{1,50}$/),
+    razorpay_payment_id: z.string().regex(/^pay_[A-Za-z0-9]{1,50}$/),
+    razorpay_signature: z.string().regex(/^[a-f0-9]{64}$/),
+  })
+  .strict();
+export type RazorpayCheckoutReturn = z.infer<typeof razorpayCheckoutReturnSchema>;
+/** The browser return never marks a payment paid; only the signed webhook does. */
+export const razorpayCheckoutReturnResultSchema = z
+  .object({ status: z.literal('AWAITING_CONFIRMATION') })
+  .strict();

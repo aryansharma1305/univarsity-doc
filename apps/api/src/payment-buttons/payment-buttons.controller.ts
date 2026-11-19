@@ -4,6 +4,10 @@ import type { Request } from 'express';
 import { PERMISSIONS } from '@docversity/types';
 import {
   paymentButtonViewSchema,
+  razorpayCheckoutReturnResultSchema,
+  razorpayCheckoutReturnSchema,
+  razorpayOrderViewSchema,
+  type RazorpayCheckoutReturn,
   razorpayReceiptsSchema,
   razorpayReconciliationSchema,
   razorpayWebhookResponseSchema,
@@ -25,6 +29,7 @@ import { UuidParamPipe } from '../common/uuid-param.pipe.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { openApiRequestSchema } from '../common/openapi.js';
 import { PaymentButtonsService } from './payment-buttons.service.js';
+import { RazorpayOrdersService } from './razorpay-orders.service.js';
 
 @ApiTags('payment-buttons')
 @ApiCookieAuth('studentSession')
@@ -50,6 +55,33 @@ export class StudentPaymentButtonsController {
   @ApiOkResponse({ standardSchema: paymentButtonViewSchema })
   certificate(@CurrentStudent() student: StudentContext, @Param('id', UuidParamPipe) id: string) {
     return this.service.certificate(student.studentId, id);
+  }
+}
+/** Test-mode Orders API checkout for an own re-exam obligation. 404 unless PAYMENTS_RAZORPAY_MODE=test. */
+@ApiTags('payment-buttons')
+@ApiCookieAuth('studentSession')
+@StudentRoute()
+@Controller('student/re-exam-payments')
+export class StudentRazorpayOrdersController {
+  constructor(private readonly orders: RazorpayOrdersService) {}
+  @Post(':id/razorpay-order')
+  @HttpCode(200)
+  @ApiSecurity('csrf')
+  @ApiOkResponse({ standardSchema: razorpayOrderViewSchema })
+  order(@CurrentStudent() student: StudentContext, @Param('id', UuidParamPipe) id: string) {
+    return this.orders.create(student.studentId, student.accountId, id);
+  }
+  @Post(':id/razorpay-return')
+  @HttpCode(200)
+  @ApiSecurity('csrf')
+  @ApiBody({ schema: openApiRequestSchema(razorpayCheckoutReturnSchema) })
+  @ApiOkResponse({ standardSchema: razorpayCheckoutReturnResultSchema })
+  checkoutReturn(
+    @CurrentStudent() student: StudentContext,
+    @Param('id', UuidParamPipe) id: string,
+    @Body(new ZodValidationPipe(razorpayCheckoutReturnSchema)) body: RazorpayCheckoutReturn,
+  ) {
+    return this.orders.checkoutReturn(student.studentId, student.accountId, id, body);
   }
 }
 @ApiTags('payment-buttons')
@@ -86,7 +118,7 @@ export class RazorpayWebhookController {
   @ApiOkResponse({ standardSchema: razorpayWebhookResponseSchema })
   webhook(@Req() request: Request) {
     return this.service.webhook(
-      request.body as Buffer,
+      request.body,
       request.header('x-razorpay-signature'),
       request.header('x-razorpay-event-id'),
       request.ip ?? 'unknown',
