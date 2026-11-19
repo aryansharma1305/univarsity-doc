@@ -1,0 +1,11 @@
+[Unit]
+Description=Docversity daily backup (capture + encrypt to custody public key)
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/docversity/ops.env
+ExecStart=/opt/docversity/ops/backup/backup-daily.sh
+Nice=10
+IOSchedulingClass=idle

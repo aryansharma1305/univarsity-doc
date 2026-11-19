@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 import { importLimitsEnvSchema, uploadRequestBodyLimitBytes } from '@docversity/validation';
+import { enforcedCsp } from './src/lib/csp';
 import { loadWebEnv } from './src/lib/env';
 
 // Local development keeps a single .env at the monorepo root. Variables already present in the
@@ -25,6 +26,8 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  // Report-only strict policy with a per-request nonce: src/proxy.ts. Both: src/lib/csp.ts.
+  { key: 'Content-Security-Policy', value: enforcedCsp(process.env.NODE_ENV === 'development') },
 ];
 
 const nextConfig: NextConfig = {

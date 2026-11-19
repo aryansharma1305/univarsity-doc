@@ -1,0 +1,9 @@
+[Unit]
+Description=Docversity health check and alerting
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/docversity/ops/alert/healthcheck.sh
+# A failing check exits 1; that is expected and already alerted.
+SuccessExitStatus=1

@@ -91,6 +91,24 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  ops-scripts:
+    name: Ops scripts (shellcheck + offline self-test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Shellcheck deploy/ops
+        run: shellcheck -x -S warning deploy/ops/*/*.sh
+      - name: sshd drop-in syntax
+        run: |
+          t=$(mktemp -d); ssh-keygen -q -t ed25519 -N '' -f "$t/hk"
+          printf 'Include %s\nHostKey %s/hk\n' "$PWD/deploy/ops/ssh/00-docversity-hardening.conf" "$t" >"$t/sshd_config"
+          /usr/sbin/sshd -t -f "$t/sshd_config" || { sudo apt-get install -y -qq openssh-server >/dev/null && sudo /usr/sbin/sshd -t -f "$t/sshd_config"; }
+      - name: Backup and alert self-test (throwaway key, synthetic data)
+        run: sh deploy/ops/test/selftest.sh
+
   staging:
     env:
       IMAGE_TAG: ${{ github.event.pull_request.head.sha || github.sha }}
