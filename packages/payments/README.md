@@ -22,11 +22,11 @@ transaction receipts with unique constraints, webhook
 deployment/rate limits, retry/reconciliation jobs, refund authorization/auditing and official receipt
 policy. Existing re-exam manual finance review remains authoritative and unchanged.
 
-Local checkpoint, 10 November 2026: **15 tests**, package typecheck and lint passed, exit 0, bounded
-runner elapsed 11.845 seconds. Cached tools only, disposable no-network container, one CPU, 512 MiB
-memory and bounded scratch; no builds, DB/storage services or gateway calls. The branch remains
-uncommitted. Frozen-lock installation, full repository integration, Graphify refresh and review are
-pending. This does not certify a real gateway or persistent payment integration.
+The mock foundation is merged (PR #30). Razorpay test-mode support lives beside it:
+`razorpay.ts` (webhook HMAC over the original bytes, event classification, Checkout signature,
+order receipt) and `razorpay-client.ts` (Orders/Payments/Refunds client behind an injectable
+`RazorpayHttpPort`; unit tests use a fake port and never reach the network). See
+`docs/development/razorpay-test-mode.md`.
 
 The integration candidate connects the adapter to `ReExamPaymentsService` through internal test-only
 methods. Owned obligations supply the reference/amount/currency; signed callbacks can submit the
