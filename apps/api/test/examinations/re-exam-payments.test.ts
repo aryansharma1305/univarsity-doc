@@ -1750,7 +1750,7 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
       .set('Content-Type', type)
       .set('X-Razorpay-Signature', createHmac('sha256', secret).update(raw).digest('hex'))
       .set('X-Razorpay-Event-Id', eventId)
-      .send(raw);
+      .send(raw.toString('utf8')); // superagent would JSON-encode a Buffer
   }
   const deliver = (payload: unknown, eventId?: string) => signed(JSON.stringify(payload), eventId);
   const orderRow = (orderId: string) =>
