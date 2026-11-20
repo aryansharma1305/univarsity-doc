@@ -69,7 +69,7 @@ export class OfficialVerificationService {
       if (!enabled)
         response = result(
           'UNAVAILABLE',
-          'No verified record is available. University verification approval is pending.',
+          'The university has not enabled online verification for this service. No record was checked. Contact the university records office for help.',
         );
       else if (service === 'registration' || service === 'result') {
         if (input.token)
@@ -95,7 +95,7 @@ export class OfficialVerificationService {
           else if (!policy)
             response = result(
               'UNAVAILABLE',
-              'No verified record is available under the current university policy.',
+              'Online verification is unavailable for your program. Contact the university records office for help.',
             );
           else if (service === 'registration')
             response = result(

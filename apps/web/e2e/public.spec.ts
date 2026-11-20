@@ -12,7 +12,7 @@ const VERIFICATION = [
   ['/verify/admission-letter', 'Verify Admission Letter', 'Enter admission letter number'],
   ['/verify/certificate', 'Verify Certificate', 'Enter the code printed on the certificate'],
   ['/verify/registration', 'Verify Registration', 'Enter registration number'],
-  ['/results', 'Check Result', 'Enter result code or registration number'],
+  ['/results', 'Check Result', 'Enter your registration number'],
 ] as const;
 
 for (const width of [1440, 768, 390, 320]) {
