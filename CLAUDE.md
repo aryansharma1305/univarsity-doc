@@ -155,7 +155,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261016090000_re_exam_payments` (9C payment destinations and payments),
   `20261016093000_re_exam_payment_destination_editor_check` (9C: approver ≠ last editor),
   `20261020090000_program_certificate_eligibility` (12C: course certificate sets, proposer ≠ decider),
-  `20261117090000_staff_mfa_first_login` (staff first-login flag, TOTP MFA, recovery codes; ADR-0021).
+  `20261117090000_staff_mfa_first_login` (staff first-login flag, TOTP MFA, recovery codes; ADR-0021),
+  `20261120090000_student_uploads` (student-uploaded academic/identity files; ADR-0022).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -198,8 +199,8 @@ accounts at `/api/v1/staff-users`; `pnpm staff:reset-access` is the break-glass 
 
 ## 10a. Student profile change requests (Phase 7)
 
-Students propose missing DOB, a photo, or corrections to name/parents' names/gender at `/student/profile`
-(edit → review → submit); history at `/student/profile/requests` (cancel while pending). Staff review at
+Students propose missing DOB, a photo, or corrections to name/parents' names/gender at
+`/student/profile/update` ("Update My Details"; the profile itself is read-only; edit → review → submit); history at `/student/profile/requests` (cancel while pending). Staff review at
 `/admin/profile-requests` (`studentProfileRequests.read` / `.review`, REGISTRAR + SUPER_ADMIN). One PENDING
 request per student; approval locks the rows and refuses stale requests (`409 PROFILE_REQUEST_STALE`);
 only requested fields change. Photos are decoded and re-encoded server-side (`sharp`, no metadata) and
@@ -213,8 +214,9 @@ stored privately; served with `no-store` after an ownership/permission check. De
 freezes their definition and subject placements. Active windows cannot overlap; archiving keeps history.
 Staff explicitly assign an active version to registrations (never guessed from dates). Registrations
 with results cannot be assigned or moved. Catalogue identity used in active/archived versions or results
-is frozen; retiring a subject preserves its history. Students see only their own assigned version at
-`/student/course`, with honest unassigned states. Existing `Program`, `Subject`, `ProgramSubject` and
+is frozen; retiring a subject preserves its history. Students see only their own assigned version in
+the Course Details section of `/student/profile` (`/student/course` redirects there), with honest
+unassigned states. Existing `Program`, `Subject`, `ProgramSubject` and
 `ResultItem` foundations remain authoritative. See [docs/api/curricula.md](docs/api/curricula.md),
 [docs/development/phase-7b-course-curriculum.md](docs/development/phase-7b-course-curriculum.md), ADR-0012.
 
@@ -287,6 +289,16 @@ application availability, payment, Rector approval or issuance. Read
 Phase 12C.1: `/student/documents` offers fixed, integrity-pinned academic sample PDFs per registration,
 only for types `APPROVED_FOR_COURSE` (registration-scoped endpoint; UI-05's training sample is separate).
 See [ADR-0019](docs/decisions/ADR-0019-registration-scoped-academic-samples.md).
+
+## 10g-1. Student uploads (Student Portal simplification)
+
+Students upload, replace and delete their own academic and identity files (one per category) at
+`/student/documents`; staff with `studentUploads.read` (REGISTRAR, SUPER_ADMIN) see them read-only in
+the "Student uploads" tab of `/admin/students/[id]`. Files only — never identity numbers. Same content
+checks as historical documents; images stored only as metadata-free re-encodes; private generated keys;
+every student write and staff view/download audited (IDs and categories only); `no-store`; rate
+limited. Read [ADR-0022](docs/decisions/ADR-0022-student-uploads.md) and
+[docs/api/student-uploads.md](docs/api/student-uploads.md) before changing it.
 
 ## 10h. Reviewer staging (Phase 14B)
 

@@ -300,6 +300,20 @@ enum HistoricalDocumentType {
   OTHER
 }
 
+/// Category of a file a student uploads about themself (one file per category).
+enum StudentUploadCategory {
+  ACADEMIC_CLASS_10
+  ACADEMIC_CLASS_12
+  ACADEMIC_BACHELORS
+  ACADEMIC_MASTERS
+  ACADEMIC_OTHER
+  IDENTITY_NATIONAL_ID
+  IDENTITY_PASSPORT
+  IDENTITY_PAN
+  IDENTITY_DRIVING_LICENCE
+  IDENTITY_OTHER
+}
+
 /// Student visibility lifecycle of a historical document. Nothing is ever deleted.
 enum HistoricalDocumentStatus {
   /// Uploaded by staff; not visible to the student.
@@ -441,6 +455,7 @@ model Student {
   certificateRequests      CertificateRequest[]
   certificateRequestEvents CertificateRequestEvent[]
   reExamPayments           ReExamPayment[]
+  uploads                  StudentUpload[]
 
   @@map("students")
 }
@@ -1091,6 +1106,28 @@ model StudentProfileChangeRequest {
 /// Evidence of a previously issued document — NOT a Docversity-issued credential (those live in
 /// `certificates`). Students see it only while PUBLISHED. The file and its identity are immutable;
 /// metadata changes only while DRAFT; corrections after publication use a replacement. Never deleted.
+/// Files a student uploaded about themself (academic and identity documents), one per category.
+/// Replacing swaps the object; deleting removes the row and the object (the audit log keeps IDs and
+/// categories only). Files only: identity numbers are never stored as data and the uploaded file
+/// name is not kept. Images are stored re-encoded without embedded metadata.
+model StudentUpload {
+  id          String                @id @default(uuid(7)) @db.Uuid
+  studentId   String                @map("student_id") @db.Uuid
+  category    StudentUploadCategory
+  /// Private object under a generated key; never returned by the API.
+  storageKey  String                @map("storage_key") @db.VarChar(512)
+  contentType String                @map("content_type") @db.VarChar(64)
+  sizeBytes   Int                   @map("size_bytes")
+  sha256      String                @db.Char(64)
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, category])
+  @@map("student_uploads")
+}
+
 model HistoricalDocument {
   id                           String                     @id @default(uuid(7)) @db.Uuid
   studentRegistrationId        String                     @map("student_registration_id") @db.Uuid

@@ -269,3 +269,12 @@ it('keeps course certificate-eligibility approval separate from proposal and cer
   ]);
   expect(holders(PERMISSIONS.certificateEligibilityRead)).not.toContain('VIEWER');
 });
+
+describe('student uploads (Student Portal simplification)', () => {
+  it('grants studentUploads.read to REGISTRAR and SUPER_ADMIN only', () => {
+    const holders = Object.values(ROLE_NAMES).filter((role) =>
+      permissionsForRoles([role]).has(PERMISSIONS.studentUploadsRead),
+    );
+    expect(holders.sort()).toEqual([ROLE_NAMES.registrar, ROLE_NAMES.superAdmin].sort());
+  });
+});

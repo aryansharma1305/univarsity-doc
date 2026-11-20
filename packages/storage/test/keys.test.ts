@@ -27,6 +27,15 @@ describe('objectKeys', () => {
     expect(() => objectKeys.importErrorReport('a/b')).toThrow();
     expect(() => objectKeys.paymentDestinationQr('../x', 'png')).toThrow();
     expect(() => objectKeys.reExamPaymentEvidence('a/b', 'pdf')).toThrow();
+    expect(() => objectKeys.studentUpload('../x', 'pdf')).toThrow();
+  });
+
+  it('keeps student uploads under the student prefix with a fresh key per upload', () => {
+    const key = objectKeys.studentUpload(JOB, 'png');
+    expect(key).toMatch(
+      /^students\/0199a8f0-0000-7000-8000-000000000001\/uploads\/[0-9a-f-]{36}\.png$/,
+    );
+    expect(objectKeys.studentUpload(JOB, 'png')).not.toBe(key);
   });
 
   it('keeps payment QR images and evidence under separate generated prefixes', () => {
