@@ -34,6 +34,14 @@ docker logs --since 168h docversity-university-407e5ed2-uniweb-407e5ed2-1 2>&1 |
   python3 -c 'import sys,json,collections as c;n=c.Counter((d["directive"],d["blocked"],d["page"]) for d in map(json.loads,sys.stdin));[print(v,*k) for k,v in n.most_common()]'
 ```
 
+The gate also **fails** if any report was suppressed by the rate limit in the window (the tuple
+list would then be incomplete):
+
+```sh
+docker logs --since 168h docversity-university-407e5ed2-uniweb-407e5ed2-1 2>&1 | grep '"msg":"csp-report-suppressed"' |
+  python3 -c 'import sys,json;n=sum(json.loads(l)["count"] for l in sys.stdin);print("suppressed",n);sys.exit(1 if n else 0)'
+```
+
 Each tuple is either fixed in code, allowed in `lib/csp.ts` with a reason, or recorded as
 extension/third-party noise (e.g. `chrome-extension`). The alert check (`DV_CSP_MAX`) surfaces spikes
 meanwhile. The sink logs at most 20 reports per client and 600 in total per minute

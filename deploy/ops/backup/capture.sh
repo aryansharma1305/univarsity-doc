@@ -14,7 +14,10 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
 D=$B/university/backups/$TS
 mkdir -m 700 "$D" "$D/objects"
 # A failed capture leaves no partial set behind (removed again just before success below).
+# dash runs no EXIT trap on a signal, so INT/TERM clean up and exit themselves.
 trap 'rm -rf "$D"' EXIT
+trap 'rm -rf "$D"; exit 130' INT
+trap 'rm -rf "$D"; exit 143' TERM
 sql() { docker exec "$PG" psql -U docversity_owner -d docversity_university -Atc "$1"; }
 
 $C --profile operator run --rm --no-deps backup-readiness >"$D/.readiness.log" 2>&1
@@ -67,5 +70,5 @@ echo "counts: students=$STU registrations=$REG users=$USR migrations=$MIG tables
   python3 -c 'import sys,json;print(json.dumps(dict(l.rstrip("\n").split("\t") for l in sys.stdin),indent=2))' >"$D/manifest.json"
 chmod -R go-rwx "$D"
 echo "manifest entries: $(python3 -c "import json;print(len(json.load(open('$D/manifest.json'))))")"
-trap - EXIT
+trap - EXIT INT TERM
 echo "$D"

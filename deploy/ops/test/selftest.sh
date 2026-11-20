@@ -36,7 +36,8 @@ echo synthetic-dump >"$D/database.dump"; echo obj >"$D/objects/a/1"; echo SECRET
 python3 "$OPS/backup/verify-manifest.py" "$D" >/dev/null || no "verify-manifest on intact set"
 ok "verify-manifest accepts an intact set"
 
-export DV_SELFTEST=1 DV_SELFTEST_RECIPIENT="$FPR" DV_ENC_DIR="$E" DV_PLAIN_DIR="$P"
+touch "$T/.ops-selftest"
+export DV_SELFTEST=1 DV_SELFTEST_DIR="$T" DV_SELFTEST_RECIPIENT="$FPR" DV_ENC_DIR="$E" DV_PLAIN_DIR="$P"
 # Wrong recipient: a public keyring holding a different key must be refused.
 mkdir -m 700 "$T/other"
 mkdir -m 700 "$T/wrongpub"
@@ -44,6 +45,8 @@ gpg --homedir "$T/other" --batch --quiet --no-tty --passphrase '' --quick-gen-ke
 gpg --homedir "$T/other" --batch --export | gpg --homedir "$T/wrongpub" --batch --quiet --import
 if DV_GNUPGHOME="$T/wrongpub" "$OPS/backup/encrypt-backup.sh" "$D" 2>/dev/null; then no "encrypt to a keyring without the custody key"; fi
 if DV_SELFTEST=0 DV_GNUPGHOME="$T/pub" "$OPS/backup/encrypt-backup.sh" "$D" 2>/dev/null; then no "recipient override outside the self-test"; fi
+mkdir -m 700 "$T/outside"
+if DV_SELFTEST_DIR="$T/outside" DV_GNUPGHOME="$T/pub" "$OPS/backup/encrypt-backup.sh" "$D" 2>/dev/null; then no "override without harness marker"; fi
 ok "encrypt refuses a keyring without the pinned custody fingerprint and ignores overrides"
 if DV_GNUPGHOME="$T/priv" "$OPS/backup/encrypt-backup.sh" "$D" 2>/dev/null; then no "encrypt with a secret key present"; fi
 ok "encrypt refuses a keyring that holds a secret key"

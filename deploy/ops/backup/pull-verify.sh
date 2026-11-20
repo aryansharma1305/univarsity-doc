@@ -30,7 +30,9 @@ fi
 [ $# -gt 0 ] || { echo "nothing to verify"; exit 0; }
 mkdir -p "$LOCAL"
 tmp=""
-trap 'rm -rf "$tmp"' EXIT INT TERM
+trap 'rm -rf "$tmp"' EXIT
+trap 'rm -rf "$tmp"; exit 130' INT
+trap 'rm -rf "$tmp"; exit 143' TERM
 
 for TS in "$@"; do
   valid_ts "$TS" || die "bad set name $TS"

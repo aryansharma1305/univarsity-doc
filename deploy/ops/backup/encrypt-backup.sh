@@ -7,12 +7,18 @@ set -euo pipefail
 umask 077
 HERE=$(cd "$(dirname "$0")" && pwd)
 GNUPG=${DV_GNUPGHOME:-/etc/docversity/backup-gnupg}
+die() { echo "encrypt-backup: $*" >&2; exit 1; }
 # Custody key (ROLLBACK-AND-RECOVERY.md §3). Fixed here on purpose; only the offline self-test may
 # substitute its throwaway key.
 RECIPIENT=E9E34ADEBC492B000736862C2936904343F7AF44
-if [ "${DV_SELFTEST:-}" = 1 ]; then RECIPIENT=$DV_SELFTEST_RECIPIENT; fi
+# The override needs the harness marker too, so a stray DV_SELFTEST=1 (e.g. in ops.env) cannot
+# redirect production backups to another key; the systemd unit also unsets these variables.
+if [ "${DV_SELFTEST:-}" = 1 ]; then
+  [ -f "${DV_SELFTEST_DIR:-/nonexistent}/.ops-selftest" ] && [ "${GNUPG#"$DV_SELFTEST_DIR"/}" != "$GNUPG" ] ||
+    die "DV_SELFTEST is only honoured inside the self-test harness"
+  RECIPIENT=$DV_SELFTEST_RECIPIENT
+fi
 ENC=${DV_ENC_DIR:-/opt/docversity/university-2efcea18-20261114/university/backups-encrypted}
-die() { echo "encrypt-backup: $*" >&2; exit 1; }
 sha256() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d' ' -f1; }
 
 [ $# -eq 1 ] || die "usage: encrypt-backup.sh <backup dir>"

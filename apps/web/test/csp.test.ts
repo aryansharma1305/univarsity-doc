@@ -172,6 +172,13 @@ describe('POST /csp-report', () => {
     for (let i = 0; i < 20; i += 1) expect(allowReport('a', t)).toBe(true);
     expect(allowReport('a', t)).toBe(false);
     expect(allowReport('b', t)).toBe(true);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     expect(allowReport('a', t + 60_000)).toBe(true);
+    // The one suppressed report of the previous minute is counted once, not lost silently.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toMatchObject({
+      msg: 'csp-report-suppressed',
+      count: 1,
+    });
   });
 });

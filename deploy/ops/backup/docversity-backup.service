@@ -6,6 +6,8 @@ After=docker.service
 [Service]
 Type=oneshot
 EnvironmentFile=-/etc/docversity/ops.env
+# Self-test overrides must never reach the production job.
+UnsetEnvironment=DV_SELFTEST DV_SELFTEST_RECIPIENT DV_SELFTEST_DIR
 ExecStart=/opt/docversity/ops/backup/backup-daily.sh
 Nice=10
 IOSchedulingClass=idle
