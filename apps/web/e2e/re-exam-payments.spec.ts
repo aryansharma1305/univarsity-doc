@@ -214,4 +214,106 @@ test.describe('mobile', () => {
     await capture(portal, 'student-re-exam-payment-mobile');
     await portal.context().close();
   });
+
+  // SIMULATED: the API is in its default mode off, so the Razorpay endpoints and checkout.js are
+  // mocked in the browser. This proves the UI flow only; no real gateway transaction is made.
+  test('Razorpay TEST checkout UI with a mocked checkout script (simulated provider)', async ({
+    browser,
+  }) => {
+    const alpha = fixtures().examStudents[0];
+    if (!alpha) throw new Error('Missing synthetic fixture');
+    const portal = await studentPage(browser, alpha, 390);
+    const paymentId = '01900000-0000-7000-8000-00000000e2e1';
+    let paid = false;
+    const calls: string[] = [];
+    await portal.route('**/api/v1/student/payment-buttons/re-exam/*', (route) =>
+      route.fulfill({
+        json: {
+          service: 'RE_EXAM',
+          applicationId: route.request().url().split('/').pop(),
+          paymentId,
+          status: 'PENDING',
+          unavailableReason: null,
+          certificateFeeScope: 'HARD_COPY_ONLY',
+          checkout: { mode: 'TEST', kind: 'ORDER' },
+          liveTransactionsEnabled: false,
+          qrFallbackEnabled: false,
+        },
+      }),
+    );
+    await portal.route(`**/api/v1/student/re-exam-payments/${paymentId}/**`, (route) => {
+      const url = route.request().url();
+      calls.push(`${route.request().method()} ${url.slice(url.indexOf('/razorpay'))}`);
+      if (url.endsWith('/razorpay-order'))
+        return route.fulfill({
+          json: {
+            orderId: 'order_E2eSimulated',
+            keyId: 'rzp_test_SYNTHETIC',
+            amountMinor: 100000,
+            currency: 'INR',
+            mode: 'TEST',
+          },
+        });
+      if (url.endsWith('/razorpay-return')) {
+        paid = true;
+        return route.fulfill({ json: { status: 'AWAITING_CONFIRMATION' } });
+      }
+      return route.fulfill({
+        json: {
+          orders: paid
+            ? [
+                {
+                  attempt: 1,
+                  paymentState: 'PAID',
+                  providerOrderId: 'order_E2eSimulated',
+                  providerPaymentId: 'pay_E2eSimulated',
+                  amountMinor: 100000,
+                  currency: 'INR',
+                  createdAt: new Date().toISOString(),
+                  checkoutReturnedAt: new Date().toISOString(),
+                },
+              ]
+            : [],
+        },
+      });
+    });
+    // Fake Standard Checkout: "pays" immediately with a synthetic response.
+    await portal.route('https://checkout.razorpay.com/v1/checkout.js', (route) =>
+      route.fulfill({
+        contentType: 'application/javascript',
+        body: `window.Razorpay = function (options) {
+          this.on = function () {};
+          this.open = function () {
+            window.__rzpOptions = { key: options.key, order_id: options.order_id, amount: options.amount, prefill: options.prefill };
+            setTimeout(function () {
+              options.handler({ razorpay_order_id: options.order_id, razorpay_payment_id: 'pay_E2eSimulated', razorpay_signature: '${'a'.repeat(64)}' });
+            }, 50);
+          };
+        };`,
+      }),
+    );
+    await portal.goto(shared.paymentUrl);
+    const pay = portal.getByRole('button', { name: 'Pay online (TEST)' });
+    await expect(pay).toBeVisible();
+    await expectNoHorizontalOverflow(portal);
+    await expectNoSeriousA11yViolations(portal);
+    await pay.dblclick();
+    await expect(
+      portal.getByRole('note').filter({ hasText: 'Acknowledgement (not an official receipt)' }),
+    ).toContainText('pay_E2eSimulated');
+    expect(calls.filter((c) => c.startsWith('POST /razorpay-order'))).toHaveLength(1);
+    expect(calls).toContain('POST /razorpay-return');
+    const options = await portal.evaluate(
+      () => (window as unknown as { __rzpOptions: unknown }).__rzpOptions,
+    );
+    expect(options).toEqual({
+      key: 'rzp_test_SYNTHETIC',
+      order_id: 'order_E2eSimulated',
+      amount: 100000,
+    });
+    await expectNoHorizontalOverflow(portal);
+    await expectNoSeriousA11yViolations(portal);
+    await capture(portal, 'student-razorpay-test-checkout-mobile');
+    await portal.context().close();
+  });
 });
