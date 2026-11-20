@@ -1,0 +1,65 @@
+#!/bin/bash
+# Encrypt one plaintext backup set on the VPS to the custody PUBLIC key, then verify the result.
+# Usage: encrypt-backup.sh <backup dir>   (e.g. .../university/backups/20261118T122235Z)
+# The VPS keyring holds only the public key; this script refuses to run if a secret key is present.
+# Output: $DV_ENC_DIR/<ts>.tar.gpg and <ts>.tar.gpg.sha256. Never deletes plaintext (prune-backups.sh).
+set -euo pipefail
+umask 077
+HERE=$(cd "$(dirname "$0")" && pwd)
+GNUPG=${DV_GNUPGHOME:-/etc/docversity/backup-gnupg}
+die() { echo "encrypt-backup: $*" >&2; exit 1; }
+# Custody key (ROLLBACK-AND-RECOVERY.md §3). Fixed here on purpose; only the offline self-test may
+# substitute its throwaway key.
+RECIPIENT=E9E34ADEBC492B000736862C2936904343F7AF44
+# The override needs the harness marker too, so a stray DV_SELFTEST=1 (e.g. in ops.env) cannot
+# redirect production backups to another key; the systemd unit also unsets these variables.
+if [ "${DV_SELFTEST:-}" = 1 ]; then
+  [ -f "${DV_SELFTEST_DIR:-/nonexistent}/.ops-selftest" ] && [ "${GNUPG#"$DV_SELFTEST_DIR"/}" != "$GNUPG" ] ||
+    die "DV_SELFTEST is only honoured inside the self-test harness"
+  RECIPIENT=$DV_SELFTEST_RECIPIENT
+fi
+ENC=${DV_ENC_DIR:-/opt/docversity/university-2efcea18-20261114/university/backups-encrypted}
+sha256() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d' ' -f1; }
+
+[ $# -eq 1 ] || die "usage: encrypt-backup.sh <backup dir>"
+D=${1%/}
+TS=$(basename "$D")
+case $TS in
+  20[0-9][0-9][01][0-9][0-3][0-9]T[0-2][0-9][0-5][0-9][0-5][0-9]Z) ;;
+  *) die "not a backup set name: $TS" ;;
+esac
+[ -d "$D" ] && [ -f "$D/manifest.json" ] || die "no manifest.json in $D"
+python3 "$HERE/verify-manifest.py" "$D" || die "plaintext set fails its manifest; not encrypting"
+
+gpg --homedir "$GNUPG" --batch --with-colons --list-secret-keys 2>/dev/null | grep -q '^sec' &&
+  die "secret key present in $GNUPG; the VPS must hold the public key only"
+# The key found must carry exactly this primary fingerprint (not a uid or short-ID match).
+FPR=$(gpg --homedir "$GNUPG" --batch --with-colons --list-keys "$RECIPIENT" 2>/dev/null |
+  awk -F: '$1=="fpr" {print $10; exit}' || true)
+[ "$FPR" = "$RECIPIENT" ] || die "custody key $RECIPIENT not in $GNUPG (found: ${FPR:-none})"
+EXPECTED=$(gpg --homedir "$GNUPG" --batch --with-colons --list-keys "$RECIPIENT" |
+  awk -F: '$1=="sub" && $12 ~ /e/ {print $5}' | sort -u || true)
+[ -n "$EXPECTED" ] || die "no encryption subkey for $RECIPIENT in $GNUPG"
+
+mkdir -p "$ENC"
+chmod 700 "$ENC"
+OUT=$ENC/$TS.tar.gpg
+[ ! -e "$OUT" ] || die "$OUT already exists"
+trap 'rm -f "$OUT.tmp"' EXIT
+# Plaintext never touches disk outside the original set: tar streams straight into gpg
+# (pipefail: a failing tar fails the job and the partial ciphertext is removed).
+tar -C "$(dirname "$D")" -cf - "$TS" |
+  gpg --homedir "$GNUPG" --batch --no-tty --trust-model always \
+    --recipient "$RECIPIENT" --encrypt --output "$OUT.tmp"
+
+# Verify: a non-empty OpenPGP message addressed to exactly the custody encryption subkey(s).
+[ -s "$OUT.tmp" ] || die "empty ciphertext"
+GOT=$(gpg --homedir "$GNUPG" --batch --no-tty --list-packets "$OUT.tmp" 2>/dev/null |
+  sed -n 's/^:pubkey enc packet:.* keyid \([0-9A-F]*\).*/\1/p' | sort -u || true)
+[ "$GOT" = "$EXPECTED" ] || die "ciphertext recipients ($GOT) differ from custody subkey ($EXPECTED)"
+
+HASH=$(sha256 "$OUT.tmp")
+mv "$OUT.tmp" "$OUT"
+trap - EXIT
+printf '%s  %s\n' "$HASH" "$TS.tar.gpg" >"$OUT.sha256"
+echo "encrypted: $OUT sha256=$HASH bytes=$(wc -c <"$OUT" | tr -d ' ')"

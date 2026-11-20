@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
+import { connection } from 'next/server';
 import type { ReactNode } from 'react';
 import { Toaster } from '@docversity/ui/components/sonner';
 import '@/styles/globals.css';
@@ -22,7 +23,10 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: '#03142F' };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Render per request so Next.js can put the per-request CSP nonce on its inline scripts
+  // (prerendered HTML has no nonce and would violate the strict policy; see lib/csp.ts).
+  await connection();
   return (
     <html lang="en" className={`${inter.variable} ${jakarta.variable}`}>
       {/*
