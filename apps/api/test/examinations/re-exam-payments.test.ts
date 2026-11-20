@@ -24,6 +24,7 @@ import {
   paymentButtonViewSchema,
   razorpayOrderViewSchema,
   razorpayReceiptsSchema,
+  razorpayWorkspaceSchema,
   type PaymentRegion,
   paymentDestinationDetailSchema,
   paymentDestinationListSchema,
@@ -1594,6 +1595,7 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
     const calls: RazorpayHttpRequest[] = [];
     let createFailure: { status: number; afterStore: boolean } | null = null;
     let malformedFetch = false;
+    const refunds: { key: string; body: Record<string, unknown> & { id: string } }[] = [];
     const port: RazorpayHttpPort = (request) => {
       calls.push(request);
       if (request.method === 'POST' && request.path === '/orders') {
@@ -1637,6 +1639,27 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
             items: orders.filter((o) => o.receipt === decodeURIComponent(byReceipt[1] ?? '')),
           }),
         );
+      const refundFor = /^\/payments\/(pay_[A-Za-z0-9]+)\/refund$/.exec(request.path);
+      if (request.method === 'POST' && refundFor) {
+        const key = request.headers['X-Refund-Idempotency'] ?? '';
+        const prior = refunds.find((r) => r.key === key);
+        if (prior) return Promise.resolve(reply(prior.body));
+        const body = JSON.parse(request.body ?? '{}') as { amount: number; receipt?: string };
+        const refund = {
+          id: `rfnd_${rid()}`,
+          entity: 'refund',
+          amount: body.amount,
+          currency: 'INR',
+          payment_id: refundFor[1] ?? '',
+          status: 'pending',
+          receipt: body.receipt ?? null,
+        };
+        refunds.push({ key, body: refund });
+        return Promise.resolve(reply(refund));
+      }
+      const oneRefund = /^\/refunds\/(rfnd_[A-Za-z0-9]+)$/.exec(request.path);
+      const knownRefund = refunds.find((r) => r.body.id === oneRefund?.[1]);
+      if (request.method === 'GET' && knownRefund) return Promise.resolve(reply(knownRefund.body));
       const ofOrder = /^\/orders\/(order_[A-Za-z0-9]+)\/payments$/.exec(request.path);
       if (request.method === 'GET' && ofOrder)
         return Promise.resolve(
@@ -1666,6 +1689,7 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
       malformedFetches: (on: boolean) => {
         malformedFetch = on;
       },
+      refunds,
     };
   }
   type Provider = ReturnType<typeof provider>;
@@ -2379,5 +2403,360 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
     expect(
       await testDb().auditLog.count({ where: { action: 'RAZORPAY_RECONCILIATION_RUN' } }),
     ).toBeGreaterThanOrEqual(2);
+  });
+  describe('checkout availability, history, refunds and reconciliation (SIMULATED provider)', () => {
+    const panel = (agent: Agent, applicationId: string) =>
+      agent.get(`/api/v1/student/payment-buttons/re-exam/${applicationId}`).expect(200);
+    const history = (agent: Agent, paymentId: string) =>
+      agent.get(`/api/v1/student/re-exam-payments/${paymentId}/razorpay`);
+
+    it('offers Pay online only for a payable synthetic obligation and shows only own history', async () => {
+      const fake = provider();
+      const o = await obligation();
+      expect(
+        paymentButtonViewSchema.parse((await panel(o.student.agent, o.applicationId)).body)
+          .checkout,
+      ).toBeNull(); // mode off
+      await expectStatus(history(o.student.agent, o.payment.id), 404);
+      enable([o.student.registrationId], fake);
+      expect((await panel(o.student.agent, o.applicationId)).body).toMatchObject({
+        status: 'PENDING',
+        checkout: { mode: 'TEST', kind: 'ORDER' },
+        unavailableReason: null,
+        liveTransactionsEnabled: false,
+      });
+      expect((await expectStatus(history(o.student.agent, o.payment.id), 200)).body).toEqual({
+        orders: [],
+      });
+      // The amount always comes from the obligation: a body is ignored, a manipulated row is refused.
+      const view = razorpayOrderViewSchema.parse(
+        (
+          await expectStatus(
+            studentPost(
+              o.student.agent,
+              `student/re-exam-payments/${o.payment.id}/razorpay-order`,
+              {
+                amountMinor: 1,
+                currency: 'USD',
+              },
+            ),
+            200,
+          )
+        ).body,
+      );
+      const due = await testDb().reExamPayment.findUniqueOrThrow({ where: { id: o.payment.id } });
+      expect(view).toMatchObject({ amountMinor: due.amountMinor, currency: due.currency });
+      await expect(
+        testDb().razorpayOrder.create({
+          data: {
+            paymentId: due.id,
+            attempt: 50,
+            receipt: `rx_${due.id.replaceAll('-', '')}_50`,
+            mode: 'TEST',
+            accountId: merchant,
+            amountMinor: due.amountMinor + 1,
+            currency: due.currency,
+            studentAccountId: o.student.accountId,
+          },
+        }),
+      ).rejects.toThrow(/must equal the obligation|razorpay_orders_one_open_key|Unique/);
+      await expect(
+        testDb().$executeRawUnsafe(
+          `UPDATE razorpay_orders SET mode = 'LIVE' WHERE provider_order_id = '${view.orderId}'`,
+        ),
+      ).rejects.toThrow();
+      const other = await newStudent();
+      await expectStatus(history(other.agent, o.payment.id), 404);
+      const pending = (await expectStatus(history(o.student.agent, o.payment.id), 200)).body as {
+        orders: { paymentState: string }[];
+      };
+      expect(pending.orders.map((x) => x.paymentState)).toEqual(['PENDING']);
+      // A failed attempt changes nothing; the order stays open for a retry.
+      const failedPayment = `pay_${rid()}`;
+      await expectStatus(
+        deliver(
+          captureEvent('payment.captured', view.orderId, failedPayment, due.amountMinor, {
+            status: 'failed',
+            captured: false,
+          }),
+        ),
+        200,
+      );
+      await expectStatus(
+        deliver({
+          ...captureEvent('payment.captured', view.orderId, failedPayment, due.amountMinor, {
+            status: 'failed',
+            captured: false,
+          }),
+          event: 'payment.failed',
+        }),
+        200,
+      );
+      expect((await orderRow(view.orderId)).status).toBe('CREATED');
+      // Paid: history shows the provider payment, the panel no longer offers checkout.
+      const paidId = `pay_${rid()}`;
+      fake.payments.set(paidId, {
+        id: paidId,
+        entity: 'payment',
+        amount: due.amountMinor,
+        currency: due.currency,
+        status: 'captured',
+        captured: true,
+        amount_refunded: 0,
+        order_id: view.orderId,
+      });
+      await expectStatus(
+        deliver(captureEvent('order.paid', view.orderId, paidId, due.amountMinor)),
+        200,
+      );
+      const after = (await expectStatus(history(o.student.agent, o.payment.id), 200)).body as {
+        orders: { paymentState: string; providerPaymentId: string | null }[];
+      };
+      expect(after.orders).toMatchObject([{ paymentState: 'PAID', providerPaymentId: paidId }]);
+      expect((await panel(o.student.agent, o.applicationId)).body).toMatchObject({
+        status: 'AWAITING_VERIFICATION',
+        checkout: null,
+      });
+      // An unapproved (retired) fee destination is never payable online.
+      const late = await obligation();
+      enable([late.student.registrationId], fake);
+      await retireRegion('INDIA');
+      expect(
+        paymentButtonViewSchema.parse((await panel(late.student.agent, late.applicationId)).body)
+          .checkout,
+      ).toBeNull();
+      await expectStatus(createOrder(late.student.agent, late.payment.id), 409);
+    });
+
+    it('refunds with maker-checker, over-refund guard, idempotency and refund webhooks', async () => {
+      const fake = provider();
+      const p = await paidOrder(fake);
+      await expectStatus(
+        deliver(captureEvent('order.paid', p.orderId, p.providerPaymentId, p.due.amountMinor)),
+        200,
+      );
+      const base = `payment-buttons/razorpay/re-exam-payments/${p.payment.id}`;
+      // Refunds disabled by default.
+      await approver.post(`${base}/refunds`, { reason: 'DUPLICATE_PAYMENT' }).expect(409);
+      enable([p.student.registrationId], fake, 'full_only');
+      await approver
+        .post(`${base}/refunds`, { amountMinor: 1_000, reason: 'DUPLICATE_PAYMENT' })
+        .expect(409);
+      enable([p.student.registrationId], fake, 'partial');
+      // Unauthorized: no verify permission, no CSRF, a student session.
+      await viewer
+        .post(`${base}/refunds`, { amountMinor: 1_000, reason: 'DUPLICATE_PAYMENT' })
+        .expect(403);
+      await approver.agent
+        .post(`/api/v1/${base}/refunds`)
+        .send({ reason: 'DUPLICATE_PAYMENT' })
+        .expect(403);
+      expect(
+        (await studentPost(p.student.agent, `${base}/refunds`, { reason: 'DUPLICATE_PAYMENT' }))
+          .status,
+      ).toBe(401);
+      const partial = 30_000;
+      const first = (
+        await approver
+          .post(`${base}/refunds`, { amountMinor: partial, reason: 'DUPLICATE_PAYMENT' })
+          .expect(200)
+      ).body as { id: string; status: string };
+      expect(first.status).toBe('REQUESTED');
+      // Over-refund guard: only the remaining amount can be requested.
+      await approver
+        .post(`${base}/refunds`, {
+          amountMinor: p.due.amountMinor - partial + 1,
+          reason: 'OVERPAYMENT',
+        })
+        .expect(409);
+      const second = (
+        await approver
+          .post(`${base}/refunds`, {
+            amountMinor: p.due.amountMinor - partial,
+            reason: 'OVERPAYMENT',
+          })
+          .expect(200)
+      ).body as { id: string };
+      // Maker-checker: the requester can neither approve nor reject.
+      await approver.post(`payment-buttons/razorpay/refunds/${first.id}/approve`).expect(403);
+      await approver.post(`payment-buttons/razorpay/refunds/${second.id}/reject`).expect(403);
+      await approver2.post(`payment-buttons/razorpay/refunds/${second.id}/reject`).expect(200);
+      const approved = await approver2
+        .post(`payment-buttons/razorpay/refunds/${first.id}/approve`)
+        .expect(200);
+      expect(approved.body).toEqual({ id: first.id, status: 'PENDING' });
+      // Idempotent: approving again sends nothing new.
+      await approver2.post(`payment-buttons/razorpay/refunds/${first.id}/approve`).expect(200);
+      const sent = fake.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/refund'));
+      expect(sent).toHaveLength(1);
+      const row = await testDb().razorpayRefund.findUniqueOrThrow({ where: { id: first.id } });
+      expect(sent[0]?.headers['X-Refund-Idempotency']).toBe(row.idempotencyKey);
+      expect(JSON.parse(sent[0]?.body ?? '{}')).toMatchObject({
+        amount: partial,
+        receipt: row.receipt,
+      });
+      // The DB refuses a refund beyond the capture even without the service.
+      await expect(
+        testDb().razorpayRefund.create({
+          data: {
+            orderId: row.orderId,
+            providerPaymentId: row.providerPaymentId,
+            amountMinor: p.due.amountMinor,
+            currency: row.currency,
+            reason: 'OTHER',
+            idempotencyKey: `refund-${randomUUID().replaceAll('-', '')}`,
+            receipt: `rf_${randomUUID().replaceAll('-', '')}`,
+            requestedByUserId: approver.user.id,
+          },
+        }),
+      ).rejects.toThrow(/exceed the captured amount/);
+      // refund.processed (signed) completes it; a replay and a stale refund.created change nothing.
+      const refundEvent = (name: string, status: string) => ({
+        entity: 'event',
+        account_id: merchant,
+        event: name,
+        created_at: Math.floor(Date.now() / 1000),
+        payload: {
+          refund: {
+            entity: {
+              id: row.providerRefundId,
+              entity: 'refund',
+              amount: partial,
+              currency: 'INR',
+              payment_id: p.providerPaymentId,
+              status,
+              receipt: row.receipt,
+            },
+          },
+        },
+      });
+      const processedId = `evt_${randomUUID()}`;
+      await expectStatus(deliver(refundEvent('refund.processed', 'processed'), processedId), 200);
+      await expectStatus(deliver(refundEvent('refund.processed', 'processed'), processedId), 200);
+      await expectStatus(deliver(refundEvent('refund.created', 'pending')), 200);
+      const done = await testDb().razorpayRefund.findUniqueOrThrow({
+        where: { id: first.id },
+        include: { events: true },
+      });
+      expect(done.status).toBe('PROCESSED');
+      expect(done.events.filter((e) => e.kind === 'PROCESSED')).toHaveLength(1);
+      expect(done.events.filter((e) => e.kind === 'WEBHOOK_IGNORED')).toHaveLength(1);
+      const workspace = razorpayWorkspaceSchema.parse((await approver2.get(base).expect(200)).body);
+      expect(workspace.orders[0]).toMatchObject({
+        paymentState: 'PAID',
+        refundState: 'PARTIALLY_REFUNDED',
+        refundableMinor: p.due.amountMinor - partial,
+      });
+      expect(workspace.refundRequests.map((r) => r.status)).toEqual(['PROCESSED', 'REJECTED']);
+      expect(workspace.audit.map((a) => a.action)).toEqual(
+        expect.arrayContaining([
+          'RAZORPAY_REFUND_REQUESTED',
+          'RAZORPAY_REFUND_APPROVED',
+          'RAZORPAY_REFUND_REJECTED',
+          'RAZORPAY_REFUND_UPDATED',
+        ]) as string[],
+      );
+      // The academic application and the obligation never change because of a refund.
+      expect(
+        (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: p.payment.id } })).status,
+      ).toBe('SUBMITTED');
+    });
+
+    it('reconciles uncertain orders: stale reservation, authorized-uncaptured, never paid without capture', async () => {
+      const fake = provider();
+      const o = await obligation();
+      enable([o.student.registrationId], fake);
+      fake.failNextCreate(504, true);
+      await expectStatus(createOrder(o.student.agent, o.payment.id), 503);
+      const reserved = await testDb().razorpayOrder.findFirstOrThrow({
+        where: { paymentId: o.payment.id },
+      });
+      expect(reserved.status).toBe('RESERVED');
+      const reconciliation = app.get(RazorpayReconciliationService);
+      await reconciliation.run();
+      const recovered = await testDb().razorpayOrder.findUniqueOrThrow({
+        where: { id: reserved.id },
+      });
+      expect(recovered.status).toBe('CREATED');
+      expect(fake.creates()).toBe(1);
+      // An authorized but uncaptured payment is reported, never treated as paid.
+      const authorizedId = `pay_${rid()}`;
+      fake.payments.set(authorizedId, {
+        id: authorizedId,
+        entity: 'payment',
+        amount: recovered.amountMinor,
+        currency: recovered.currency,
+        status: 'authorized',
+        captured: false,
+        amount_refunded: 0,
+        order_id: recovered.providerOrderId,
+      });
+      const summary = await reconciliation.run();
+      expect(summary.issues.filter((i) => i.orderId === recovered.id)).toEqual([
+        {
+          code: 'AUTHORIZED_UNCAPTURED',
+          orderId: recovered.id,
+          providerPaymentId: authorizedId,
+          driftMinor: 0,
+        },
+      ]);
+      // A capture Razorpay reports without a signed webhook is reported, not fulfilled.
+      fake.payments.set(authorizedId, {
+        ...fake.payments.get(authorizedId),
+        status: 'captured',
+        captured: true,
+      });
+      const third = await reconciliation.run();
+      expect(third.issues.filter((i) => i.orderId === recovered.id).map((i) => i.code)).toEqual([
+        'CAPTURE_WITHOUT_WEBHOOK',
+      ]);
+      expect(
+        (await testDb().razorpayOrder.findUniqueOrThrow({ where: { id: recovered.id } })).status,
+      ).toBe('CREATED');
+      expect(
+        (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: o.payment.id } })).status,
+      ).toBe('AWAITING_PAYMENT');
+    });
+
+    it('writes no secret, signature or key into the logs (test-mode app with a log sink)', async () => {
+      const lines: string[] = [];
+      const testApp = await createTestApp(
+        realConfig({
+          PAYMENTS_RAZORPAY_MODE: 'test',
+          DOCVERSITY_DEPLOYMENT: 'ci-synthetic',
+          PAYMENTS_ALLOWED_DEPLOYMENT: 'ci-synthetic',
+          RAZORPAY_KEY_ID: keyId,
+          RAZORPAY_KEY_SECRET: keySecret,
+          RAZORPAY_WEBHOOK_SECRET: secret,
+          RAZORPAY_ACCOUNT_ID: merchant,
+          PAYMENTS_TEST_REGISTRATION_ALLOWLIST: [randomUUID()],
+        }),
+        { logSink: (line) => lines.push(line) },
+      );
+      try {
+        const body = JSON.stringify(
+          captureEvent('payment.captured', 'order_NoSuch', `pay_${rid()}`, 100000),
+        );
+        await signed(body, `evt_${randomUUID()}`, 'application/json', testApp).expect(200);
+        await browser(testApp)
+          .post('/api/v1/payment-buttons/webhook')
+          .set('Content-Type', 'application/json')
+          .set('X-Razorpay-Signature', 'd'.repeat(64))
+          .set('X-Razorpay-Event-Id', `evt_${randomUUID()}`)
+          .send(body)
+          .expect(400);
+      } finally {
+        await testApp.close();
+      }
+      const log = lines.join('\n');
+      expect(lines.length).toBeGreaterThan(0);
+      for (const value of [
+        secret,
+        keySecret,
+        'd'.repeat(64),
+        Buffer.from(`${keyId}:${keySecret}`).toString('base64'),
+      ])
+        expect(log).not.toContain(value);
+    });
   });
 });
