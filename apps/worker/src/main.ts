@@ -1,6 +1,11 @@
 import { createPrismaClient } from '@docversity/database';
 import { S3ObjectStorage } from '@docversity/storage';
+import { Queue } from 'bullmq';
+import { razorpayPolicy } from '@docversity/payments/server';
+import { QUEUE_NAMES } from '@docversity/types';
+import { bullmqConnection } from './connection.ts';
 import { createWorkers } from './create-workers.ts';
+import { razorpayProcessor, scheduleRazorpayReconcile } from './razorpay.ts';
 import { loadRootEnv, loadWorkerEnv } from './env.ts';
 
 function log(message: string): void {
@@ -24,7 +29,24 @@ function main(): void {
       engine: { prisma, storage, limits: env },
       concurrency: env.IMPORT_CONCURRENCY,
     },
+    // Mode off (default, production): no payments queue is consumed or scheduled at all.
+    ...(razorpayPolicy(env) ? { payments: razorpayProcessor({ prisma, env }) } : {}),
   });
+  if (razorpayPolicy(env)) {
+    const queue = new Queue(QUEUE_NAMES.payments, {
+      connection: bullmqConnection(env.REDIS_URL),
+      prefix: env.QUEUE_PREFIX,
+    });
+    void scheduleRazorpayReconcile(queue)
+      .then(() => {
+        log('razorpay: mode=test reconciliation scheduled');
+      })
+      .catch((error: unknown) => {
+        log(
+          `razorpay: could not schedule reconciliation: ${error instanceof Error ? error.message : 'error'}`,
+        );
+      });
+  }
 
   // While Redis is unavailable BullMQ retries continuously. Log each distinct error once instead
   // of once per retry; the suppression resets when the worker is ready or completes a job.

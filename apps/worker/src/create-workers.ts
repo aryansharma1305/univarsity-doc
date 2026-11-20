@@ -11,6 +11,8 @@ export interface CreateWorkersOptions {
   prefix?: string;
   /** When given, the process also consumes the `imports` queue (Phase 5). */
   imports?: { engine: ImportEngine; concurrency: number };
+  /** Razorpay TEST reconciliation (only when PAYMENTS_RAZORPAY_MODE=test). */
+  payments?: Processor;
 }
 
 /** BullMQ processor for import steps (parse / validate / commit). */
@@ -28,6 +30,7 @@ export function createWorkers({
   concurrency,
   prefix,
   imports,
+  payments,
 }: CreateWorkersOptions): Worker[] {
   const base: WorkerOptions = {
     connection: bullmqConnection(redisUrl),
@@ -46,5 +49,7 @@ export function createWorkers({
       }),
     );
   }
+  if (payments)
+    workers.push(new Worker(QUEUE_NAMES.payments, payments, { ...base, concurrency: 1 }));
   return workers;
 }

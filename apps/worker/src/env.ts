@@ -7,23 +7,31 @@ import {
   nodeEnvSchema,
   parseEnv,
   queueEnvSchema,
+  razorpayEnvSchema,
   redisEnvSchema,
+  refineRazorpayEnv,
   storageEnvSchema,
 } from '@docversity/validation';
 import { z } from 'zod';
 
-export const workerEnvSchema = z.object({
-  NODE_ENV: nodeEnvSchema,
-  LOG_LEVEL: logLevelSchema,
-  WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(2),
-  /** Import steps processed in parallel (each is memory-heavy: a whole workbook is parsed). */
-  IMPORT_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(1),
-  ...redisEnvSchema.shape,
-  ...queueEnvSchema.shape,
-  ...databaseEnvSchema.shape,
-  ...storageEnvSchema.shape,
-  ...importLimitsEnvSchema.shape,
-});
+export const workerEnvSchema = z
+  .object({
+    NODE_ENV: nodeEnvSchema,
+    LOG_LEVEL: logLevelSchema,
+    WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(2),
+    /** Import steps processed in parallel (each is memory-heavy: a whole workbook is parsed). */
+    IMPORT_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(1),
+    ...redisEnvSchema.shape,
+    ...queueEnvSchema.shape,
+    ...databaseEnvSchema.shape,
+    ...storageEnvSchema.shape,
+    ...importLimitsEnvSchema.shape,
+    // Same Razorpay settings as the API (same runtime env); off by default, test runs reconciliation.
+    ...razorpayEnvSchema.shape,
+  })
+  .superRefine((env, ctx) => {
+    refineRazorpayEnv(env, ctx);
+  });
 
 export type WorkerEnv = z.infer<typeof workerEnvSchema>;
 
