@@ -302,15 +302,18 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
   });
 
   it('A2 before any policy every service is UNAVAILABLE (no disclosure by default)', async () => {
+    const unavailable = {
+      status: 'UNAVAILABLE',
+      message: expect.stringContaining('No record was checked.'),
+    };
     for (const service of ['admission-letter', 'certificate'] as const)
-      expect((await verify(service, { reference: 'ACC-NOTHING-1' })).body?.status).toBe(
-        'UNAVAILABLE',
+      expect((await verify(service, { reference: 'ACC-NOTHING-1' })).body).toMatchObject(
+        unavailable,
       );
     for (const service of ['registration', 'result'] as const)
       expect(
-        (await verify(service, { reference: alice.registrationNumber }, { as: alice.agent })).body
-          ?.status,
-      ).toBe('UNAVAILABLE');
+        (await verify(service, { reference: alice.registrationNumber }, { as: alice.agent })).body,
+      ).toMatchObject(unavailable);
   });
 
   it('A3 policy proposal/approval: only verificationPolicies.manage, approver must differ from proposer', async () => {

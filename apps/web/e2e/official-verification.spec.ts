@@ -35,7 +35,7 @@ for (const [service, path, label] of services) {
     const received = await response;
     expect(received.status()).toBe(200);
     expect(((await received.json()) as { status: string }).status).toBe('UNAVAILABLE');
-    await expect(page.getByRole('status')).toContainText('No verified record is available');
+    await expect(page.getByRole('status')).toContainText('No record was checked.');
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await expectNoHorizontalOverflow(page);
