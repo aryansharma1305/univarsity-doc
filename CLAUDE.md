@@ -157,7 +157,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261016093000_re_exam_payment_destination_editor_check` (9C: approver ≠ last editor),
   `20261020090000_program_certificate_eligibility` (12C: course certificate sets, proposer ≠ decider),
   `20261117090000_staff_mfa_first_login` (staff first-login flag, TOTP MFA, recovery codes; ADR-0021),
-  `20261119090000_razorpay_test_orders` (Razorpay test-mode orders, order events, ignored webhooks; ADR-0022).
+  `20261119090000_razorpay_test_orders` (Razorpay test-mode orders, order events, ignored webhooks; ADR-0022),
+  `20261120090000_razorpay_test_hardening` (synthetic-registration marker, create lease).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -260,7 +261,8 @@ Payment never decides the application. Details: docs/api/examinations.md (Phase 
 Razorpay (ADR-0022, [docs/development/razorpay-test-mode.md](docs/development/razorpay-test-mode.md)):
 `PAYMENTS_RAZORPAY_MODE` defaults to `off` (webhook and order routes 404); `test` needs runtime
 secrets and an allowed deployment name; `live` refuses to start. A signed, order-bound capture with
-exact amount/currency moves an obligation only to SUBMITTED; staff still verify.
+exact amount/currency moves an obligation only to SUBMITTED; staff still verify. Production must
+have no `RAZORPAY_*` variables.
 
 ## 10e. Internal draft results (Phase 10C)
 

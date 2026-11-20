@@ -29,6 +29,18 @@ obligation, and a webhook that never answers an authentic event with 4xx.
 6. API refunds exist only as a client method with `X-Refund-Idempotency`; no endpoint until the
    refund policy and approvers (plan D4/D6) are decided. Refunds are issued in the dashboard.
 
+7. Hardening after the PR #49 review: deployment names matching `prod`, `production`, `live` or
+   `main` are refused in code; an order needs both the config allowlist **and** an operator row in
+   `razorpay_test_registrations` (enforced by the order trigger); staff see `providerSource =
+RAZORPAY_TEST`; Razorpay calls run outside transactions under a 15 s create lease; open orders
+   are abandoned on manual submission, void, cancellation, a failed payability re-check or after
+   30 minutes; a daily `pnpm --filter @docversity/api razorpay:reconcile` compares orders with
+   Razorpay's payments and the settlement recon, re-matches `PROVIDER_UNVERIFIED` captures, and
+   alerts through the pluggable `PAYMENT_ALERT_SINK` (default: a structured warning log).
+
+This supersedes the plan's wording (sections 3.1 and 3.4) that a matched capture makes the
+obligation VERIFIED: it makes it SUBMITTED, and staff verify.
+
 ## Consequences
 
 Production keeps `off` and is byte-for-byte unchanged on the disabled path (404). Staging needs the
