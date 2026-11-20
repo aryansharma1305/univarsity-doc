@@ -304,7 +304,8 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
   it('A2 before any policy every service is UNAVAILABLE (no disclosure by default)', async () => {
     const unavailable = {
       status: 'UNAVAILABLE',
-      message: expect.stringContaining('No record was checked.'),
+      message:
+        'The university has not enabled online verification for this service. No record was checked. Contact the university records office for help.',
     };
     for (const service of ['admission-letter', 'certificate'] as const)
       expect((await verify(service, { reference: 'ACC-NOTHING-1' })).body).toMatchObject(
