@@ -198,6 +198,23 @@ describe('RazorpayClient (fake port, no network)', () => {
       code: 'INVALID_REQUEST',
     });
   });
+  it('fetches one refund by id', async () => {
+    const refund = {
+      id: 'rfnd_Synthetic1',
+      entity: 'refund',
+      amount: 100,
+      currency: 'INR',
+      payment_id: 'pay_Synthetic1',
+      status: 'processed',
+      receipt: 'rf_x',
+    };
+    const { client, calls } = fake(ok(refund));
+    await expect(client.fetchRefund('rfnd_Synthetic1')).resolves.toMatchObject({
+      status: 'processed',
+    });
+    expect(calls[0]?.path).toBe('/refunds/rfnd_Synthetic1');
+    await expect(client.fetchRefund('x')).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+  });
   it('refuses malformed credentials', () => {
     expect(() => new RazorpayClient('key', keySecret, vi.fn())).toThrow(RazorpayApiError);
     expect(() => new RazorpayClient(keyId, 'short', vi.fn())).toThrow(RazorpayApiError);

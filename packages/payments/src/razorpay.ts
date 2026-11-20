@@ -12,6 +12,12 @@ export const RAZORPAY_HANDLED_EVENTS = [
   'payment.failed',
   'order.paid',
 ] as const;
+/** Refund events applied to Docversity-initiated refunds (matched by our refund receipt). */
+export const RAZORPAY_REFUND_EVENTS = [
+  'refund.created',
+  'refund.processed',
+  'refund.failed',
+] as const;
 export type RazorpayHandledEvent = (typeof RAZORPAY_HANDLED_EVENTS)[number];
 
 const paymentSchema = z.object({
@@ -43,6 +49,27 @@ const payloadSchema = z.object({
   order: z.object({ entity: orderSchema }).optional(),
 });
 
+const refundEntitySchema = z.object({
+  id: z.string().regex(/^rfnd_[A-Za-z0-9]{1,50}$/),
+  entity: z.literal('refund'),
+  amount: z.number().int().min(1).max(1_000_000_000),
+  currency: z.string().regex(/^[A-Z]{3}$/),
+  payment_id: z.string().regex(paymentIdPattern),
+  status: z.enum(['pending', 'processed', 'failed']),
+  receipt: z.string().max(40).nullish(),
+});
+export interface RazorpayRefundEvidence {
+  eventId: string;
+  bodySha256: string;
+  eventType: (typeof RAZORPAY_REFUND_EVENTS)[number];
+  providerRefundId: string;
+  providerPaymentId: string;
+  amountMinor: number;
+  currency: string;
+  status: 'pending' | 'processed' | 'failed';
+  receipt: string | null;
+}
+
 export type RazorpayIgnoreReason = 'UNHANDLED_EVENT' | 'UNPARSEABLE' | 'ACCOUNT_MISMATCH';
 export interface RazorpayEvidence {
   eventId: string;
@@ -59,6 +86,7 @@ export interface RazorpayEvidence {
 }
 export type RazorpayClassifiedEvent =
   | { outcome: 'HANDLED'; evidence: RazorpayEvidence }
+  | { outcome: 'REFUND'; refund: RazorpayRefundEvidence }
   | {
       outcome: 'IGNORED';
       reason: RazorpayIgnoreReason;
@@ -122,6 +150,34 @@ export function classifyRazorpayEvent(
   const e = envelope.data;
   if (!accountIdPattern.test(e.account_id) || e.account_id !== merchantId)
     return ignored('ACCOUNT_MISMATCH');
+  if ((RAZORPAY_REFUND_EVENTS as readonly string[]).includes(e.event)) {
+    const refund = z
+      .object({ refund: z.object({ entity: refundEntitySchema }) })
+      .safeParse((json as { payload?: unknown }).payload);
+    if (!refund.success) return ignored('UNPARSEABLE');
+    const r = refund.data.refund.entity;
+    const consistent =
+      e.event === 'refund.processed'
+        ? r.status === 'processed'
+        : e.event === 'refund.failed'
+          ? r.status === 'failed'
+          : r.status !== 'failed';
+    if (!consistent) return ignored('UNPARSEABLE');
+    return {
+      outcome: 'REFUND',
+      refund: {
+        eventId,
+        bodySha256,
+        eventType: e.event as RazorpayRefundEvidence['eventType'],
+        providerRefundId: r.id,
+        providerPaymentId: r.payment_id,
+        amountMinor: r.amount,
+        currency: r.currency,
+        status: r.status,
+        receipt: r.receipt ?? null,
+      },
+    };
+  }
   if (!(RAZORPAY_HANDLED_EVENTS as readonly string[]).includes(e.event))
     return ignored('UNHANDLED_EVENT');
   const payload = payloadSchema.safeParse((json as { payload?: unknown }).payload);

@@ -243,6 +243,8 @@ export class MockPaymentProvider implements PaymentProvider {
 export { verifyRazorpayWebhook } from './razorpay.js';
 export {
   RAZORPAY_HANDLED_EVENTS,
+  RAZORPAY_REFUND_EVENTS,
+  type RazorpayRefundEvidence,
   classifyRazorpayEvent,
   isRazorpayEventId,
   razorpayOrderReceipt,

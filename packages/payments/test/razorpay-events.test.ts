@@ -70,12 +70,49 @@ describe('Razorpay signed event classification', () => {
     });
   });
   it('ignores unknown events without parsing their payload', () => {
-    for (const name of ['refund.processed', 'payment.dispute.created', 'payment.authorized'])
+    for (const name of ['refund.speed_changed', 'payment.dispute.created', 'payment.authorized'])
       expect(classify(event(name, { payload: { anything: true } }))).toMatchObject({
         outcome: 'IGNORED',
         reason: 'UNHANDLED_EVENT',
         eventType: name,
       });
+  });
+  it('parses refund events by the refund entity, and refuses inconsistent ones', () => {
+    const refund = (name: string, status: string) =>
+      event(name, {
+        payload: {
+          refund: {
+            entity: {
+              id: 'rfnd_Synthetic',
+              entity: 'refund',
+              amount: 500,
+              currency: 'INR',
+              payment_id: 'pay_Synthetic',
+              status,
+              receipt: 'rf_x',
+              notes: { a: 'b' },
+            },
+          },
+        },
+      });
+    expect(classify(refund('refund.processed', 'processed'))).toMatchObject({
+      outcome: 'REFUND',
+      refund: {
+        providerRefundId: 'rfnd_Synthetic',
+        amountMinor: 500,
+        status: 'processed',
+        receipt: 'rf_x',
+      },
+    });
+    expect(JSON.stringify(classify(refund('refund.failed', 'failed')))).not.toContain('notes');
+    expect(classify(refund('refund.processed', 'failed'))).toMatchObject({
+      outcome: 'IGNORED',
+      reason: 'UNPARSEABLE',
+    });
+    expect(classify(refund('refund.created', 'failed'))).toMatchObject({
+      outcome: 'IGNORED',
+      reason: 'UNPARSEABLE',
+    });
   });
   it('ignores account mismatches and unparseable bodies instead of throwing', () => {
     expect(classify({ ...event('payment.captured'), account_id: 'acc_Other' })).toMatchObject({

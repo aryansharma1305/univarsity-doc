@@ -97,6 +97,7 @@ const refundSchema = z.object({
   currency,
   payment_id: z.string().regex(/^pay_[A-Za-z0-9]{1,50}$/),
   status: z.enum(['pending', 'processed', 'failed']),
+  receipt: z.string().max(40).nullish(),
 });
 const paymentListSchema = z.object({ items: z.array(paymentSchema).max(100) });
 const reconRowSchema = z.object({
@@ -200,6 +201,12 @@ export class RazorpayClient {
     if (!valid) throw new RazorpayApiError('INVALID_REQUEST');
     const query = `year=${String(day.year)}&month=${String(day.month)}&day=${String(day.day)}&count=1000`;
     return (await this.call(reconListSchema, 'GET', `/settlements/recon/combined?${query}`)).items;
+  }
+
+  fetchRefund(refundId: string): Promise<RazorpayRefund> {
+    if (!/^rfnd_[A-Za-z0-9]{1,50}$/.test(refundId))
+      return Promise.reject(new RazorpayApiError('INVALID_REQUEST'));
+    return this.call(refundSchema, 'GET', `/refunds/${refundId}`);
   }
 
   createRefund(paymentId: string, input: CreateRefundInput): Promise<RazorpayRefund> {
