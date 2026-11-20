@@ -37,6 +37,18 @@ function useOfficialList() {
 }
 const types = ['ADMISSION_LETTER', 'TRANSCRIPT', 'PROVISIONAL', 'CHARACTER'] as const;
 const label = (value: string) => value.replaceAll('_', ' ');
+function isDocumentService(service: string) {
+  return service === 'admission-letter' || service === 'certificate';
+}
+function policyAudience(service: string) {
+  if (isDocumentService(service))
+    return 'Anyone with the document number or secure QR code can check its status and approved details. The PDF stays private.';
+  if (service === 'registration')
+    return 'Only the signed-in student can check their own registration.';
+  if (service === 'result')
+    return 'Only the signed-in student can view their own published results.';
+  return '';
+}
 function Field({
   title,
   name,
@@ -227,16 +239,21 @@ function PolicyPanel() {
               </option>
             ))}
           </Choice>
+          {service && <p className="text-sm sm:col-span-2">{policyAudience(service)}</p>}
           <Field title="Approved legal issuing institution" name="institutionName" />
           <Field title="University approval reference" name="authorizationReference" />
-          <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
-            <input name="discloseProgram" type="checkbox" />
-            Program name disclosure is approved
-          </label>
-          <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
-            <input name="discloseIssueDate" type="checkbox" />
-            Issue date disclosure is approved
-          </label>
+          {(isDocumentService(service) || service === 'registration') && (
+            <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
+              <input name="discloseProgram" type="checkbox" />
+              Program name disclosure is approved
+            </label>
+          )}
+          {isDocumentService(service) && (
+            <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
+              <input name="discloseIssueDate" type="checkbox" />
+              Issue date disclosure is approved
+            </label>
+          )}
           {service === 'certificate' && (
             <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm sm:col-span-2">
               <input
@@ -310,23 +327,30 @@ function PolicyPanel() {
                     <p className="mt-1 text-xs break-all text-muted-foreground">
                       {p.definition.authorizationReference}
                     </p>
+                    <p className="mt-2 text-sm">{policyAudience(p.service)}</p>
                     <details className="mt-3 text-sm">
                       <summary className="cursor-pointer font-medium">
                         Review proposed rules
                       </summary>
                       <dl className="mt-3 grid gap-2">
-                        <div>
-                          <dt className="font-medium">Public program</dt>
-                          <dd>{p.definition.discloseProgram ? 'Allowed' : 'Hidden'}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-medium">Public issue date</dt>
-                          <dd>{p.definition.discloseIssueDate ? 'Allowed' : 'Hidden'}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-medium">Identity rule</dt>
-                          <dd>{label(p.definition.identityFactor)}</dd>
-                        </div>
+                        {(isDocumentService(p.service) || p.service === 'registration') && (
+                          <div>
+                            <dt className="font-medium">Program name</dt>
+                            <dd>{p.definition.discloseProgram ? 'Allowed' : 'Hidden'}</dd>
+                          </div>
+                        )}
+                        {isDocumentService(p.service) && (
+                          <div>
+                            <dt className="font-medium">Issue date</dt>
+                            <dd>{p.definition.discloseIssueDate ? 'Allowed' : 'Hidden'}</dd>
+                          </div>
+                        )}
+                        {p.service === 'result' && (
+                          <div>
+                            <dt className="font-medium">Results available to the student</dt>
+                            <dd>Independently reviewed and published results</dd>
+                          </div>
+                        )}
                         {p.definition.application && (
                           <>
                             <div>
