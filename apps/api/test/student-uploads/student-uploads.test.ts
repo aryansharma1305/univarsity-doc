@@ -36,15 +36,17 @@ async function upload(
   contentType: string,
   csrf = true,
 ) {
+  // Fetch the token BEFORE building the request: a supertest request binds the shared HTTP server
+  // when it is created, and another request finishing in between closes it under it.
+  const token = csrf ? await studentCsrf(agent) : undefined;
   let req = agent.post(`/api/v1/student/uploads/${category}`);
-  if (csrf) req = req.set('X-CSRF-Token', await studentCsrf(agent));
+  if (token) req = req.set('X-CSRF-Token', token);
   return req.attach('file', bytes, { filename: 'ABCDE1234F passport.pdf', contentType });
 }
 
 async function remove(agent: Agent, category: string) {
-  return agent
-    .delete(`/api/v1/student/uploads/${category}`)
-    .set('X-CSRF-Token', await studentCsrf(agent));
+  const token = await studentCsrf(agent);
+  return agent.delete(`/api/v1/student/uploads/${category}`).set('X-CSRF-Token', token);
 }
 
 const auditsFor = (entityId: string) =>
