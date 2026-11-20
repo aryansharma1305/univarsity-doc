@@ -156,7 +156,7 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261016093000_re_exam_payment_destination_editor_check` (9C: approver ≠ last editor),
   `20261020090000_program_certificate_eligibility` (12C: course certificate sets, proposer ≠ decider),
   `20261117090000_staff_mfa_first_login` (staff first-login flag, TOTP MFA, recovery codes; ADR-0021),
-  `20261120090000_student_uploads` (student-uploaded academic/identity files; ADR-0022).
+  `20261122090000_student_uploads` (student-uploaded academic/identity files; ADR-0023).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -295,9 +295,11 @@ See [ADR-0019](docs/decisions/ADR-0019-registration-scoped-academic-samples.md).
 Students upload, replace and delete their own academic and identity files (one per category) at
 `/student/documents`; staff with `studentUploads.read` (REGISTRAR, SUPER_ADMIN) see them read-only in
 the "Student uploads" tab of `/admin/students/[id]`. Files only — never identity numbers. Same content
-checks as historical documents; images stored only as metadata-free re-encodes; private generated keys;
+checks as historical documents; images stored only as metadata-free re-encodes, PDFs byte-for-byte (their
+author/XMP metadata and embedded image EXIF remain; stripping is a follow-up); no retention period yet
+(university decision; orphan sweep is a follow-up); private generated keys;
 every student write and staff view/download audited (IDs and categories only); `no-store`; rate
-limited. Read [ADR-0022](docs/decisions/ADR-0022-student-uploads.md) and
+limited. Read [ADR-0023](docs/decisions/ADR-0023-student-uploads.md) and
 [docs/api/student-uploads.md](docs/api/student-uploads.md) before changing it.
 
 ## 10h. Reviewer staging (Phase 14B)

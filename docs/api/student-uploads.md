@@ -1,6 +1,6 @@
 # Student uploads
 
-Academic and identity documents a student uploads about themself (ADR-0022). One file per category.
+Academic and identity documents a student uploads about themself (ADR-0023). One file per category.
 Files only: no identity numbers, names or uploaded file names are stored or returned.
 
 Categories (`StudentUploadCategory`): `ACADEMIC_CLASS_10`, `ACADEMIC_CLASS_12`, `ACADEMIC_BACHELORS`,
@@ -21,7 +21,9 @@ Item (`studentUploadSchema`): `{ id, category, contentType, sizeBytes, uploadedA
 Upload errors: `400 UNSUPPORTED_FILE` (type, content mismatch, active/encrypted PDF, unreadable image),
 `400 VALIDATION_FAILED` (unknown category, no file), `413 FILE_TOO_LARGE` (> 15 MB),
 `429` (more than 20 uploads/deletes per hour), `503` (storage unavailable; nothing changed).
-Images are re-encoded without embedded metadata before storage; PDFs are stored as uploaded.
+Images are re-encoded without embedded metadata before storage; PDFs are stored as uploaded (their
+document metadata and any EXIF inside embedded images remain). The upload rate limit is checked before
+the body is read.
 
 ## Staff (`studentUploads.read`: REGISTRAR, SUPER_ADMIN)
 

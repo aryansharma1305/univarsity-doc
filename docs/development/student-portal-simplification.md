@@ -28,7 +28,7 @@ Branch `feature/student-portal-simplification` from main `b4ace7f`. Release note
 8. **My Documents**: student uploads by category (Academic: Class 10, Class 12, Bachelor's, Master's,
    Others; Identity: National ID, Passport, PAN Card, Driving Licence, Other Identity Proof) with
    upload/replace/view/delete; university-published documents stay below, read-only. New backend:
-   ADR-0022, `docs/api/student-uploads.md`, migration `20261120090000_student_uploads`, permission
+   ADR-0023, `docs/api/student-uploads.md`, migration `20261122090000_student_uploads`, permission
    `studentUploads.read` (REGISTRAR, SUPER_ADMIN). Staff view: "Student uploads" tab on
    `/admin/students/[id]`, read-only, audited.
 9. Notifications: unchanged.

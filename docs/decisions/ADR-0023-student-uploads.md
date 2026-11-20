@@ -1,4 +1,4 @@
-# ADR-0022: Student-uploaded academic and identity documents
+# ADR-0023: Student-uploaded academic and identity documents
 
 Status: proposed (feature branch `feature/student-portal-simplification`).
 
@@ -13,7 +13,7 @@ numbers (CLAUDE.md §11).
 
 ## Decision
 
-1. **New table `student_uploads`** (migration `20261120090000_student_uploads`), one row per
+1. **New table `student_uploads`** (migration `20261122090000_student_uploads`), one row per
    `(student_id, category)`; `category` is the enum `StudentUploadCategory` (10 values). Replacing
    updates the row and points it at a new object; deleting removes the row and the object. Uploads
    are the student's own copies, not university records, so no lifecycle, review or history table is
@@ -47,6 +47,16 @@ numbers (CLAUDE.md §11).
    when opened so the audit trail reflects deliberate views.
 
 ## Consequences
+
+- **PDF metadata is kept.** Uploaded PDFs are stored byte-for-byte (as historical documents are), so
+  document-info/XMP metadata (author, producer, dates) and EXIF inside embedded images remain in the
+  stored file. Only images uploaded as JPEG/PNG are stripped. Stripping or re-rendering PDFs is a
+  follow-up.
+- **No retention period yet.** Files stay until the student deletes them; how long identity documents
+  may be kept is an open university decision. A retention job and an orphan-object sweep (see below)
+  are follow-ups.
+- The upload rate limit is counted by `UploadThrottleInterceptor` before multer buffers the body, so
+  a throttled client never makes the API read a 15 MB upload; deletes are counted in the service.
 
 - A failed object delete after a committed replace/delete leaves an unreferenced private object
   (logged nowhere, referenced nowhere). A storage sweep can be added if this matters.
