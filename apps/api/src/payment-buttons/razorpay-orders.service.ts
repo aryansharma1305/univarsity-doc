@@ -5,12 +5,10 @@ import {
   razorpayOrderReceipt,
   verifyRazorpayCheckoutSignature,
   type RazorpayEvidence,
-  type RazorpayPayment,
 } from '@docversity/payments';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   ERROR_CODES,
-  normalizeTransactionReference,
   type RazorpayCheckoutReturn,
   type RazorpayOrderView,
 } from '@docversity/validation';
@@ -19,7 +17,13 @@ import { AuditService } from '../audit/audit.service.js';
 import { RateLimiter } from '../auth/rate-limiter.js';
 import { AppError, Errors } from '../common/app-error.js';
 import { isUsable } from '../re-exams/payment-destinations.service.js';
-import { abandonOpenRazorpayOrders } from './razorpay-order-abandon.js';
+import {
+  REFUND_CANDIDATE,
+  abandonOpenRazorpayOrders,
+  matchCapture,
+  type CaptureReceipt,
+  type CurrentPayment,
+} from '@docversity/payments/server';
 import {
   PaymentButtonPolicyService,
   RazorpayGatewayService,
@@ -38,27 +42,33 @@ const notPayable = () =>
     'This payment cannot be paid online now.',
   );
 /** Captures that reached a closed obligation or a paid order: money arrived that must go back. */
-// PROVIDER_UNVERIFIED is deliberately absent: it is not final, reconciliation re-matches it.
-export const REFUND_CANDIDATE = new Set([
-  'OBLIGATION_NOT_OPEN',
-  'ORDER_ALREADY_PAID',
-  'PAYMENT_ALREADY_USED',
-  'AMOUNT_MISMATCH',
-  'ORDER_NOT_OPEN',
-  'PROVIDER_STATE_MISMATCH',
-]);
+export { REFUND_CANDIDATE };
+/**
+ * The brief's payment states on the existing order model. AUTHORIZED never appears: an authorized,
+ * uncaptured payment leaves the order PENDING (reconciliation reports it; Razorpay auto-refunds it).
+ */
+export function paymentState(
+  status: string,
+  events: readonly { kind: string }[],
+): 'PENDING' | 'PAID' | 'RECONCILIATION_REQUIRED' | 'FAILED' | 'ABANDONED' {
+  const flagged = events.some((e) => e.kind === 'FLAGGED');
+  if (status === 'PAID') return 'PAID';
+  if (flagged) return 'RECONCILIATION_REQUIRED';
+  if (status === 'CREATE_FAILED') return 'FAILED';
+  if (status === 'ABANDONED') return 'ABANDONED';
+  return 'PENDING';
+}
+
 /** An unpaid CREATED order is offered for this long, then abandoned and replaced. */
 const ORDER_TTL_MS = 30 * 60_000;
 const CREATE_LEASE_MS = 15_000;
 const WAIT_FOR_CREATE_MS = 10_000;
 
-type CurrentPayment = RazorpayPayment | 'UNVERIFIABLE' | null;
-export type CaptureMatch = { matched: true } | { matched: false; reason: string };
-type ObligationForCheckout = Prisma.ReExamPaymentGetPayload<{
+export type ObligationForCheckout = Prisma.ReExamPaymentGetPayload<{
   include: { application: true; destination: true };
 }>;
 
-function payable(p: ObligationForCheckout | null): p is ObligationForCheckout {
+export function payable(p: ObligationForCheckout | null): p is ObligationForCheckout {
   return (
     p?.status === 'AWAITING_PAYMENT' &&
     p.application.feeStatus === 'ASSESSED' &&
@@ -345,148 +355,36 @@ export class RazorpayOrdersService {
     }
   }
 
-  /** Binds a signed capture to its order and obligation when every money check holds. */
-  async matchCapture(
-    tx: Prisma.TransactionClient,
-    receipt: { id: string; providerOrderId: string | null; providerPaymentId: string } & Pick<
-      RazorpayEvidence,
-      'merchantId' | 'amountMinor' | 'currency' | 'captured' | 'amountRefunded'
-    >,
-    current: CurrentPayment,
-  ): Promise<CaptureMatch> {
-    if (!receipt.providerOrderId) return { matched: false, reason: 'NO_ORDER' };
-    await tx.$queryRaw`SELECT id FROM razorpay_orders WHERE provider_order_id = ${receipt.providerOrderId} FOR UPDATE`;
-    const order = await tx.razorpayOrder.findUnique({
-      where: { providerOrderId: receipt.providerOrderId },
+  /** The student's own attempts for one obligation, oldest first. */
+  async studentHistory(studentId: string, paymentId: string) {
+    this.policy.requireFixture();
+    const owned = await this.prisma.client.reExamPayment.findFirst({
+      where: { id: paymentId, studentId },
+      select: { id: true },
     });
-    if (!order) return { matched: false, reason: 'UNKNOWN_ORDER' };
-    // payment.captured and order.paid describe the same capture: the second one is a no-op.
-    if (order.status === 'PAID' && order.providerPaymentId === receipt.providerPaymentId)
-      return { matched: true };
-    await tx.$queryRaw`SELECT id FROM re_exam_payments WHERE id = ${order.paymentId}::uuid FOR UPDATE`;
-    const obligation = await tx.reExamPayment.findUniqueOrThrow({
-      where: { id: order.paymentId },
-      include: { application: true },
+    if (!owned) throw Errors.notFound();
+    const orders = await this.prisma.client.razorpayOrder.findMany({
+      where: { paymentId },
+      include: { events: { orderBy: { createdAt: 'asc' } } },
+      orderBy: { attempt: 'asc' },
     });
-    const reference = normalizeTransactionReference(receipt.providerPaymentId);
-    const reused =
-      reference.length >= 6 &&
-      (await tx.reExamPayment.findFirst({
-        where: {
-          transactionReferenceNormalized: reference,
-          status: { in: ['SUBMITTED', 'VERIFIED'] },
-        },
-        select: { id: true },
-      }));
-    const exact = (amount: number, currency: string) =>
-      amount === order.amountMinor &&
-      currency === order.currency &&
-      amount === obligation.amountMinor &&
-      currency === obligation.currency;
-    const reason =
-      order.status === 'PAID'
-        ? 'ORDER_ALREADY_PAID'
-        : order.status !== 'CREATED'
-          ? 'ORDER_NOT_OPEN'
-          : order.mode !== 'TEST' || order.accountId !== receipt.merchantId
-            ? 'ACCOUNT_MISMATCH'
-            : !exact(receipt.amountMinor, receipt.currency)
-              ? 'AMOUNT_MISMATCH'
-              : !receipt.captured || receipt.amountRefunded !== 0
-                ? 'NOT_CAPTURED'
-                : current === null || current === 'UNVERIFIABLE'
-                  ? 'PROVIDER_UNVERIFIED'
-                  : current.id !== receipt.providerPaymentId ||
-                      current.order_id !== order.providerOrderId ||
-                      current.status !== 'captured' ||
-                      !current.captured ||
-                      current.amount_refunded !== 0 ||
-                      !exact(current.amount, current.currency)
-                    ? 'PROVIDER_STATE_MISMATCH'
-                    : obligation.status !== 'AWAITING_PAYMENT' ||
-                        obligation.application.feeStatus !== 'ASSESSED' ||
-                        ['CANCELLED', 'REJECTED'].includes(obligation.application.status)
-                      ? 'OBLIGATION_NOT_OPEN'
-                      : reference.length < 6
-                        ? 'UNUSABLE_REFERENCE'
-                        : reused
-                          ? 'PAYMENT_ALREADY_USED'
-                          : null;
-    if (reason) {
-      await tx.razorpayOrderEvent.create({
-        data: {
-          orderId: order.id,
-          kind: 'FLAGGED',
-          reason,
-          receiptId: receipt.id,
-          providerPaymentId: receipt.providerPaymentId,
-        },
-      });
-      await this.audit.writeAuditEvent(
-        {
-          action: AUDIT_ACTIONS.razorpayPaymentCaptureFlagged,
-          entityType: 'ReExamPayment',
-          entityId: order.paymentId,
-          metadata: {
-            receiptId: receipt.id,
-            orderId: order.id,
-            reason,
-            refundCandidate: REFUND_CANDIDATE.has(reason),
-            mode: 'TEST',
-          },
-        },
-        tx,
-      );
-      return { matched: false, reason };
-    }
-    await tx.razorpayOrder.update({
-      where: { id: order.id },
-      data: { status: 'PAID', providerPaymentId: receipt.providerPaymentId },
-    });
-    await tx.razorpayOrderEvent.create({
-      data: {
-        orderId: order.id,
-        kind: 'PAID',
-        receiptId: receipt.id,
-        providerPaymentId: receipt.providerPaymentId,
-      },
-    });
-    // AWAITING_PAYMENT → SUBMITTED, exactly as a student submission, but with the signed,
-    // re-fetched provider payment id as the reference. Staff still verify (Phase 9C).
-    await tx.reExamPayment.update({
-      where: { id: obligation.id },
-      data: {
-        status: 'SUBMITTED',
-        transactionReference: receipt.providerPaymentId,
-        transactionReferenceNormalized: reference,
-        submittedAt: new Date(),
-        submittedByAccountId: order.studentAccountId,
-      },
-    });
-    await this.audit.writeAuditEvent(
-      {
-        action: AUDIT_ACTIONS.reExamPaymentSubmitted,
-        entityType: 'ReExamPayment',
-        entityId: obligation.id,
-        metadata: {
-          principal: 'provider',
-          accountId: order.studentAccountId,
-          applicationId: obligation.applicationId,
-          hasEvidence: false,
-          source: 'RAZORPAY_TEST',
-        },
-      },
-      tx,
-    );
-    await this.audit.writeAuditEvent(
-      {
-        action: AUDIT_ACTIONS.razorpayPaymentCapturedMatched,
-        entityType: 'ReExamPayment',
-        entityId: obligation.id,
-        metadata: { receiptId: receipt.id, orderId: order.id, mode: 'TEST' },
-      },
-      tx,
-    );
-    return { matched: true };
+    return {
+      orders: orders.map((o) => ({
+        attempt: o.attempt,
+        paymentState: paymentState(o.status, o.events),
+        providerOrderId: o.providerOrderId,
+        providerPaymentId: o.providerPaymentId,
+        amountMinor: o.amountMinor,
+        currency: o.currency,
+        createdAt: o.createdAt.toISOString(),
+        checkoutReturnedAt:
+          o.events.find((e) => e.kind === 'CHECKOUT_RETURNED')?.createdAt.toISOString() ?? null,
+      })),
+    };
+  }
+
+  /** Binds a signed capture to its order and obligation (shared core; see matchCapture). */
+  matchCapture(tx: Prisma.TransactionClient, receipt: CaptureReceipt, current: CurrentPayment) {
+    return matchCapture(tx, (entry, t) => this.audit.writeAuditEvent(entry, t), receipt, current);
   }
 }

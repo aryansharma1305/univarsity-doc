@@ -1275,6 +1275,7 @@ describe('Razorpay disabled collection and manual report reconciliation', () => 
       keySecret: 'synthetic-key-secret-0000',
       webhookSecret: secret,
       registrationIds: [student.registrationId],
+      refunds: 'off',
     });
   }
   function notification(paymentId: string, overrides: Record<string, unknown> = {}) {
@@ -1669,7 +1670,11 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
   }
   type Provider = ReturnType<typeof provider>;
 
-  function enable(registrationIds: string[], fake: Provider) {
+  function enable(
+    registrationIds: string[],
+    fake: Provider,
+    refunds: 'off' | 'full_only' | 'partial' = 'off',
+  ) {
     vi.spyOn(app.get(PaymentButtonPolicyService), 'fixture').mockReturnValue({
       mode: 'TEST',
       merchantId: merchant,
@@ -1677,6 +1682,7 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
       keySecret,
       webhookSecret: secret,
       registrationIds,
+      refunds,
     });
     vi.spyOn(app.get(RazorpayGatewayService), 'client').mockImplementation(
       () => new RazorpayClient(keyId, keySecret, fake.port),
@@ -2170,16 +2176,19 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
       const refund = {
         entity: 'event',
         account_id: merchant,
-        event: 'refund.processed',
+        event: 'payment.dispute.created',
         created_at: Math.floor(Date.now() / 1000),
-        payload: { refund: { entity: { id: 'rfnd_Synthetic', notes: { x: 'y' } } } },
+        payload: { dispute: { entity: { id: 'disp_Synthetic', notes: { x: 'y' } } } },
       };
       await expectStatus(send(JSON.stringify(refund), 'application/json', refundId), 200);
       const ignored = await testDb().razorpayWebhookIgnored.findFirstOrThrow({
         where: { eventId: refundId },
       });
-      expect(ignored).toMatchObject({ reason: 'UNHANDLED_EVENT', eventType: 'refund.processed' });
-      expect(JSON.stringify(ignored)).not.toContain('rfnd_Synthetic');
+      expect(ignored).toMatchObject({
+        reason: 'UNHANDLED_EVENT',
+        eventType: 'payment.dispute.created',
+      });
+      expect(JSON.stringify(ignored)).not.toContain('disp_Synthetic');
       expect(
         await testDb().auditLog.count({
           where: { action: 'RAZORPAY_WEBHOOK_IGNORED', entityId: ignored.id },

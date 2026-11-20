@@ -664,6 +664,10 @@ export class ReExamPaymentsService {
                 ...(normalized.length >= 4
                   ? [{ transactionReferenceNormalized: { contains: normalized } }]
                   : []),
+                // Razorpay test order ids (order_…) are exact-match only.
+                ...(/^order_[A-Za-z0-9]{1,50}$/.test(query.search.trim())
+                  ? [{ razorpayOrders: { some: { providerOrderId: query.search.trim() } } }]
+                  : []),
               ],
             }
           : {},

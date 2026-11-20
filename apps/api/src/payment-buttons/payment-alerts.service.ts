@@ -1,15 +1,8 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
-/** Machine-readable payment alert: ids and codes only, never secrets, signatures or personal data. */
-export interface PaymentAlert {
-  kind:
-    | 'WEBHOOK_DIGEST_CONFLICT'
-    | 'WEBHOOK_ACCOUNT_MISMATCH'
-    | 'CAPTURE_FLAGGED'
-    | 'RECONCILIATION_ISSUES';
-  severity: 'warning' | 'critical';
-  details: Record<string, string | number | boolean | null>;
-}
+import type { PaymentAlert } from '@docversity/payments/server';
+
+export type { PaymentAlert };
 export type PaymentAlertSink = (alert: PaymentAlert) => Promise<void> | void;
 /** Pluggable delivery (e-mail, chat, pager). Default: one structured warning log line. */
 export const PAYMENT_ALERT_SINK = Symbol('PAYMENT_ALERT_SINK');

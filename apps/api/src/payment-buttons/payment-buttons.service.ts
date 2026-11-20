@@ -1,5 +1,6 @@
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { applyRefundEvent } from '@docversity/payments/server';
 import {
   classifyRazorpayEvent,
   isRazorpayEventId,
@@ -19,7 +20,7 @@ import { RateLimiter } from '../auth/rate-limiter.js';
 import { IdentifierHasher } from '../auth/identifier-hasher.js';
 import { AppError, Errors } from '../common/app-error.js';
 import { PaymentButtonPolicyService } from './payment-button-policy.service.js';
-import { REFUND_CANDIDATE, RazorpayOrdersService } from './razorpay-orders.service.js';
+import { REFUND_CANDIDATE, RazorpayOrdersService, payable } from './razorpay-orders.service.js';
 import { PaymentAlertsService, type PaymentAlert } from './payment-alerts.service.js';
 const conflict = () =>
   new AppError(
@@ -106,7 +107,25 @@ export class PaymentButtonsService {
             ? 'FAILED'
             : 'PENDING';
     // Test-mode collection uses the Orders API (POST student/re-exam-payments/:id/razorpay-order);
-    // the code-held Payment Button fixture is gone, so this panel never embeds a button.
+    // the panel never embeds a Payment Button. Mode off: no policy, no extra query, no checkout.
+    const policy = this.policy.fixture();
+    if (
+      policy &&
+      payment.status === 'AWAITING_PAYMENT' &&
+      policy.registrationIds.includes(app.studentRegistrationId) &&
+      (await this.prisma.client.razorpayTestRegistration.findUnique({
+        where: { registrationId: app.studentRegistrationId },
+      })) &&
+      payable(
+        await this.prisma.client.reExamPayment.findUnique({
+          where: { id: payment.id },
+          include: { application: true, destination: true },
+        }),
+      )
+    ) {
+      view.checkout = { mode: 'TEST', kind: 'ORDER' };
+      view.unavailableReason = null;
+    }
     return view;
   }
   async webhook(raw: unknown, signature: unknown, eventId: unknown, ip: string) {
@@ -132,21 +151,29 @@ export class PaymentButtonsService {
       event.outcome === 'HANDLED'
         ? {
             eventId,
-            eventType: event.evidence.eventType,
+            eventType: event.evidence.eventType as string,
             bodySha256: event.evidence.bodySha256,
-            providerCreatedAt: event.evidence.providerCreatedAt,
+            providerCreatedAt: event.evidence.providerCreatedAt as Date | null,
           }
-        : {
-            eventId,
-            eventType: event.eventType,
-            bodySha256: event.bodySha256,
-            providerCreatedAt: event.providerCreatedAt,
-          };
+        : event.outcome === 'REFUND'
+          ? {
+              eventId,
+              eventType: event.refund.eventType as string,
+              bodySha256: event.refund.bodySha256,
+              providerCreatedAt: null,
+            }
+          : {
+              eventId,
+              eventType: event.eventType,
+              bodySha256: event.bodySha256,
+              providerCreatedAt: event.providerCreatedAt,
+            };
     // Re-fetch the current payment before acting on an order-bound capture (never trust event order),
     // but not for a replay: a known event id never causes a provider call.
     const known =
       (await this.prisma.client.razorpayWebhookReceipt.count({ where: { eventId } })) > 0 ||
-      (await this.prisma.client.razorpayWebhookIgnored.count({ where: { eventId } })) > 0;
+      (await this.prisma.client.razorpayWebhookIgnored.count({ where: { eventId } })) > 0 ||
+      (await this.prisma.client.razorpayRefundEvent.count({ where: { eventId } })) > 0;
     const current =
       event.outcome === 'HANDLED' && !known
         ? await this.orders.currentPayment(event.evidence)
@@ -158,6 +185,7 @@ export class PaymentButtonsService {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId}))`;
         const priorDigest =
           (await tx.razorpayWebhookReceipt.findUnique({ where: { eventId } }))?.bodySha256 ??
+          (await tx.razorpayRefundEvent.findUnique({ where: { eventId } }))?.bodySha256 ??
           (
             await tx.razorpayWebhookIgnored.findFirst({
               where: { eventId, reason: { not: 'DIGEST_CONFLICT' } },
@@ -182,6 +210,36 @@ export class PaymentButtonsService {
                 details: { eventId, eventType: summary.eventType },
               }
             : null;
+        }
+        if (event.outcome === 'REFUND') {
+          const applied = await applyRefundEvent(
+            tx,
+            (entry, t) => this.audit.writeAuditEvent(entry, t),
+            event.refund,
+          );
+          if (applied === 'UNKNOWN_REFUND')
+            // A refund not issued through Docversity (e.g. the dashboard): recorded, never applied.
+            await this.ignore(tx, { ...summary, reason: 'UNHANDLED_EVENT' });
+          else if (applied === 'UNCHANGED') {
+            const known = await tx.razorpayRefund.findFirstOrThrow({
+              where: {
+                OR: [
+                  { providerRefundId: event.refund.providerRefundId },
+                  ...(event.refund.receipt ? [{ receipt: event.refund.receipt }] : []),
+                ],
+              },
+            });
+            // Stale or out-of-order: kept for dedupe, never moves the refund backwards.
+            await tx.razorpayRefundEvent.create({
+              data: {
+                refundId: known.id,
+                kind: 'WEBHOOK_IGNORED',
+                eventId,
+                bodySha256: summary.bodySha256,
+              },
+            });
+          }
+          return null;
         }
         const receipt = await tx.razorpayWebhookReceipt.create({
           data: { id: randomUUID(), ...event.evidence },
