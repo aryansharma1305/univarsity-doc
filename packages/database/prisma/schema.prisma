@@ -1429,6 +1429,8 @@ model User {
 
   razorpayReconciliations    RazorpayReconciliation[]
   razorpayTestRegistrations  RazorpayTestRegistration[]
+  razorpayRefundsRequested   RazorpayRefund[]           @relation("RazorpayRefundRequester")
+  razorpayRefundsApproved    RazorpayRefund[]           @relation("RazorpayRefundApprover")
   retotalingEvents           RetotalingEvent[]
   preparedSyntheticReleases  SyntheticRelease[]         @relation("SyntheticReleasePreparer")
   approvedSyntheticReleases  SyntheticRelease[]         @relation("SyntheticReleaseApprover")
@@ -1907,6 +1909,7 @@ model RazorpayOrder {
   payment           ReExamPayment        @relation(fields: [paymentId], references: [id], onDelete: Restrict)
   studentAccount    StudentAccount       @relation(fields: [studentAccountId], references: [id], onDelete: Restrict)
   events            RazorpayOrderEvent[]
+  refunds           RazorpayRefund[]
 
   @@unique([paymentId, attempt])
   /// At most one open (reserved or created) order per obligation.
@@ -1925,6 +1928,58 @@ model RazorpayTestRegistration {
   markedBy       User                @relation(fields: [markedByUserId], references: [id], onDelete: Restrict)
 
   @@map("razorpay_test_registrations")
+}
+
+enum RazorpayRefundStatus {
+  REQUESTED
+  APPROVED
+  PENDING
+  PROCESSED
+  FAILED
+  REJECTED
+}
+
+/// API refund of a PAID test order: requested by one staff member, approved by a different one, then
+/// sent with X-Refund-Idempotency = idempotency_key. The DB keeps the sum of live refunds ≤ the capture.
+model RazorpayRefund {
+  id                String                @id @default(uuid(7)) @db.Uuid
+  orderId           String                @map("order_id") @db.Uuid
+  providerPaymentId String                @map("provider_payment_id") @db.VarChar(64)
+  amountMinor       Int                   @map("amount_minor")
+  currency          String                @db.Char(3)
+  reason            String                @db.VarChar(48)
+  status            RazorpayRefundStatus  @default(REQUESTED)
+  idempotencyKey    String                @unique @map("idempotency_key") @db.VarChar(64)
+  receipt           String                @unique @db.VarChar(40)
+  providerRefundId  String?               @unique @map("provider_refund_id") @db.VarChar(64)
+  failureReason     String?               @map("failure_reason") @db.VarChar(48)
+  requestedByUserId String                @map("requested_by_user_id") @db.Uuid
+  approvedByUserId  String?               @map("approved_by_user_id") @db.Uuid
+  decidedAt         DateTime?             @map("decided_at") @db.Timestamptz(3)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  order             RazorpayOrder         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  requestedBy       User                  @relation("RazorpayRefundRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  approvedBy        User?                 @relation("RazorpayRefundApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
+  events            RazorpayRefundEvent[]
+
+  @@index([orderId])
+  @@map("razorpay_refunds")
+}
+
+/// Append-only refund history; event_id (unique) deduplicates signed refund.* webhooks.
+model RazorpayRefundEvent {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  refundId    String         @map("refund_id") @db.Uuid
+  kind        String         @db.VarChar(24)
+  eventId     String?        @unique @map("event_id") @db.VarChar(128)
+  bodySha256  String?        @map("body_sha256") @db.Char(64)
+  actorUserId String?        @map("actor_user_id") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  refund      RazorpayRefund @relation(fields: [refundId], references: [id], onDelete: Restrict)
+
+  @@index([refundId, createdAt])
+  @@map("razorpay_refund_events")
 }
 
 /// Append-only history of an order (reservation, creation, checkout return, payment, flags).
