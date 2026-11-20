@@ -120,7 +120,8 @@ test('staff upload, publish, replace and withdraw; the student sees only their p
   // The student sees nothing until it is published.
   const portal = await studentPage(browser, student);
   await portal.goto('/student/documents');
-  await expect(portal.getByText('No documents published yet')).toBeVisible();
+  await expect(portal.getByRole('heading', { name: 'My uploads' })).toBeVisible();
+  await expect(portal.getByRole('heading', { name: 'University documents' })).toHaveCount(0);
   expect(
     (await portal.request.get(`/api/v1/student/documents/${shared.documentId}/file`)).status(),
   ).toBe(404);

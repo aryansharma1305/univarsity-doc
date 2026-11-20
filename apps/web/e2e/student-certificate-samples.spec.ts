@@ -23,8 +23,8 @@ test('student finds, previews and downloads the fixed sample across all sizes wi
   expect(initialResponse.status()).toBe(200);
   const initialDocuments = studentDocumentListSchema.parse(await initialResponse.json());
   await page.goto('/student/certificate-requests');
-  await page.getByRole('link', { name: 'View Sample Certificate', exact: true }).click();
-  await expect(page).toHaveURL(/\/student\/documents#certificate-samples$/);
+  await page.getByRole('link', { name: 'View Certificate Sample', exact: true }).click();
+  await expect(page).toHaveURL(/\/student\/certificate-requests\/samples$/);
   for (const [width, height, size] of [
     [1440, 1000, 'desktop'],
     [768, 1024, 'tablet'],

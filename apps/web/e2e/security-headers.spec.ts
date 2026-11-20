@@ -65,7 +65,15 @@ test('signed-in staff and student pages load without any CSP violation', async (
   }
   await page.context().clearCookies();
   await studentSignIn(page, fixtures().sampleStudent);
-  for (const path of ['/student', '/student/profile', '/student/documents']) {
+  for (const path of [
+    '/student',
+    '/student/profile',
+    '/student/profile/update',
+    '/student/requests',
+    '/student/examinations',
+    '/student/certificate-requests',
+    '/student/documents',
+  ]) {
     await visit(page, path);
   }
   expect(violations).toEqual([]);
