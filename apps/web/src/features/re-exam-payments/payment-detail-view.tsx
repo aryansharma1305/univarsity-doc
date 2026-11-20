@@ -35,6 +35,7 @@ import { evidenceUrl, paymentsApi, usePayment, usePaymentMutation } from './api'
 import { minorToMajor } from './destination-form';
 import { PAYMENT_STATUS } from './labels';
 import { PaymentStatusBadge } from './payments-view';
+import { RazorpayWorkspacePanel } from './razorpay-workspace';
 
 function Row({ label, value, mono }: { label: string; value: string | null; mono?: boolean }) {
   return (
@@ -302,6 +303,7 @@ export function ReExamPaymentDetailView({ paymentId }: { paymentId: string }) {
           a synthetic registration. No real money was received.
         </p>
       )}
+      <RazorpayWorkspacePanel paymentId={p.id} />
       {canVerify &&
         p.status === 'SUBMITTED' &&
         /^pay_[A-Za-z0-9]+$/.test(p.transactionReference ?? '') && (
