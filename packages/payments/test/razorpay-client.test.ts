@@ -99,7 +99,7 @@ describe('RazorpayClient (fake port, no network)', () => {
     });
     await expect(
       fake({ status: 200, body: '{not json' }).client.createOrder(create),
-    ).rejects.toMatchObject({ code: 'MALFORMED_RESPONSE' });
+    ).rejects.toMatchObject({ code: 'MALFORMED_RESPONSE', transient: true });
     await expect(
       fake(ok({ ...order, amount: 1.5 })).client.createOrder(create),
     ).rejects.toMatchObject({ code: 'MALFORMED_RESPONSE' });
@@ -161,6 +161,42 @@ describe('RazorpayClient (fake port, no network)', () => {
     await expect(
       fake().client.createRefund('pay_Synthetic1', { idempotencyKey: 'short' }),
     ).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+  });
+  it('lists the payments of an order and the settlement recon rows of one day', async () => {
+    const { client, calls } = fake(
+      ok({ entity: 'collection', count: 1, items: [payment] }),
+      ok({
+        entity: 'collection',
+        count: 1,
+        items: [
+          {
+            type: 'payment',
+            amount: 50000,
+            fee: 1000,
+            tax: 180,
+            payment_id: 'pay_Synthetic1',
+            order_id: 'order_Synthetic1',
+            settlement_id: 'setl_X',
+          },
+        ],
+      }),
+    );
+    await expect(client.fetchOrderPayments('order_Synthetic1')).resolves.toHaveLength(1);
+    await expect(
+      client.fetchSettlementRecon({ year: 2026, month: 11, day: 19 }),
+    ).resolves.toMatchObject([{ type: 'payment', amount: 50000, order_id: 'order_Synthetic1' }]);
+    expect(calls.map((c) => c.path)).toEqual([
+      '/orders/order_Synthetic1/payments',
+      '/settlements/recon/combined?year=2026&month=11&day=19&count=1000',
+    ]);
+    await expect(client.fetchOrderPayments('../x')).rejects.toMatchObject({
+      code: 'INVALID_REQUEST',
+    });
+    await expect(
+      client.fetchSettlementRecon({ year: 2026, month: 13, day: 1 }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_REQUEST',
+    });
   });
   it('refuses malformed credentials', () => {
     expect(() => new RazorpayClient('key', keySecret, vi.fn())).toThrow(RazorpayApiError);

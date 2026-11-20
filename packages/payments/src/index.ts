@@ -266,5 +266,6 @@ export {
   type RazorpayHttpResponse,
   type RazorpayOrder,
   type RazorpayPayment,
+  type RazorpayReconRow,
   type RazorpayRefund,
 } from './razorpay-client.js';

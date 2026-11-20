@@ -35,7 +35,10 @@ export class RazorpayApiError extends Error {
   }
   /** Worth retrying later (our side or Razorpay's is temporarily unavailable). */
   get transient(): boolean {
-    return this.code === 'UNAVAILABLE' || this.code === 'TRANSPORT';
+    // A malformed body is treated as transient: never decide money on it, ask again later.
+    return (
+      this.code === 'UNAVAILABLE' || this.code === 'TRANSPORT' || this.code === 'MALFORMED_RESPONSE'
+    );
   }
 }
 
@@ -95,6 +98,18 @@ const refundSchema = z.object({
   payment_id: z.string().regex(/^pay_[A-Za-z0-9]{1,50}$/),
   status: z.enum(['pending', 'processed', 'failed']),
 });
+const paymentListSchema = z.object({ items: z.array(paymentSchema).max(100) });
+const reconRowSchema = z.object({
+  type: z.string().max(32),
+  amount: z.number().int(),
+  fee: z.number().int().nullable().optional(),
+  tax: z.number().int().nullable().optional(),
+  payment_id: z.string().max(64).nullable().optional(),
+  order_id: z.string().max(64).nullable().optional(),
+  settlement_id: z.string().max(64).nullable().optional(),
+});
+const reconListSchema = z.object({ items: z.array(reconRowSchema).max(1000) });
+export type RazorpayReconRow = z.infer<typeof reconRowSchema>;
 export type RazorpayOrder = z.infer<typeof orderSchema>;
 export type RazorpayPayment = z.infer<typeof paymentSchema>;
 export type RazorpayRefund = z.infer<typeof refundSchema>;
@@ -163,6 +178,28 @@ export class RazorpayClient {
     if (!/^pay_[A-Za-z0-9]{1,50}$/.test(paymentId))
       return Promise.reject(new RazorpayApiError('INVALID_REQUEST'));
     return this.call(paymentSchema, 'GET', `/payments/${paymentId}`);
+  }
+
+  async fetchOrderPayments(orderId: string): Promise<RazorpayPayment[]> {
+    if (!/^order_[A-Za-z0-9]{1,50}$/.test(orderId)) throw new RazorpayApiError('INVALID_REQUEST');
+    return (await this.call(paymentListSchema, 'GET', `/orders/${orderId}/payments`)).items;
+  }
+
+  /** Settlement recon rows for one day (GET /settlements/recon/combined). */
+  async fetchSettlementRecon(day: { year: number; month: number; day: number }) {
+    const valid =
+      Number.isInteger(day.year) &&
+      day.year >= 2000 &&
+      day.year <= 2100 &&
+      Number.isInteger(day.month) &&
+      day.month >= 1 &&
+      day.month <= 12 &&
+      Number.isInteger(day.day) &&
+      day.day >= 1 &&
+      day.day <= 31;
+    if (!valid) throw new RazorpayApiError('INVALID_REQUEST');
+    const query = `year=${String(day.year)}&month=${String(day.month)}&day=${String(day.day)}&count=1000`;
+    return (await this.call(reconListSchema, 'GET', `/settlements/recon/combined?${query}`)).items;
   }
 
   createRefund(paymentId: string, input: CreateRefundInput): Promise<RazorpayRefund> {
