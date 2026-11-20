@@ -135,6 +135,18 @@ describe('student uploads: owning student', () => {
     expect(await testDb().studentUpload.count({ where: { studentId: s.studentId } })).toBe(0);
   });
 
+  it('rate-limits uploads per account before reading the body', async () => {
+    const s = await activatedStudent(app, registrar, 'UPL');
+    for (let i = 0; i < 20; i++) {
+      expect((await upload(s.agent, 'ACADEMIC_OTHER', staticPdf(), 'application/pdf')).status).toBe(
+        201,
+      );
+    }
+    const limited = await upload(s.agent, 'ACADEMIC_OTHER', staticPdf(), 'application/pdf');
+    expect(limited.status).toBe(429);
+    expect(limited.headers['retry-after']).toBeDefined();
+  });
+
   it('never serves another student’s file', async () => {
     const owner = await activatedStudent(app, registrar, 'UPL');
     const other = await activatedStudent(app, registrar, 'UPL');

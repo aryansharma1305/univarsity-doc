@@ -52,6 +52,7 @@ import {
   StudentRoute,
 } from '../student-auth/student-auth.decorators.js';
 import { type UploadFile, StudentUploadsService } from './student-uploads.service.js';
+import { UploadThrottleInterceptor } from './upload-throttle.interceptor.js';
 
 const error = { standardSchema: errorResponseSchema };
 const categoryPipe = new ZodValidationPipe(studentUploadCategorySchema);
@@ -92,7 +93,8 @@ export class StudentOwnUploadsController {
   }
 
   @Post(':category')
-  @UseInterceptors(DocumentUploadInterceptor)
+  // Order matters: the rate limit is checked before the body is buffered.
+  @UseInterceptors(UploadThrottleInterceptor, DocumentUploadInterceptor)
   @ApiSecurity('csrf')
   @ApiOperation({
     summary: 'Upload or replace the file for one category; audited',
@@ -110,7 +112,11 @@ export class StudentOwnUploadsController {
   @ApiCreatedResponse({ standardSchema: studentUploadSchema })
   @ApiResponse({ status: 400, description: 'Unsafe or unsupported file', ...error })
   @ApiResponse({ status: 413, description: 'File larger than 15 MB', ...error })
-  @ApiResponse({ status: 429, description: 'Too many uploads', ...error })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many uploads (checked before the body is read)',
+    ...error,
+  })
   @ApiResponse({ status: 503, description: 'Storage unavailable (nothing changed)', ...error })
   save(
     @CurrentStudent() student: StudentContext,

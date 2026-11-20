@@ -89,6 +89,14 @@ export class StudentUploadsService {
     }
   }
 
+  /**
+   * Upload/delete budget per student account. Uploads are counted by `UploadThrottleInterceptor`
+   * before multer buffers the body, so a throttled client never makes the API read 15 MB.
+   */
+  throttleWrite(accountId: string) {
+    return this.throttle('student-upload-write', accountId, 20, 3600);
+  }
+
   async listOwn(studentId: string): Promise<StudentUploadList> {
     const rows = await this.prisma.client.studentUpload.findMany({
       where: { studentId },
@@ -105,7 +113,7 @@ export class StudentUploadsService {
     category: StudentUploadCategory,
     file: UploadedDocument | undefined,
   ): Promise<StudentUpload> {
-    await this.throttle('student-upload-write', accountId, 20, 3600);
+    // Already counted by UploadThrottleInterceptor (before the body was buffered).
     if (!file || file.size === 0) {
       throw Errors.validation([{ path: 'file', message: 'Choose a PDF, JPEG or PNG file.' }]);
     }
@@ -161,7 +169,7 @@ export class StudentUploadsService {
   }
 
   async remove(studentId: string, accountId: string, category: StudentUploadCategory) {
-    await this.throttle('student-upload-write', accountId, 20, 3600);
+    await this.throttleWrite(accountId);
     const removed = await this.prisma.client.$transaction(async (tx) => {
       const row = await tx.studentUpload.findUnique({
         where: { studentId_category: { studentId, category } },
