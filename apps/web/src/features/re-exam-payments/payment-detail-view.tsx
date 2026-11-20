@@ -293,6 +293,15 @@ export function ReExamPaymentDetailView({ paymentId }: { paymentId: string }) {
           received the money — confirm it in the university’s own account first.
         </p>
       )}
+      {p.providerSource === 'RAZORPAY_TEST' && (
+        <p
+          role="note"
+          className="rounded-lg border border-warning/40 bg-warning-soft p-4 text-sm text-navy-950"
+        >
+          Razorpay TEST payment: submitted automatically by a matched Razorpay test-mode capture on
+          a synthetic registration. No real money was received.
+        </p>
+      )}
       {canVerify &&
         p.status === 'SUBMITTED' &&
         /^pay_[A-Za-z0-9]+$/.test(p.transactionReference ?? '') && (

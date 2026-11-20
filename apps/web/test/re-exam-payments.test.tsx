@@ -207,6 +207,7 @@ const detail: ReExamPaymentDetail = {
   subject: { code: 'SUB-1', name: 'Synthetic Anatomy' },
   transactionReference: 'UTR1234567890',
   hasEvidence: true,
+  providerSource: 'MANUAL',
   amountSource: 'FEE_RULE',
   feeRuleVersion: 1,
   destination: {
@@ -241,6 +242,22 @@ const detail: ReExamPaymentDetail = {
 };
 
 describe('staff payment review', () => {
+  it('marks a payment submitted by a matched Razorpay test-mode capture', async () => {
+    mockFetch(() => ({
+      body: {
+        ...detail,
+        providerSource: 'RAZORPAY_TEST',
+        transactionReference: 'pay_SyntheticTest1',
+      },
+    }));
+    renderWithProviders(<ReExamPaymentDetailView paymentId={PAYMENT_ID} />, REVIEWER);
+    expect(await screen.findByText('Test Student One')).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('note')
+        .some((note) => note.textContent.includes('Razorpay TEST payment')),
+    ).toBe(true);
+  });
   it('warns that a reference is not proof and offers verification only with the permission', async () => {
     mockFetch(() => ({ body: detail }));
     const view = renderWithProviders(<ReExamPaymentDetailView paymentId={PAYMENT_ID} />, REVIEWER);

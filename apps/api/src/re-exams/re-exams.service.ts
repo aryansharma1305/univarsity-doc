@@ -28,6 +28,7 @@ import { invalidRelation } from '../common/conflicts.js';
 import { pageArgs, paginationMeta } from '../common/pagination.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { type FeeAssessment, FeeRulesService } from './fee-rules.service.js';
+import { abandonOpenRazorpayOrders } from '../payment-buttons/razorpay-order-abandon.js';
 import { latestPaymentSummary } from './re-exam-payments.service.js';
 
 const ENTITY = 'ReExamApplication';
@@ -454,6 +455,11 @@ export class ReExamsService {
         where: { id },
         data: { status: 'CANCELLED', cancelledAt: new Date() },
       });
+      await abandonOpenRazorpayOrders(
+        tx,
+        { payment: { applicationId: id } },
+        'APPLICATION_CANCELLED',
+      );
       await this.audit.writeAuditEvent(
         {
           actorUserId: null,

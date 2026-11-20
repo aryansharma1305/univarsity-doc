@@ -92,6 +92,9 @@ export function ReExamPaymentsView() {
       cell: ({ row }) => (
         <span className="font-mono text-xs break-all">
           {row.original.transactionReference ?? '—'}
+          {row.original.providerSource === 'RAZORPAY_TEST' && (
+            <span className="ml-2 font-sans font-semibold">Razorpay TEST</span>
+          )}
         </span>
       ),
     },
@@ -163,7 +166,12 @@ export function ReExamPaymentsView() {
                   {p.registrationNumber} · {p.subject.code} ·{' '}
                   {formatMoney(p.amountMinor, p.currency)} · {PAYMENT_REGION_LABELS[p.region]}
                 </p>
-                <p className="font-mono text-xs break-all">{p.transactionReference ?? '—'}</p>
+                <p className="font-mono text-xs break-all">
+                  {p.transactionReference ?? '—'}
+                  {p.providerSource === 'RAZORPAY_TEST' && (
+                    <span className="ml-2 font-sans font-semibold">Razorpay TEST</span>
+                  )}
+                </p>
                 <PaymentStatusBadge status={p.status} />
               </div>
             )}

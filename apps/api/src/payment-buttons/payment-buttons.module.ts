@@ -8,6 +8,8 @@ import {
   razorpayHttpPort,
 } from './payment-button-policy.service.js';
 import { RazorpayOrdersService } from './razorpay-orders.service.js';
+import { RazorpayReconciliationService } from './razorpay-reconciliation.service.js';
+import { PaymentAlertsService } from './payment-alerts.service.js';
 import { API_CONFIG } from '../config/api-config.js';
 import {
   PaymentButtonsController,
@@ -27,6 +29,8 @@ import {
     PaymentButtonPolicyService,
     RazorpayGatewayService,
     RazorpayOrdersService,
+    RazorpayReconciliationService,
+    PaymentAlertsService,
     { provide: RAZORPAY_HTTP_PORT, inject: [API_CONFIG], useFactory: razorpayHttpPort },
   ],
 })

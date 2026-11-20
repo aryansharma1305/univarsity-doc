@@ -12,6 +12,9 @@ import {
   PaymentButtonPolicyService,
   RazorpayGatewayService,
 } from '../../src/payment-buttons/payment-button-policy.service.js';
+import { PaymentAlertsService } from '../../src/payment-buttons/payment-alerts.service.js';
+import { RazorpayOrdersService } from '../../src/payment-buttons/razorpay-orders.service.js';
+import { RazorpayReconciliationService } from '../../src/payment-buttons/razorpay-reconciliation.service.js';
 import { PaymentButtonsService } from '../../src/payment-buttons/payment-buttons.service.js';
 import { SandboxGatewayService } from '../../src/release-workflows/sandbox-gateway.service.js';
 import { WorkflowPolicyService } from '../../src/release-workflows/workflow-policy.service.js';
@@ -1589,6 +1592,7 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
     const payments = new Map<string, Record<string, unknown>>();
     const calls: RazorpayHttpRequest[] = [];
     let createFailure: { status: number; afterStore: boolean } | null = null;
+    let malformedFetch = false;
     const port: RazorpayHttpPort = (request) => {
       calls.push(request);
       if (request.method === 'POST' && request.path === '/orders') {
@@ -1632,6 +1636,18 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
             items: orders.filter((o) => o.receipt === decodeURIComponent(byReceipt[1] ?? '')),
           }),
         );
+      const ofOrder = /^\/orders\/(order_[A-Za-z0-9]+)\/payments$/.exec(request.path);
+      if (request.method === 'GET' && ofOrder)
+        return Promise.resolve(
+          reply({
+            entity: 'collection',
+            items: [...payments.values()].filter((p) => p.order_id === ofOrder[1]),
+          }),
+        );
+      if (request.method === 'GET' && request.path.startsWith('/settlements/recon/combined?'))
+        return Promise.resolve(reply({ entity: 'collection', count: 0, items: [] }));
+      if (malformedFetch && request.path.startsWith('/payments/'))
+        return Promise.resolve({ status: 200, body: '<html>not json</html>' });
       const pay = /^\/payments\/(pay_[A-Za-z0-9]+)$/.exec(request.path);
       const found = pay ? payments.get(pay[1] ?? '') : undefined;
       if (request.method === 'GET' && found) return Promise.resolve(reply(found));
@@ -1645,6 +1661,9 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
       creates: () => calls.filter((c) => c.method === 'POST' && c.path === '/orders').length,
       failNextCreate: (status: number, afterStore = false) => {
         createFailure = { status, afterStore };
+      },
+      malformedFetches: (on: boolean) => {
+        malformedFetch = on;
       },
     };
   }
@@ -1663,9 +1682,17 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
       () => new RazorpayClient(keyId, keySecret, fake.port),
     );
   }
-  async function obligation() {
+  /** The operator's DB marker (razorpay_test_registrations) that a registration is synthetic. */
+  const markSynthetic = (registrationId: string) =>
+    testDb().razorpayTestRegistration.upsert({
+      where: { registrationId },
+      create: { registrationId, markedByUserId: maker.user.id, note: 'Synthetic CI registration' },
+      update: {},
+    });
+  async function obligation({ synthetic = true } = {}) {
     await publish('INDIA');
     const student = await newStudent();
+    if (synthetic) await markSynthetic(student.registrationId);
     const applicationId = await assessedApplication(student);
     const v = studentReExamPaymentViewSchema.parse(
       (await expectStatus(start(student.agent, applicationId, 'INDIA'), 200)).body,
@@ -1762,6 +1789,20 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
   it('with mode off, every Razorpay route answers 404 as before and nothing is stored', async () => {
     expect(app.get(PaymentButtonPolicyService).fixture()).toBeNull();
     const { student, payment } = await obligation();
+    const limiter = vi.spyOn(
+      app.get((await import('../../src/auth/rate-limiter.js')).RateLimiter),
+      'hit',
+    );
+    const client = vi.spyOn(app.get(RazorpayGatewayService), 'client');
+    const alerts = vi.spyOn(app.get(PaymentAlertsService), 'notify');
+    const counts = () =>
+      Promise.all([
+        testDb().razorpayWebhookReceipt.count(),
+        testDb().razorpayWebhookIgnored.count(),
+        testDb().razorpayOrder.count(),
+        testDb().auditLog.count({ where: { action: { startsWith: 'RAZORPAY_' } } }),
+      ]);
+    const beforeCounts = await counts();
     const body = JSON.stringify(
       captureEvent('payment.captured', 'order_Off', 'pay_OffMode', 100000),
     );
@@ -1783,6 +1824,14 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
     );
     expect(await testDb().razorpayWebhookIgnored.count()).toBe(before);
     expect(await testDb().razorpayOrder.count({ where: { paymentId: payment.id } })).toBe(0);
+    // No receipt, audit or order written; no rate-limit counter touched; no provider client built.
+    expect(await counts()).toEqual(beforeCounts);
+    expect(limiter).not.toHaveBeenCalled();
+    expect(client).not.toHaveBeenCalled();
+    expect(alerts).not.toHaveBeenCalled();
+    await expect(app.get(RazorpayReconciliationService).run()).rejects.toMatchObject({
+      status: 404,
+    });
   });
 
   it('creates one order from the server-side obligation, replays it and serializes concurrent requests', async () => {
@@ -1792,6 +1841,27 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
     // Not on the allowlist, another student, no CSRF: all refused before any provider call.
     enable([randomUUID()], fake);
     await expectStatus(createOrder(student.agent, payment.id), 404);
+    // Allowlisted in config but not marked synthetic in the database: refused, and the DB agrees.
+    const unmarked = await obligation({ synthetic: false });
+    enable([unmarked.student.registrationId], fake);
+    await expectStatus(createOrder(unmarked.student.agent, unmarked.payment.id), 404);
+    const due2 = await testDb().reExamPayment.findUniqueOrThrow({
+      where: { id: unmarked.payment.id },
+    });
+    await expect(
+      testDb().razorpayOrder.create({
+        data: {
+          paymentId: due2.id,
+          attempt: 1,
+          receipt: `rx_${due2.id.replaceAll('-', '')}_1`,
+          mode: 'TEST',
+          accountId: merchant,
+          amountMinor: due2.amountMinor,
+          currency: due2.currency,
+          studentAccountId: unmarked.student.accountId,
+        },
+      }),
+    ).rejects.toThrow(/not marked synthetic/);
     enable([student.registrationId], fake);
     const other = await newStudent();
     await expectStatus(createOrder(other.agent, payment.id), 404);
@@ -2142,9 +2212,162 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
       expect(statuses.at(-1)).toBe(429);
       // Verified deliveries are still answered while unverified ones are throttled.
       await expectStatus(send(JSON.stringify(refund)), 200);
+      // Alert hooks: a signed other-account event and a digest conflict both alert, still 2xx.
+      const alerts = vi.spyOn(testApp.get(PaymentAlertsService), 'notify');
+      await expectStatus(send(JSON.stringify({ ...refund, account_id: 'acc_SomeoneElse' })), 200);
+      const conflictId = `evt_${randomUUID()}`;
+      await expectStatus(send(JSON.stringify(refund), 'application/json', conflictId), 200);
+      await expectStatus(
+        send(JSON.stringify({ ...refund, created_at: 1 }), 'application/json', conflictId),
+        200,
+      );
+      expect(alerts.mock.calls.map(([alert]) => alert.kind)).toEqual([
+        'WEBHOOK_ACCOUNT_MISMATCH',
+        'WEBHOOK_DIGEST_CONFLICT',
+      ]);
       expect(fake.calls).toHaveLength(0);
     } finally {
       await testApp.close();
     }
+  });
+  it('closes stale open orders: on create re-check, manual submission, void and expiry', async () => {
+    const fake = provider();
+    const abandoned = async (orderId: string) => {
+      const row = await orderRow(orderId);
+      return { status: row.status, reason: row.events.find((e) => e.kind === 'ABANDONED')?.reason };
+    };
+    // Obligation closed without our hooks: the next create closes the open order and refuses.
+    const a = await paidOrder(fake);
+    await testDb().reExamPayment.update({
+      where: { id: a.payment.id },
+      data: { status: 'VOID', voidedAt: new Date(), voidReason: 'SYNTHETIC_TEST' },
+    });
+    await expectStatus(createOrder(a.student.agent, a.payment.id), 409);
+    expect(await abandoned(a.orderId)).toEqual({
+      status: 'ABANDONED',
+      reason: 'OBLIGATION_NOT_OPEN',
+    });
+    // A capture on an abandoned order is a refund candidate and alerts.
+    const alerts = vi.spyOn(app.get(PaymentAlertsService), 'notify');
+    await expectStatus(
+      deliver(captureEvent('payment.captured', a.orderId, a.providerPaymentId, a.due.amountMinor)),
+      200,
+    );
+    expect(alerts.mock.calls.map(([alert]) => alert)).toContainEqual({
+      kind: 'CAPTURE_FLAGGED',
+      severity: 'critical',
+      details: {
+        receiptId: expect.any(String) as string,
+        reason: 'ORDER_NOT_OPEN',
+        refundCandidate: true,
+      },
+    });
+    // Manual submission and a region change (void) close the open order in the same transaction.
+    const b = await paidOrder(fake);
+    await expectStatus(submit(b.student.agent, b.payment.id, `UTR${rid()}`), 200);
+    expect(await abandoned(b.orderId)).toEqual({
+      status: 'ABANDONED',
+      reason: 'MANUALLY_SUBMITTED',
+    });
+    const c = await paidOrder(fake);
+    await publish('NEPAL');
+    await expectStatus(start(c.student.agent, c.applicationId, 'NEPAL'), 200);
+    expect(await abandoned(c.orderId)).toEqual({
+      status: 'ABANDONED',
+      reason: 'OBLIGATION_VOIDED',
+    });
+    // An expired unpaid order is replaced by a new attempt instead of being offered forever.
+    const d = await paidOrder(fake);
+    const service = app.get(RazorpayOrdersService);
+    service.orderTtlMs = 0;
+    try {
+      const next = razorpayOrderViewSchema.parse(
+        (await expectStatus(createOrder(d.student.agent, d.payment.id), 200)).body,
+      );
+      expect(next.orderId).not.toBe(d.orderId);
+    } finally {
+      service.orderTtlMs = 30 * 60_000;
+    }
+    expect(await abandoned(d.orderId)).toEqual({ status: 'ABANDONED', reason: 'EXPIRED' });
+    expect((await orderRow(fake.orders.at(-1)?.id ?? '')).attempt).toBe(2);
+  });
+
+  it('shows staff which submitted payments came from a Razorpay test capture', async () => {
+    const fake = provider();
+    const p = await paidOrder(fake);
+    await expectStatus(
+      deliver(captureEvent('order.paid', p.orderId, p.providerPaymentId, p.due.amountMinor)),
+      200,
+    );
+    const viaRazorpay = reExamPaymentDetailSchema.parse(
+      (await approver.get(`re-exam-payments/${p.payment.id}`).expect(200)).body,
+    );
+    expect(viaRazorpay).toMatchObject({ status: 'SUBMITTED', providerSource: 'RAZORPAY_TEST' });
+    const manual = await obligation();
+    await expectStatus(submit(manual.student.agent, manual.payment.id, `UTR${rid()}`), 200);
+    const byHand = reExamPaymentDetailSchema.parse(
+      (await approver.get(`re-exam-payments/${manual.payment.id}`).expect(200)).body,
+    );
+    expect(byHand.providerSource).toBe('MANUAL');
+  });
+
+  it('retries malformed provider answers, re-matches PROVIDER_UNVERIFIED by reconciliation, and alerts on drift', async () => {
+    const fake = provider();
+    const p = await paidOrder(fake);
+    const event = captureEvent(
+      'payment.captured',
+      p.orderId,
+      p.providerPaymentId,
+      p.due.amountMinor,
+    );
+    const eventId = `evt_${randomUUID()}`;
+    fake.malformedFetches(true);
+    await expectStatus(deliver(event, eventId), 503);
+    expect(await testDb().razorpayWebhookReceipt.count({ where: { eventId } })).toBe(0);
+    fake.malformedFetches(false);
+    // A definite refusal (the provider does not know the payment) flags, but is not final.
+    const saved = fake.payments.get(p.providerPaymentId) ?? {};
+    fake.payments.delete(p.providerPaymentId);
+    await expectStatus(deliver(event, eventId), 200);
+    const flagged = await orderRow(p.orderId);
+    expect(flagged.status).toBe('CREATED');
+    expect(flagged.events.filter((e) => e.kind === 'FLAGGED').map((e) => e.reason)).toEqual([
+      'PROVIDER_UNVERIFIED',
+    ]);
+    // A replay of a known event id never reaches the provider.
+    const fetchesBefore = fake.calls.filter((c) => c.path.startsWith('/payments/')).length;
+    await expectStatus(deliver(event, eventId), 200);
+    expect(fake.calls.filter((c) => c.path.startsWith('/payments/')).length).toBe(fetchesBefore);
+
+    fake.payments.set(p.providerPaymentId, saved);
+    const reconciliation = app.get(RazorpayReconciliationService);
+    const first = await reconciliation.run();
+    expect(first.rematched).toBeGreaterThanOrEqual(1);
+    expect(first.settlement).toBe('EMPTY');
+    const paid = await orderRow(p.orderId);
+    expect(paid.status).toBe('PAID');
+    expect(
+      (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: p.payment.id } })).status,
+    ).toBe('SUBMITTED');
+
+    fake.payments.set(p.providerPaymentId, {
+      ...saved,
+      status: 'refunded',
+      amount_refunded: p.due.amountMinor,
+    });
+    const alerts = vi.spyOn(app.get(PaymentAlertsService), 'notify');
+    const second = await reconciliation.run();
+    expect(second.issues.filter((issue) => issue.orderId === paid.id)).toEqual([
+      {
+        code: 'PAID_ORDER_DRIFT',
+        orderId: paid.id,
+        providerPaymentId: p.providerPaymentId,
+        driftMinor: p.due.amountMinor,
+      },
+    ]);
+    expect(alerts.mock.calls.some(([alert]) => alert.kind === 'RECONCILIATION_ISSUES')).toBe(true);
+    expect(
+      await testDb().auditLog.count({ where: { action: 'RAZORPAY_RECONCILIATION_RUN' } }),
+    ).toBeGreaterThanOrEqual(2);
   });
 });

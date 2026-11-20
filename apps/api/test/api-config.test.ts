@@ -262,6 +262,19 @@ describe('Razorpay payment configuration (synthetic values only)', () => {
     expect(() => loadApiConfig(unset)).toThrow(/DOCVERSITY_DEPLOYMENT/);
   });
 
+  it.each(['production', 'prod', 'docversity-prod', 'live', 'main', 'prod-eu'])(
+    'hard-refuses the production deployment name %s even when both names agree',
+    (name) => {
+      expect(() =>
+        loadApiConfig({
+          ...testMode,
+          DOCVERSITY_DEPLOYMENT: name,
+          PAYMENTS_ALLOWED_DEPLOYMENT: name,
+        }),
+      ).toThrow(/names a production deployment/);
+    },
+  );
+
   it('(f) refuses a webhook secret reused from the key secret, SESSION_SECRET or the MFA key', () => {
     const mfa = 'ab'.repeat(32);
     for (const secret of [

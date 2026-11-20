@@ -476,6 +476,8 @@ export const reExamPaymentRowSchema = z
     subject: z.object({ code: z.string(), name: z.string() }),
     transactionReference: z.string().nullable(),
     hasEvidence: z.boolean(),
+    /** RAZORPAY_TEST: submitted by a matched Razorpay test-mode capture, never real money. */
+    providerSource: z.enum(['MANUAL', 'RAZORPAY_TEST']),
   })
   .meta({ id: 'ReExamPaymentRow' });
 

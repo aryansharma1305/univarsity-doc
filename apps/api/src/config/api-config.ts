@@ -58,6 +58,8 @@ const trustProxySchema = z
 // shortcut: live approval is a code constant, so enabling live mode is always a reviewed commit
 // (a university sign-off ADR plus a live-mode security review). Never set it from configuration.
 export const RAZORPAY_LIVE_APPROVAL_REF = null as string | null;
+/** Deployment names that may never collect in test mode, whatever the environment says. */
+export const PAYMENTS_FORBIDDEN_DEPLOYMENT = /(^|-)(prod|production|live|main)(-|$)/;
 const deploymentName = z.string().regex(/^[a-z0-9-]{3,40}$/);
 const RAZORPAY_SECRET_KEYS = [
   'RAZORPAY_KEY_ID',
@@ -208,6 +210,12 @@ export const apiEnvSchema = z
           'must equal PAYMENTS_ALLOWED_DEPLOYMENT on an instance allowed to collect',
           'DOCVERSITY_DEPLOYMENT',
         );
+      for (const key of ['DOCVERSITY_DEPLOYMENT', 'PAYMENTS_ALLOWED_DEPLOYMENT'] as const)
+        if (PAYMENTS_FORBIDDEN_DEPLOYMENT.test(env[key] ?? ''))
+          razorpay(
+            'names a production deployment, which can never enable Razorpay collection',
+            key,
+          );
       if (env.PAYMENTS_TEST_REGISTRATION_ALLOWLIST.length === 0)
         razorpay(
           'must list at least one synthetic registration',

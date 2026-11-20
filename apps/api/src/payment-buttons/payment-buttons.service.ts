@@ -19,7 +19,8 @@ import { RateLimiter } from '../auth/rate-limiter.js';
 import { IdentifierHasher } from '../auth/identifier-hasher.js';
 import { AppError, Errors } from '../common/app-error.js';
 import { PaymentButtonPolicyService } from './payment-button-policy.service.js';
-import { RazorpayOrdersService } from './razorpay-orders.service.js';
+import { REFUND_CANDIDATE, RazorpayOrdersService } from './razorpay-orders.service.js';
+import { PaymentAlertsService, type PaymentAlert } from './payment-alerts.service.js';
 const conflict = () =>
   new AppError(
     HttpStatus.CONFLICT,
@@ -50,6 +51,7 @@ export class PaymentButtonsService {
     private readonly limiter: RateLimiter,
     private readonly hasher: IdentifierHasher,
     private readonly orders: RazorpayOrdersService,
+    private readonly alerts: PaymentAlertsService,
   ) {}
 
   async exam(studentId: string, registrationId: string, examinationId: string) {
@@ -140,46 +142,81 @@ export class PaymentButtonsService {
             bodySha256: event.bodySha256,
             providerCreatedAt: event.providerCreatedAt,
           };
-    // Re-fetch the current payment before acting on an order-bound capture (never trust event order).
+    // Re-fetch the current payment before acting on an order-bound capture (never trust event order),
+    // but not for a replay: a known event id never causes a provider call.
+    const known =
+      (await this.prisma.client.razorpayWebhookReceipt.count({ where: { eventId } })) > 0 ||
+      (await this.prisma.client.razorpayWebhookIgnored.count({ where: { eventId } })) > 0;
     const current =
-      event.outcome === 'HANDLED' ? await this.orders.currentPayment(event.evidence) : null;
+      event.outcome === 'HANDLED' && !known
+        ? await this.orders.currentPayment(event.evidence)
+        : null;
     // From here on the body is authentic: every outcome is 2xx unless our own storage fails (5xx).
-    await this.prisma.client.$transaction(async (tx) => {
-      // The header is not signed: bind it to the original body, and never attribute from this header.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId}))`;
-      const priorDigest =
-        (await tx.razorpayWebhookReceipt.findUnique({ where: { eventId } }))?.bodySha256 ??
-        (
-          await tx.razorpayWebhookIgnored.findFirst({
-            where: { eventId, reason: { not: 'DIGEST_CONFLICT' } },
-          })
-        )?.bodySha256;
-      if (priorDigest === summary.bodySha256) return; // replay: no side effect
-      // Same id, different signed body: authentic, so never 4xx (24 h of 4xx disables the webhook).
-      if (priorDigest !== undefined)
-        return this.ignore(tx, { ...summary, reason: 'DIGEST_CONFLICT' });
-      if (event.outcome === 'IGNORED') return this.ignore(tx, { ...summary, reason: event.reason });
-      const receipt = await tx.razorpayWebhookReceipt.create({
-        data: { id: randomUUID(), ...event.evidence },
-      });
-      const match =
-        event.evidence.captured && event.evidence.providerOrderId
-          ? await this.orders.matchCapture(tx, receipt, current)
-          : null;
-      await this.audit.writeAuditEvent(
-        {
-          action: AUDIT_ACTIONS.razorpayWebhookReceived,
-          entityType: 'RazorpayWebhookReceipt',
-          entityId: receipt.id,
-          metadata: {
-            eventType: event.evidence.eventType,
-            automaticallyAttributed: match?.matched ?? false,
-            ...(match && !match.matched ? { reason: match.reason } : {}),
+    const alert = await this.prisma.client.$transaction(
+      async (tx): Promise<PaymentAlert | null> => {
+        // The header is not signed: bind it to the original body, and never attribute from this header.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId}))`;
+        const priorDigest =
+          (await tx.razorpayWebhookReceipt.findUnique({ where: { eventId } }))?.bodySha256 ??
+          (
+            await tx.razorpayWebhookIgnored.findFirst({
+              where: { eventId, reason: { not: 'DIGEST_CONFLICT' } },
+            })
+          )?.bodySha256;
+        if (priorDigest === summary.bodySha256) return null; // replay: no side effect
+        // Same id, different signed body: authentic, so never 4xx (24 h of 4xx disables the webhook).
+        if (priorDigest !== undefined) {
+          await this.ignore(tx, { ...summary, reason: 'DIGEST_CONFLICT' });
+          return {
+            kind: 'WEBHOOK_DIGEST_CONFLICT',
+            severity: 'critical',
+            details: { eventId, eventType: summary.eventType },
+          };
+        }
+        if (event.outcome === 'IGNORED') {
+          await this.ignore(tx, { ...summary, reason: event.reason });
+          return event.reason === 'ACCOUNT_MISMATCH'
+            ? {
+                kind: 'WEBHOOK_ACCOUNT_MISMATCH',
+                severity: 'critical',
+                details: { eventId, eventType: summary.eventType },
+              }
+            : null;
+        }
+        const receipt = await tx.razorpayWebhookReceipt.create({
+          data: { id: randomUUID(), ...event.evidence },
+        });
+        const match =
+          event.evidence.captured && event.evidence.providerOrderId
+            ? await this.orders.matchCapture(tx, receipt, current)
+            : null;
+        await this.audit.writeAuditEvent(
+          {
+            action: AUDIT_ACTIONS.razorpayWebhookReceived,
+            entityType: 'RazorpayWebhookReceipt',
+            entityId: receipt.id,
+            metadata: {
+              eventType: event.evidence.eventType,
+              automaticallyAttributed: match?.matched ?? false,
+              ...(match && !match.matched ? { reason: match.reason } : {}),
+            },
           },
-        },
-        tx,
-      );
-    });
+          tx,
+        );
+        return match && !match.matched && match.reason !== 'UNKNOWN_ORDER'
+          ? {
+              kind: 'CAPTURE_FLAGGED',
+              severity: REFUND_CANDIDATE.has(match.reason) ? 'critical' : 'warning',
+              details: {
+                receiptId: receipt.id,
+                reason: match.reason,
+                refundCandidate: REFUND_CANDIDATE.has(match.reason),
+              },
+            }
+          : null;
+      },
+    );
+    if (alert) await this.alerts.notify(alert);
     // Identical body for every verified outcome, so responses reveal nothing about matching.
     return { received: true, attributed: false } as const;
   }

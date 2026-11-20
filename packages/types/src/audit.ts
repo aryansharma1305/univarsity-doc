@@ -10,6 +10,7 @@ export const AUDIT_ACTIONS = {
   razorpayOrderCreated: 'RAZORPAY_ORDER_CREATED',
   razorpayPaymentCapturedMatched: 'RAZORPAY_PAYMENT_CAPTURED_MATCHED',
   razorpayPaymentCaptureFlagged: 'RAZORPAY_PAYMENT_CAPTURE_FLAGGED',
+  razorpayReconciliationRun: 'RAZORPAY_RECONCILIATION_RUN',
   syntheticWorkflowChanged: 'SYNTHETIC_WORKFLOW_CHANGED',
   syntheticCertificateTransitioned: 'SYNTHETIC_CERTIFICATE_TRANSITIONED',
   publicVerificationUnavailable: 'PUBLIC_VERIFICATION_UNAVAILABLE',

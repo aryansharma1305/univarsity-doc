@@ -14,7 +14,8 @@
     "clean": "rm -rf dist",
     "admin:create": "node dist/cli/create-admin.js",
     "documents:backfill-student-copies": "node dist/cli/backfill-student-copies.js",
-    "staff:reset-access": "node dist/cli/reset-staff-access.js"
+    "staff:reset-access": "node dist/cli/reset-staff-access.js",
+    "razorpay:reconcile": "node dist/cli/razorpay-reconcile.js"
   },
   "dependencies": {
     "@docversity/database": "workspace:*",
