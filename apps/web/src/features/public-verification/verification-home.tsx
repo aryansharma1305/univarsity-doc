@@ -9,7 +9,7 @@ import { HeroSearch } from './hero-search';
 import { PublicHeader } from '@/components/public/public-header';
 import { LandingFooter } from './landing-sections';
 import { useLandingMotion } from './use-landing-motion';
-import crest from './university-crest.png';
+import crest from './university-logo.png';
 import styles from './verification-home.module.css';
 
 /**
@@ -72,7 +72,7 @@ export function VerificationHome({ year }: { year: number }) {
                       src={crest}
                       alt="Docversity University"
                       priority
-                      sizes="(max-width: 560px) 210px, (max-width: 900px) 280px, 360px"
+                      sizes="(max-width: 560px) 210px, (max-width: 900px) 280px, 300px"
                       className={styles.crest}
                     />
                   </div>
