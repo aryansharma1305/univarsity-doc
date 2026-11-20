@@ -243,7 +243,7 @@ export async function apiDownload(path: string, fallbackName: string): Promise<v
 
 /** A request made with the STUDENT session (student portal pages only). */
 export function studentRequest<TSchema extends z.ZodType>(
-  method: 'GET' | 'POST' | 'PATCH',
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
   path: string,
   schema: TSchema,
   options: { query?: Query; body?: unknown } = {},

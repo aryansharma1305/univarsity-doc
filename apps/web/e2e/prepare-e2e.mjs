@@ -150,7 +150,12 @@ try {
   });
   // Students with ACTIVE portal accounts for the profile request tests (Phase 7). Each test that
   // changes a record uses its own student, so the read-only fixture above stays unchanged.
-  for (const [index, name] of ['E2E Profile Student', 'E2E Review Student'].entries()) {
+  // The third (E2E Upload Student) is used only by student-uploads.spec.ts.
+  for (const [index, name] of [
+    'E2E Profile Student',
+    'E2E Review Student',
+    'E2E Upload Student',
+  ].entries()) {
     const registrationNumber = `E2E-REG-010${index + 1}`;
     const password = randomBytes(18).toString('base64url');
     const created = await db.student.create({

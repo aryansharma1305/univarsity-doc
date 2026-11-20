@@ -20,6 +20,7 @@ import { formatDate, formatDateTime } from '@/lib/format';
 import { useStudent, useStudentActivity } from './api';
 import { PersonalDialog } from './personal-dialog';
 import { RegistrationDialog } from './registration-dialog';
+import { StudentUploadsPanel } from './student-uploads-panel';
 
 function Detail({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -161,6 +162,7 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
   const searchParams = useSearchParams();
   const canEditStudent = useCan(PERMISSIONS.studentsWrite);
   const canEditRegistrations = useCan(PERMISSIONS.registrationsWrite);
+  const canReadUploads = useCan(PERMISSIONS.studentUploadsRead);
   const [tab, setTab] = useState('overview');
   const [personalOpen, setPersonalOpen] = useState(searchParams.get('edit') === 'personal');
   const [registrationDialog, setRegistrationDialog] = useState<{
@@ -184,12 +186,13 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
     <>
       <Header student={student} />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 h-auto max-w-full flex-wrap">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="registrations">
             Registrations ({student.registrations.length})
           </TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
+          {canReadUploads && <TabsTrigger value="uploads">Student uploads</TabsTrigger>}
         </TabsList>
         <TabsContent value="overview">
           <Card className="shadow-card">
@@ -252,6 +255,11 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
         <TabsContent value="activity">
           <ActivityTab studentId={student.id} active={tab === 'activity'} />
         </TabsContent>
+        {canReadUploads && (
+          <TabsContent value="uploads">
+            <StudentUploadsPanel studentId={student.id} active={tab === 'uploads'} />
+          </TabsContent>
+        )}
       </Tabs>
       {canEditStudent && (
         <PersonalDialog open={personalOpen} onOpenChange={setPersonalOpen} student={student} />
