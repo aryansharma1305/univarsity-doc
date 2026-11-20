@@ -25,6 +25,8 @@ export function StudentUploadsPanel({ studentId, active }: { studentId: string; 
     queryFn: () => apiRequest('GET', `students/${studentId}/uploads`, studentUploadListSchema),
     enabled: active,
     staleTime: 0,
+    // Each list view is audited; never re-list just because the window regained focus.
+    refetchOnWindowFocus: false,
   });
   if (query.isPending) return <Skeleton className="h-40 w-full" />;
   if (query.isError) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;

@@ -125,6 +125,12 @@ describe('staff Student uploads panel', () => {
       );
     });
     expect(screen.getAllByText('Not uploaded')).toHaveLength(9);
+    // Regaining focus must not re-list (each list view is audited).
+    const calls = fetchMock.mock.calls.length;
+    window.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('focus'));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(fetchMock.mock.calls.length).toBe(calls);
     expect(screen.queryByRole('button', { name: /Upload|Delete|Replace/ })).not.toBeInTheDocument();
   });
 });
