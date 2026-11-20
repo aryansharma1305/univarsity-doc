@@ -2,7 +2,8 @@
 # Read-only capture of the live university DB + objects into a private backup dir on the VPS.
 # Prints only non-sensitive status lines; the last line is the backup directory.
 # Copy of the rehearsed release-55c2350-mfa/vps-capture.sh; only change: the metadata scope text
-# comes from $SCOPE (default: scheduled daily capture) instead of being edited per occasion.
+# comes from $SCOPE (default: scheduled daily capture) instead of being edited per occasion, and a
+# failed run removes its partial set.
 set -eu
 umask 077
 B=/opt/docversity/university-2efcea18-20261114
@@ -12,6 +13,8 @@ PG=docversity-university-407e5ed2-postgres-1
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 D=$B/university/backups/$TS
 mkdir -m 700 "$D" "$D/objects"
+# A failed capture leaves no partial set behind (removed again just before success below).
+trap 'rm -rf "$D"' EXIT
 sql() { docker exec "$PG" psql -U docversity_owner -d docversity_university -Atc "$1"; }
 
 $C --profile operator run --rm --no-deps backup-readiness >"$D/.readiness.log" 2>&1
@@ -64,4 +67,5 @@ echo "counts: students=$STU registrations=$REG users=$USR migrations=$MIG tables
   python3 -c 'import sys,json;print(json.dumps(dict(l.rstrip("\n").split("\t") for l in sys.stdin),indent=2))' >"$D/manifest.json"
 chmod -R go-rwx "$D"
 echo "manifest entries: $(python3 -c "import json;print(len(json.load(open('$D/manifest.json'))))")"
+trap - EXIT
 echo "$D"

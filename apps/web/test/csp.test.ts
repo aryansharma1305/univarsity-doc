@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { getScriptNonceFromHeader } from 'next/dist/server/app-render/get-script-nonce-from-header';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { POST as cspReport } from '@/app/csp-report/route';
+import { allowReport } from '@/lib/csp-report-limit';
 import { createNonce, enforcedCsp, reportOnlyCsp } from '@/lib/csp';
 import { config, proxy } from '@/proxy';
 
@@ -20,9 +21,9 @@ describe('CSP policies', () => {
     expect(directive(enforced, 'object-src')).toBe("object-src 'none'");
     expect(directive(enforced, 'frame-ancestors')).toBe("frame-ancestors 'none'");
     expect(directive(enforced, 'base-uri')).toBe("base-uri 'none'");
-    expect(directive(enforced, 'connect-src')).toBe("connect-src 'self'");
+    expect(directive(enforced, 'connect-src')).toBe("connect-src 'self' https://api.razorpay.com");
     expect(directive(enforced, 'script-src')).toBe(
-      "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com",
+      "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://cdn.razorpay.com",
     );
     // A nonce in the enforced policy would switch off its 'unsafe-inline'.
     expect(enforced).not.toContain('nonce-');
@@ -42,7 +43,19 @@ describe('CSP policies', () => {
   it('allows eval and the hot-reload websocket only in development', () => {
     expect(directive(enforcedCsp(true), 'script-src')).toContain("'unsafe-eval'");
     expect(directive(reportOnlyCsp('n', true), 'script-src')).toContain("'unsafe-eval'");
-    expect(directive(enforcedCsp(true), 'connect-src')).toBe("connect-src 'self' ws:");
+    expect(directive(enforcedCsp(true), 'connect-src')).toBe(
+      "connect-src 'self' ws: https://api.razorpay.com",
+    );
+  });
+
+  it('allows exactly the hosts the Razorpay payment button needs, in both policies', () => {
+    for (const policy of [enforced, reportOnly]) {
+      expect(directive(policy, 'frame-src')).toContain('https://razorpay.com');
+      expect(directive(policy, 'img-src')).toContain('https://cdn.razorpay.com');
+      expect(directive(policy, 'connect-src')).toContain('https://api.razorpay.com');
+      // Telemetry and ad beacons of Razorpay's analytics bundle stay blocked.
+      expect(policy).not.toMatch(/lumberjack|google-analytics|adroll|fonts\.googleapis/);
+    }
   });
 
   it('creates distinct 128-bit nonces Next.js accepts', () => {
@@ -139,5 +152,26 @@ describe('POST /csp-report', () => {
     expect((await post('not json')).status).toBe(400);
     expect((await post(JSON.stringify({ other: 1 }))).status).toBe(400);
     expect((await post('x'.repeat(9000))).status).toBe(413);
+    // Chunked body without content-length is capped while streaming.
+    const big = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 0; i < 10; i += 1) controller.enqueue(new Uint8Array(1024));
+        controller.close();
+      },
+    });
+    const chunked = new Request('http://localhost/csp-report', {
+      method: 'POST',
+      body: big,
+      duplex: 'half',
+    } as RequestInit);
+    expect((await cspReport(chunked)).status).toBe(413);
+  });
+
+  it('rate-limits logging per client and in total', () => {
+    const t = Date.now() + 120_000;
+    for (let i = 0; i < 20; i += 1) expect(allowReport('a', t)).toBe(true);
+    expect(allowReport('a', t)).toBe(false);
+    expect(allowReport('b', t)).toBe(true);
+    expect(allowReport('a', t + 60_000)).toBe(true);
   });
 });

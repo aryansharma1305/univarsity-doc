@@ -4,6 +4,8 @@
  * source reduced to its origin (or a keyword such as `inline`/`eval`) and the page path are logged —
  * never query strings, script samples or anything else from the report.
  */
+import { allowReport } from '@/lib/csp-report-limit';
+
 const MAX_BODY_BYTES = 8 * 1024;
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -26,11 +28,29 @@ function pathOf(value: unknown): string {
   }
 }
 
+/** Reads at most `limit` bytes; null when the body is larger (also for chunked bodies). */
+async function readCapped(request: Request, limit: number): Promise<string | null> {
+  if (Number(request.headers.get('content-length') ?? 0) > limit) return null;
+  const reader = request.body?.getReader();
+  if (!reader) return '';
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
+}
+
 export async function POST(request: Request): Promise<Response> {
-  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES)
-    return new Response(null, { status: 413 });
-  const body = await request.text();
-  if (body.length > MAX_BODY_BYTES) return new Response(null, { status: 413 });
+  const body = await readCapped(request, MAX_BODY_BYTES);
+  if (body === null) return new Response(null, { status: 413 });
   let report: Record<string, unknown> | undefined;
   try {
     const parsed: unknown = JSON.parse(body);
@@ -40,6 +60,8 @@ export async function POST(request: Request): Promise<Response> {
     // fall through: malformed body
   }
   if (!report) return new Response(null, { status: 400 });
+  const client = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  if (!allowReport(client)) return new Response(null, { status: 204 });
   console.warn(
     JSON.stringify({
       level: 'warn',

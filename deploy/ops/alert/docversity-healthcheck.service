@@ -5,5 +5,5 @@ After=docker.service
 [Service]
 Type=oneshot
 ExecStart=/opt/docversity/ops/alert/healthcheck.sh
-# A failing check exits 1; that is expected and already alerted.
-SuccessExitStatus=1
+# A failing check exits 1 after alerting, so the unit shows as failed (systemctl --failed) until
+# the next clean run; the timer keeps firing either way.

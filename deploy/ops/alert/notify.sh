@@ -12,20 +12,29 @@ set -eu
 SUBJECT=$1
 BODY=$2
 logger -t docversity-alert -- "$SUBJECT: $BODY" 2>/dev/null || echo "docversity-alert: $SUBJECT: $BODY" >&2
+# URLs and tokens reach curl through a config on stdin, never argv (visible in ps / audit logs).
+# Usage: post <url> [curl options]
+post() {
+  case $1 in *'"'* | *'\'*) echo "notify: unsupported characters in URL" >&2; return 2 ;; esac
+  url=$1
+  shift
+  printf 'url = "%s"\n' "$url" | curl -fsS -m 15 -o /dev/null -K - "$@"
+}
+body=$(mktemp)
+trap 'rm -f "$body"' EXIT
 case ${ALERT_CHANNEL:-log} in
   log) ;;
   webhook)
     python3 -c 'import json,sys;print(json.dumps({"subject":sys.argv[1],"text":sys.argv[1]+"\n"+sys.argv[2]}))' \
-      "$SUBJECT" "$BODY" | curl -fsS -m 15 -H 'Content-Type: application/json' --data-binary @- \
-      "$ALERT_WEBHOOK_URL" >/dev/null ;;
+      "$SUBJECT" "$BODY" >"$body"
+    post "$ALERT_WEBHOOK_URL" --data-binary "@$body" -H 'Content-Type: application/json' ;;
   ntfy)
-    printf '%s' "$BODY" | curl -fsS -m 15 -H "Title: $SUBJECT" --data-binary @- "$ALERT_NTFY_URL" >/dev/null ;;
+    printf '%s' "$BODY" >"$body"
+    post "$ALERT_NTFY_URL" --data-binary "@$body" -H "Title: $SUBJECT" ;;
   telegram)
-    # The token goes through a curl config on stdin, never argv (visible in ps).
-    printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$ALERT_TELEGRAM_TOKEN" |
-      curl -fsS -m 15 -K - --data-urlencode "chat_id=$ALERT_TELEGRAM_CHAT_ID" \
-        --data-urlencode "text=$SUBJECT
-$BODY" >/dev/null ;;
+    printf '%s\n%s' "$SUBJECT" "$BODY" >"$body"
+    post "https://api.telegram.org/bot$ALERT_TELEGRAM_TOKEN/sendMessage" \
+      --data-urlencode "chat_id=$ALERT_TELEGRAM_CHAT_ID" --data-urlencode "text@$body" ;;
   email)
     printf 'To: %s\nSubject: %s\n\n%s\n' "$ALERT_EMAIL_TO" "$SUBJECT" "$BODY" | sendmail -t ;;
   *) echo "notify: unknown ALERT_CHANNEL" >&2; exit 2 ;;

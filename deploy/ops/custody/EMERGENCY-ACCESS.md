@@ -13,6 +13,17 @@ procedure adds a **second custodian** and break-glass steps. Nothing here has be
 | iCloud passphrase (MFA key copy B)  | operator's password manager                                               | copy B unusable (copy A inside backups remains)   |
 | `STAFF_MFA_ENCRYPTION_KEY`          | VPS `secrets/runtime`, backups (copy A), iCloud (copy B)                  | every enrolled staff member needs an access reset |
 
+## Do now (before the custodian handover)
+
+**Move the GPG custody passphrase file off the Mac.** Today the passphrase file (referenced by
+`custody-20261114.json` `passphraseFile`) sits on the same Mac as the key, so whoever has the Mac (or
+a backup of its disk) can open every backup. Put the passphrase into the password manager (operator
+vault, later shared with the custodian), check it unlocks the key once
+(`gpg --homedir ~/.docversity-recovery-keys/gnupg-20261114 --pinentry-mode loopback --dry-run --sign /dev/null`
+with the passphrase typed), then delete the file and update `passphraseFile` in the custody record to
+"password manager". `pull-verify.sh` then asks for it through pinentry (no `DV_PASSPHRASE_FILE`).
+Operator action; not done by this change.
+
 ## Second custodian (decision D3: who)
 
 A named person at the institution or a trusted co-operator, reachable within 24 h, with a password
@@ -72,7 +83,21 @@ docversity-healthcheck -n 50`; `df -h /`.
 4. **Act only with the runbooks**: web/api rollback (ROLLBACK-AND-RECOVERY.md §1–2), restore
    (§3, isolated first), MFA key recovery (§4) with the custodian's iCloud passphrase or a decrypted
    backup.
-5. **Lost operator Mac**: revoke `docversity-deploy` from `/root/.ssh/authorized_keys` (after confirming
-   the custodian key works), revoke the Mac's other sessions (Hostinger, GitHub, iCloud), keep the GPG
-   key (the passphrase still protects the stolen copy) but schedule its rotation.
+5. **Lost or stolen operator Mac.** Treat it as a full compromise of everything on it. While the
+   passphrase file is still on the Mac (see "Do now"), the GPG key protects nothing: assume every
+   backup set and the runtime secrets inside them (`secrets/runtime`: `SESSION_SECRET`,
+   `STAFF_MFA_ENCRYPTION_KEY`, DB/Redis/MinIO credentials) are readable by the thief.
+   - Access: confirm the custodian key works, then remove `docversity-deploy` from
+     `/root/.ssh/authorized_keys`; revoke the Mac's sessions (Hostinger, GitHub, iCloud, password
+     manager device).
+   - Backup key: create a new custody key on a clean machine, import only its public key into
+     `/etc/docversity/backup-gnupg` (update the pinned fingerprint in `encrypt-backup.sh` by a PR),
+     take a fresh capture and encrypt it to the new key. Old ciphertexts stay readable to the thief:
+     delete the VPS copies encrypted to the old key once new verified sets exist; keep off-server old
+     sets only where the custodian holds them and they are needed.
+   - Runtime secrets (planned, approved maintenance window, fresh backup first): rotate the DB, Redis
+     and MinIO passwords and `SESSION_SECRET` (all sessions and open activation codes become invalid;
+     reissue codes); rotate `STAFF_MFA_ENCRYPTION_KEY` (enrolled staff need an access reset and
+     re-enrolment, unless a re-encryption migration exists by then). Then a new capture, encrypted to
+     the new key, and destroy the iCloud copy B of the old MFA key.
 6. **Afterwards**: rotate anything exposed, write the incident note, re-run the custody tests.

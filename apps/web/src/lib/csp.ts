@@ -12,15 +12,30 @@
  * origin (no Google CDN at runtime); the homepage MOTION_GUARD inline script and GSAP/motion from the
  * bundle; same-origin API calls through the `/api/v1` proxy; images from `/api/v1/*`, `data:` (MFA QR)
  * and `blob:` (photo previews); PDF previews in `blob:` iframes; the Razorpay test payment button
- * script (`https://checkout.razorpay.com`) and its checkout frames. The repository has a Vercel GitHub
+ * script and its frames (hosts below). The repository has a Vercel GitHub
  * integration that builds PR previews only (production is the Hostinger VPS); its vercel.live comment
  * toolbar is deliberately not allowed, so it is blocked on previews and nothing else changes.
  */
 
 export const CSP_REPORT_PATH = '/csp-report';
 
-const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com';
-const RAZORPAY_FRAMES = 'https://api.razorpay.com https://checkout.razorpay.com';
+/**
+ * Razorpay payment button (features/payments/payment-button.tsx), hosts taken from
+ * https://checkout.razorpay.com/v1/payment-button.js (2026-11-19): it loads more script from
+ * cdn.razorpay.com (color.js, analytics bundle), calls https://api.razorpay.com/v1 by XHR and opens the
+ * payment form in an iframe at https://razorpay.com/payment-button/<id>/view (api.razorpay.com in QA
+ * mode). Razorpay publishes no CSP host list. Deliberately NOT allowed: the analytics bundle's
+ * beacons (lumberjack.razorpay.com, google-analytics, adroll, linkedin, reddit) and the button's Google
+ * Fonts @import; the button works without them (system font, no telemetry).
+ *
+ * Allowed app-wide, not only on the three pages that render the button: a client-side navigation keeps
+ * the first document's CSP, so a per-route policy would block the button after in-app navigation.
+ */
+const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com https://cdn.razorpay.com';
+const RAZORPAY_CONNECT = 'https://api.razorpay.com';
+const RAZORPAY_FRAMES =
+  'https://razorpay.com https://api.razorpay.com https://checkout.razorpay.com';
+const RAZORPAY_IMG = 'https://cdn.razorpay.com';
 
 function common(dev: boolean): string[] {
   return [
@@ -29,12 +44,12 @@ function common(dev: boolean): string[] {
     "object-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
-    "img-src 'self' data: blob:",
+    `img-src 'self' data: blob: ${RAZORPAY_IMG}`,
     "font-src 'self'",
     // React style props, motion/GSAP and sonner's injected <style> need inline styles.
     "style-src 'self' 'unsafe-inline'",
     // Dev only: Next.js hot reload uses a websocket.
-    dev ? "connect-src 'self' ws:" : "connect-src 'self'",
+    `connect-src 'self'${dev ? ' ws:' : ''} ${RAZORPAY_CONNECT}`,
     `frame-src 'self' blob: ${RAZORPAY_FRAMES}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",

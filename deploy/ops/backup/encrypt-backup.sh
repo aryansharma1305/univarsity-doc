@@ -1,13 +1,16 @@
-#!/bin/sh
+#!/bin/bash
 # Encrypt one plaintext backup set on the VPS to the custody PUBLIC key, then verify the result.
 # Usage: encrypt-backup.sh <backup dir>   (e.g. .../university/backups/20261118T122235Z)
 # The VPS keyring holds only the public key; this script refuses to run if a secret key is present.
 # Output: $DV_ENC_DIR/<ts>.tar.gpg and <ts>.tar.gpg.sha256. Never deletes plaintext (prune-backups.sh).
-set -eu
+set -euo pipefail
 umask 077
 HERE=$(cd "$(dirname "$0")" && pwd)
 GNUPG=${DV_GNUPGHOME:-/etc/docversity/backup-gnupg}
-RECIPIENT=${DV_RECIPIENT:-E9E34ADEBC492B000736862C2936904343F7AF44}
+# Custody key (ROLLBACK-AND-RECOVERY.md §3). Fixed here on purpose; only the offline self-test may
+# substitute its throwaway key.
+RECIPIENT=E9E34ADEBC492B000736862C2936904343F7AF44
+if [ "${DV_SELFTEST:-}" = 1 ]; then RECIPIENT=$DV_SELFTEST_RECIPIENT; fi
 ENC=${DV_ENC_DIR:-/opt/docversity/university-2efcea18-20261114/university/backups-encrypted}
 die() { echo "encrypt-backup: $*" >&2; exit 1; }
 sha256() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d' ' -f1; }
@@ -24,8 +27,12 @@ python3 "$HERE/verify-manifest.py" "$D" || die "plaintext set fails its manifest
 
 gpg --homedir "$GNUPG" --batch --with-colons --list-secret-keys 2>/dev/null | grep -q '^sec' &&
   die "secret key present in $GNUPG; the VPS must hold the public key only"
+# The key found must carry exactly this primary fingerprint (not a uid or short-ID match).
+FPR=$(gpg --homedir "$GNUPG" --batch --with-colons --list-keys "$RECIPIENT" 2>/dev/null |
+  awk -F: '$1=="fpr" {print $10; exit}' || true)
+[ "$FPR" = "$RECIPIENT" ] || die "custody key $RECIPIENT not in $GNUPG (found: ${FPR:-none})"
 EXPECTED=$(gpg --homedir "$GNUPG" --batch --with-colons --list-keys "$RECIPIENT" |
-  awk -F: '$1=="sub" && $12 ~ /e/ {print $5}' | sort -u)
+  awk -F: '$1=="sub" && $12 ~ /e/ {print $5}' | sort -u || true)
 [ -n "$EXPECTED" ] || die "no encryption subkey for $RECIPIENT in $GNUPG"
 
 mkdir -p "$ENC"
@@ -33,7 +40,8 @@ chmod 700 "$ENC"
 OUT=$ENC/$TS.tar.gpg
 [ ! -e "$OUT" ] || die "$OUT already exists"
 trap 'rm -f "$OUT.tmp"' EXIT
-# Plaintext never touches disk outside the original set: tar streams straight into gpg.
+# Plaintext never touches disk outside the original set: tar streams straight into gpg
+# (pipefail: a failing tar fails the job and the partial ciphertext is removed).
 tar -C "$(dirname "$D")" -cf - "$TS" |
   gpg --homedir "$GNUPG" --batch --no-tty --trust-model always \
     --recipient "$RECIPIENT" --encrypt --output "$OUT.tmp"

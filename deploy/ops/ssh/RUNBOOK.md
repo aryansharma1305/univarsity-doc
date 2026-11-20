@@ -86,7 +86,7 @@ ssh root@189.72.149.93
 
    Expect `passwordauthentication no`, `kbdinteractiveauthentication no`,
    `permitrootlogin prohibit-password` (some builds print the alias `without-password`), `authenticationmethods publickey`,
-   `maxauthtries 3`, `x11forwarding no`, `allowagentforwarding no`. If `sshd -t` fails: `rm` the file, stop.
+   `maxauthtries 6`, `x11forwarding no`, `allowagentforwarding no`. If `sshd -t` fails: `rm` the file, stop.
 
 5. Session A — reload (existing sessions are not dropped):
 
@@ -103,7 +103,17 @@ ssh root@189.72.149.93
    # expected: "Permission denied (publickey)."
    ```
 
-   Only after all three behave as expected close session A.
+   Then run the commands the release scripts actually use (deployment runbook), still from new
+   terminals, with the operator's normal `~/.ssh/config` (add `IdentitiesOnly yes` for this host if the
+   agent holds many keys):
+
+   ```sh
+   ssh -o BatchMode=yes root@189.72.149.93 'docker compose -p docversity-university-407e5ed2 -f /opt/docversity/university-2efcea18-20261114/university/compose.json ps --format "{{.Service}} {{.Status}}"'
+   scp -o BatchMode=yes deploy/ops/README.md root@189.72.149.93:/root/ssh-hardening-scp-test && ssh root@189.72.149.93 'rm /root/ssh-hardening-scp-test'
+   ```
+
+   Both must work non-interactively (as the release scripts do). Only after all of this behaves as
+   expected close session A.
 
 ## Rollback
 

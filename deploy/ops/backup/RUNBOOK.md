@@ -18,9 +18,10 @@
 
 ## Design
 
-1. `capture.sh` (unchanged rehearsed capture, scope text from `$SCOPE`) → plaintext set.
+1. `capture.sh` (rehearsed capture; scope text from `$SCOPE`; a failed run removes its partial set)
+   → plaintext set.
 2. `encrypt-backup.sh <set>`: checks the set against `manifest.json`, refuses if the VPS keyring holds a
-   secret key, streams `tar | gpg --encrypt` to the custody **public** key
+   secret key or if the key found does not carry the fingerprint pinned in the script, streams `tar | gpg --encrypt` to the custody **public** key
    `E9E34ADEBC492B000736862C2936904343F7AF44` (encryption subkey `426C140C98519D12`), verifies that the
    ciphertext is addressed to exactly that subkey, writes `$U/backups-encrypted/<ts>.tar.gpg` + `.sha256`.
 3. `pull-verify.sh` (operator Mac): copies new ciphertexts to `~/.docversity-recovery-vps/<ts>/`, checks
@@ -87,7 +88,11 @@ systemctl list-timers docversity-backup.timer
 ```
 
 Run `pull-verify.sh` on the Mac at least weekly (daily during onboarding), then
-`prune-backups.sh --apply` on the VPS.
+`prune-backups.sh --apply` on the VPS. Plaintext therefore lives up to 7 days; the healthcheck raises
+`plaintext-age` after 192 h (`DV_PLAINTEXT_MAX_AGE_HOURS`). Shorter plaintext retention needs either a
+daily pull or automated off-server verification (decision D4).
+
+Until the one-time plan below is done, the 6 existing sets trigger `plaintext-age` (intended).
 
 ## One-time plan for the existing plaintext sets (no deletion without approval)
 

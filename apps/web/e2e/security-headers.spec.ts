@@ -84,3 +84,53 @@ test('the report sink accepts a violation report', async ({ request }) => {
   });
   expect(response.status()).toBe(204);
 });
+
+test('the enforced policy lets the Razorpay payment button reach every host it needs', async ({
+  page,
+}) => {
+  // Stand-in for checkout.razorpay.com/v1/payment-button.js: the same requests the real script
+  // makes (hosts from lib/csp.ts). The browser blocks CSP violations before Playwright's routing,
+  // so a request only arrives here if the policy allowed it. Nothing reaches Razorpay.
+  const stub = `fetch('https://api.razorpay.com/v1/payment_buttons/pl_e2e/button_preferences').catch(()=>{});
+var s=document.createElement('script');s.src='https://cdn.razorpay.com/static/assets/color.js';document.head.appendChild(s);
+var f=document.createElement('iframe');f.src='https://razorpay.com/payment-button/pl_e2e/view';document.body.appendChild(f);
+new Image().src='https://cdn.razorpay.com/static/e2e.png';`;
+  const reached = new Set<string>();
+  await page.route(/^https:\/\/([a-z]+\.)?razorpay\.com\//, (route) => {
+    const url = new URL(route.request().url());
+    reached.add(`${url.host}${url.pathname}`);
+    return route.fulfill({
+      status: 200,
+      headers: { 'access-control-allow-origin': '*' },
+      contentType: url.pathname.endsWith('.js') ? 'text/javascript' : 'text/plain',
+      body: url.pathname === '/v1/payment-button.js' ? stub : '',
+    });
+  });
+  const enforced: string[] = [];
+  page.on('console', (message) => {
+    const text = message.text();
+    if (text.includes('Content Security Policy') && !text.includes('report-only'))
+      enforced.push(text);
+  });
+  const student = fixtures().profileStudents[0];
+  if (!student) throw new Error('Missing synthetic fixture');
+  await studentSignIn(page, student);
+  // A page that renders the payment panel (payment-buttons.spec.ts).
+  await visit(page, `/student/certificate-requests/${fixtures().certificateRequestId}`);
+  // Same mechanism as RazorpayTestEmbed: a script element appended at runtime.
+  await page.evaluate(() => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/payment-button.js';
+    document.body.append(script);
+  });
+  await expect
+    .poll(() => [...reached].sort())
+    .toEqual([
+      'api.razorpay.com/v1/payment_buttons/pl_e2e/button_preferences',
+      'cdn.razorpay.com/static/assets/color.js',
+      'cdn.razorpay.com/static/e2e.png',
+      'checkout.razorpay.com/v1/payment-button.js',
+      'razorpay.com/payment-button/pl_e2e/view',
+    ]);
+  expect(enforced).toEqual([]);
+});

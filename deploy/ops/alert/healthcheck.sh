@@ -61,6 +61,15 @@ else
   age=$(( ($(date +%s) - $(stat -c %Y "$newest")) / 3600 ))
   [ "$age" -le "${DV_BACKUP_MAX_AGE_HOURS:-26}" ] || fail backup-age "newest encrypted backup is ${age}h old"
 fi
+# Plaintext sets wait for off-server verification (pull-verify.sh) before prune-backups.sh removes
+# them; one older than DV_PLAINTEXT_MAX_AGE_HOURS means the weekly pull/prune was missed.
+PLAIN=${DV_PLAIN_DIR:-/opt/docversity/university-2efcea18-20261114/university/backups}
+oldest=$(ls -1dtr "$PLAIN"/20*Z 2>/dev/null | head -1)
+if [ -n "$oldest" ]; then
+  page=$(( ($(date +%s) - $(stat -c %Y "$oldest")) / 3600 ))
+  [ "$page" -le "${DV_PLAINTEXT_MAX_AGE_HOURS:-192}" ] ||
+    fail plaintext-age "oldest plaintext backup set is ${page}h old (pull-verify + prune overdue)"
+fi
 systemctl is-failed --quiet docversity-backup.service 2>/dev/null && fail backup-job "docversity-backup.service failed"
 
 # Dedupe: alert on new problems, repeat after DV_REPEAT_MINUTES, announce recoveries.
@@ -82,7 +91,8 @@ done
 if [ -n "${DV_HEARTBEAT_URL:-}" ]; then
   suffix=""
   [ -n "$FAILS" ] && suffix=/fail
-  curl -fsS -m 10 -o /dev/null "$DV_HEARTBEAT_URL$suffix" || true
+  # URL via a curl config on stdin, never argv.
+  printf 'url = "%s%s"\n' "$DV_HEARTBEAT_URL" "$suffix" | curl -fsS -m 10 -o /dev/null -K - || true
 fi
 if [ -n "$FAILS" ]; then
   printf '%s' "$FAILS" | cut -d'|' -f2

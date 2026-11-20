@@ -24,9 +24,20 @@ Deploy like any web release (deployment runbook, web-only rollback). Rollback = 
 
 ## Stage 2 — enforce (separate PR + approval)
 
-Gate: ≥ 7 days of production with the web image from stage 1, staff and students active, and
-`docker logs --since 168h <web> | grep -c '"msg":"csp-violation"'` = 0 (or every report explained).
-The alert check (`DV_CSP_MAX`) surfaces spikes meanwhile.
+Gate: ≥ 7 days of production with the web image from stage 1, staff and students active, and an
+empty (or fully explained) list of **distinct** violations — (directive, blocked source, page)
+tuples, so one noisy browser extension does not hide a real breakage and a single real breakage is
+not drowned by counts:
+
+```sh
+docker logs --since 168h docversity-university-407e5ed2-uniweb-407e5ed2-1 2>&1 | grep '"msg":"csp-violation"' |
+  python3 -c 'import sys,json,collections as c;n=c.Counter((d["directive"],d["blocked"],d["page"]) for d in map(json.loads,sys.stdin));[print(v,*k) for k,v in n.most_common()]'
+```
+
+Each tuple is either fixed in code, allowed in `lib/csp.ts` with a reason, or recorded as
+extension/third-party noise (e.g. `chrome-extension`). The alert check (`DV_CSP_MAX`) surfaces spikes
+meanwhile. The sink logs at most 20 reports per client and 600 in total per minute
+(`lib/csp-report-limit.ts`) and reads at most 8 KB per body, also for chunked bodies.
 
 Switch: in `src/proxy.ts` send the strict nonce policy as the enforced header, on both the request
 (Next.js reads its nonce from it) and the response:
@@ -51,5 +62,9 @@ Keep the report-uri. Rollback of stage 2: redeploy the stage-1 web image (web-on
   `https://vercel.live` only if the team wants preview comments, and only for `VERCEL_ENV=preview`.
 - `style-src 'unsafe-inline'` stays (React style props, motion/GSAP, sonner). Low risk without script
   injection; revisit only with a style-nonce design.
-- `/csp-report` is unauthenticated by nature; it logs one short line per report, bodies ≤ 8 KB, and
-  Docker log rotation (10 MB × 3) bounds disk use.
+- `/csp-report` is unauthenticated by nature: body cap, per-client and global per-minute limit (in
+  process memory, resets on restart), Docker log rotation (10 MB × 3). No Caddy-level limit is needed.
+- Razorpay: the button script's functional hosts (`checkout`/`cdn`/`api.razorpay.com`, frames on
+  `razorpay.com`) are allowed app-wide, because a client-side navigation keeps the first page's CSP.
+  Its analytics/ad beacons and Google Fonts import stay blocked. e2e asserts every functional request
+  passes the enforced policy.

@@ -28,11 +28,14 @@
 | Backup age      | newest `backups-encrypted/*.tar.gpg`         | > 26 h                |
 | Backup job      | `systemctl is-failed docversity-backup`      | failed                |
 
-Alerts fire on a new problem, repeat hourly while it lasts, and a RECOVERED message follows. Messages
+The timer runs on the wall clock (`*:0/5`); a run with findings exits 1, so the unit shows as failed
+until the next clean run. Alerts fire on a new problem, repeat hourly while it lasts, and a RECOVERED message follows. Messages
 hold counts only. `DV_HEARTBEAT_URL` (e.g. healthchecks.io) is pinged every run (`/fail` on problems):
 that external dead-man's switch is the only thing that notices a dead VPS or a stopped timer.
 
-Note: until the backup timer runs, the backup-age check alerts (intended: backups are overdue).
+Note: until the backup timer runs and the existing plaintext sets are handled, `backup-age` and
+`plaintext-age` alert (intended: both are overdue). Notifier URLs/tokens and the heartbeat URL reach
+curl through a config on stdin, never the command line.
 
 ## Notification channel — OPEN DECISION (D2)
 
