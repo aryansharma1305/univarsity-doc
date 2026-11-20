@@ -448,27 +448,28 @@ model Student {
 /// A student's enrolment in a program. Registration Number is the primary human academic
 /// identifier and the anchor for results, certificates and public verification.
 model StudentRegistration {
+  razorpayTestMarker           RazorpayTestRegistration?
   syntheticReleases            SyntheticRelease[]
   retotalingRequests           RetotalingRequest[]
-  id                           String              @id @default(uuid(7)) @db.Uuid
-  studentId                    String              @map("student_id") @db.Uuid
+  id                           String                    @id @default(uuid(7)) @db.Uuid
+  studentId                    String                    @map("student_id") @db.Uuid
   /// Official registration number exactly as issued (trimmed).
-  registrationNumber           String              @map("registration_number") @db.VarChar(64)
+  registrationNumber           String                    @map("registration_number") @db.VarChar(64)
   /// upper(btrim(registration_number)); uniqueness and case-insensitive lookups use this.
   /// Kept in sync by a CHECK constraint, so it can never disagree with registration_number.
-  registrationNumberNormalized String              @unique @map("registration_number_normalized") @db.VarChar(64)
-  rollReferenceNumber          String?             @map("roll_reference_number") @db.VarChar(64)
-  programId                    String              @map("program_id") @db.Uuid
-  departmentId                 String?             @map("department_id") @db.Uuid
-  academicSessionId            String              @map("academic_session_id") @db.Uuid
-  admissionDate                DateTime?           @map("admission_date") @db.Date
-  completionDate               DateTime?           @map("completion_date") @db.Date
-  status                       StudentStatus       @default(ACTIVE)
+  registrationNumberNormalized String                    @unique @map("registration_number_normalized") @db.VarChar(64)
+  rollReferenceNumber          String?                   @map("roll_reference_number") @db.VarChar(64)
+  programId                    String                    @map("program_id") @db.Uuid
+  departmentId                 String?                   @map("department_id") @db.Uuid
+  academicSessionId            String                    @map("academic_session_id") @db.Uuid
+  admissionDate                DateTime?                 @map("admission_date") @db.Date
+  completionDate               DateTime?                 @map("completion_date") @db.Date
+  status                       StudentStatus             @default(ACTIVE)
   /// Curriculum version this registration follows (Phase 7B). Set only by an explicit staff action;
   /// a trigger keeps it within the registration's program and limits new assignments to ACTIVE versions.
-  curriculumId                 String?             @map("curriculum_id") @db.Uuid
-  createdAt                    DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  curriculumId                 String?                   @map("curriculum_id") @db.Uuid
+  createdAt                    DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                    DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   student             Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
   curriculum          ProgramCurriculum?      @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
@@ -1427,30 +1428,31 @@ model User {
   officialPublications         ResultPublication[]
 
   razorpayReconciliations    RazorpayReconciliation[]
+  razorpayTestRegistrations  RazorpayTestRegistration[]
   retotalingEvents           RetotalingEvent[]
-  preparedSyntheticReleases  SyntheticRelease[]       @relation("SyntheticReleasePreparer")
-  approvedSyntheticReleases  SyntheticRelease[]       @relation("SyntheticReleaseApprover")
-  publishedSyntheticReleases SyntheticRelease[]       @relation("SyntheticReleasePublisher")
+  preparedSyntheticReleases  SyntheticRelease[]         @relation("SyntheticReleasePreparer")
+  approvedSyntheticReleases  SyntheticRelease[]         @relation("SyntheticReleaseApprover")
+  publishedSyntheticReleases SyntheticRelease[]         @relation("SyntheticReleasePublisher")
   migrationDryRuns           LegacyMigrationBatch[]
   resultReviewEvents         ResultReviewEvent[]
   draftBatches               ResultDraftBatch[]
-  id                         String                   @id @default(uuid(7)) @db.Uuid
+  id                         String                     @id @default(uuid(7)) @db.Uuid
   /// Stored lower-case (CHECK) so uniqueness is case-insensitive.
-  email                      String                   @unique @db.VarChar(254)
-  displayName                String                   @map("display_name") @db.VarChar(120)
+  email                      String                     @unique @db.VarChar(254)
+  displayName                String                     @map("display_name") @db.VarChar(120)
   /// Argon2id hash (Phase 3). Null = cannot sign in with a password.
-  passwordHash               String?                  @map("password_hash")
-  status                     UserStatus               @default(ACTIVE)
+  passwordHash               String?                    @map("password_hash")
+  status                     UserStatus                 @default(ACTIVE)
   /// Staff must choose a new password before reaching anything else (set by the CLI and by access resets).
-  passwordChangeRequired     Boolean                  @default(false) @map("password_change_required")
+  passwordChangeRequired     Boolean                    @default(false) @map("password_change_required")
   /// AES-256-GCM ciphertext of the RFC 6238 TOTP secret (key: STAFF_MFA_ENCRYPTION_KEY). Null = no MFA.
-  mfaTotpSecretEnc           String?                  @map("mfa_totp_secret_enc")
+  mfaTotpSecretEnc           String?                    @map("mfa_totp_secret_enc")
   /// Highest TOTP time-step accepted so far (replay protection: a step is never accepted twice).
-  mfaTotpLastUsedStep        BigInt?                  @map("mfa_totp_last_used_step")
+  mfaTotpLastUsedStep        BigInt?                    @map("mfa_totp_last_used_step")
   /// When the authenticator was confirmed. Non-null exactly when mfaTotpSecretEnc is set (CHECK).
-  mfaEnabledAt               DateTime?                @map("mfa_enabled_at") @db.Timestamptz(3)
-  createdAt                  DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                  DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  mfaEnabledAt               DateTime?                  @map("mfa_enabled_at") @db.Timestamptz(3)
+  createdAt                  DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                  DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   mfaRecoveryCodes StaffMfaRecoveryCode[]
 
@@ -1898,6 +1900,8 @@ model RazorpayOrder {
   currency          String               @db.Char(3)
   status            RazorpayOrderStatus  @default(RESERVED)
   studentAccountId  String               @map("student_account_id") @db.Uuid
+  /// Short lease held by the one request currently calling Razorpay for a RESERVED order.
+  createLeaseUntil  DateTime?            @map("create_lease_until") @db.Timestamptz(3)
   createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
   payment           ReExamPayment        @relation(fields: [paymentId], references: [id], onDelete: Restrict)
@@ -1908,6 +1912,19 @@ model RazorpayOrder {
   /// At most one open (reserved or created) order per obligation.
   @@unique([paymentId], map: "razorpay_orders_one_open_key", where: raw("(status = ANY (ARRAY['RESERVED'::\"RazorpayOrderStatus\", 'CREATED'::\"RazorpayOrderStatus\"]))"))
   @@map("razorpay_orders")
+}
+
+/// Registrations an operator marked as synthetic: the only ones a test-mode order may be created for
+/// (checked by the API and by the razorpay_orders trigger), in addition to the config allowlist.
+model RazorpayTestRegistration {
+  registrationId String              @id @map("registration_id") @db.Uuid
+  markedByUserId String              @map("marked_by_user_id") @db.Uuid
+  note           String              @db.VarChar(200)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  registration   StudentRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  markedBy       User                @relation(fields: [markedByUserId], references: [id], onDelete: Restrict)
+
+  @@map("razorpay_test_registrations")
 }
 
 /// Append-only history of an order (reservation, creation, checkout return, payment, flags).
