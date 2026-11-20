@@ -1836,13 +1836,14 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
 
   it('creates one order from the server-side obligation, replays it and serializes concurrent requests', async () => {
     const fake = provider();
+    // Created first: each obligation() republishes the INDIA destination, retiring older ones.
+    const unmarked = await obligation({ synthetic: false });
     const { student, payment } = await obligation();
     const due = await testDb().reExamPayment.findUniqueOrThrow({ where: { id: payment.id } });
     // Not on the allowlist, another student, no CSRF: all refused before any provider call.
     enable([randomUUID()], fake);
     await expectStatus(createOrder(student.agent, payment.id), 404);
     // Allowlisted in config but not marked synthetic in the database: refused, and the DB agrees.
-    const unmarked = await obligation({ synthetic: false });
     enable([unmarked.student.registrationId], fake);
     await expectStatus(createOrder(unmarked.student.agent, unmarked.payment.id), 404);
     const due2 = await testDb().reExamPayment.findUniqueOrThrow({
