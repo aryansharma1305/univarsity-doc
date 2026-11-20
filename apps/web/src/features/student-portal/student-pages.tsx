@@ -23,22 +23,28 @@ import { ProfileRequestCard } from './profile-requests';
 import { ProfileUpdateForm } from './profile-update';
 import { StudentAvatar } from './student-avatar';
 
+const buttonLink =
+  'inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
+
+/** My Profile: official details and course details, read-only. Changes start from "Update My Details". */
 export function StudentProfile({
   me,
-  requests,
+  curricula,
 }: {
   me: StudentMe;
-  /** The student's own requests, newest first; null when they could not be loaded. */
-  requests: StudentProfileRequest[] | null;
+  /** From GET /student/curriculum; null when it could not be loaded. */
+  curricula?: StudentCurriculum | null;
 }) {
   const { student } = me;
-  const pending = requests?.find((request) => request.status === 'PENDING');
   return (
     <>
-      <PageIntro
-        title="My Profile"
-        description="Your personal information as held by the university."
-      />
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <h1 className="text-page-title text-navy-950">My Profile</h1>
+        <Link href="/student/profile/update" className={buttonLink}>
+          <PencilLineIcon aria-hidden="true" className="size-4" />
+          Update My Details
+        </Link>
+      </div>
       <div className="grid items-start gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
         <section
           aria-label="Student identity"
@@ -51,62 +57,70 @@ export function StudentProfile({
               ? 'Official photo on record.'
               : 'Photo: Not on record. Initials shown instead.'}
           </p>
-          <Link
-            href="/student/profile/requests"
-            className="mt-4 inline-flex min-h-11 items-center rounded text-sm font-medium text-brand hover:underline"
-          >
-            My update requests
-            {requests && requests.length > 0 ? ` (${String(requests.length)})` : ''}
-          </Link>
         </section>
-        <div className="flex min-w-0 flex-col gap-5">
-          <PortalCard title="Personal details" icon={UserRoundIcon}>
-            <DetailList
-              columns={2}
-              items={[
-                { label: 'Full name', value: student.fullName },
-                {
-                  label: 'Date of birth',
-                  value: student.dateOfBirth ? formatDate(student.dateOfBirth) : null,
-                },
-                { label: 'Gender', value: student.gender },
-                { label: 'Father’s name', value: student.fatherName },
-                { label: 'Mother’s name', value: student.motherName },
-                { label: 'Photo', value: student.hasPhoto ? 'On record' : null },
-              ]}
-            />
-            <div className="mt-6 rounded-lg bg-info-soft p-4 text-sm text-navy-950">
-              <p className="font-semibold">Official records are read-only</p>
-              <p className="mt-1 leading-relaxed">
-                You cannot change them directly. Submit missing details, a photo or a correction
-                below; the university reviews every request before your record is updated. Academic
-                details (program, session, registration) are changed only by the registrar’s office.
-              </p>
-            </div>
-          </PortalCard>
-          <PortalCard
-            title="Update my details"
-            icon={PencilLineIcon}
-            action={{ href: '/student/profile/requests', label: 'Request history' }}
-          >
-            {requests === null ? (
-              <p role="alert" className="text-sm text-danger-text">
-                Your update requests could not be loaded right now. Refresh the page to try again.
-              </p>
-            ) : pending ? (
-              <div className="flex flex-col gap-4">
-                <p className="text-sm text-navy-950">
-                  You have a request waiting for review. You can submit another once it is decided,
-                  or cancel it to change what you asked for.
-                </p>
-                <ProfileRequestCard request={pending} />
-              </div>
-            ) : (
-              <ProfileUpdateForm me={me} />
-            )}
-          </PortalCard>
-        </div>
+        <PortalCard title="Personal details" icon={UserRoundIcon}>
+          <DetailList
+            columns={2}
+            items={[
+              { label: 'Full name', value: student.fullName },
+              {
+                label: 'Date of birth',
+                value: student.dateOfBirth ? formatDate(student.dateOfBirth) : null,
+              },
+              { label: 'Gender', value: student.gender },
+              { label: 'Father’s name', value: student.fatherName },
+              { label: 'Mother’s name', value: student.motherName },
+              { label: 'Photo', value: student.hasPhoto ? 'On record' : null },
+            ]}
+          />
+          <div className="mt-6 rounded-lg bg-info-soft p-4 text-sm text-navy-950">
+            <p className="font-semibold">Official records are read-only</p>
+            <p className="mt-1 leading-relaxed">
+              Use Update My Details to request a change. The university reviews every request before
+              your record is updated.
+            </p>
+          </div>
+        </PortalCard>
       </div>
+      <StudentCourses me={me} curricula={curricula} />
+    </>
+  );
+}
+
+/** Update My Details: the existing review-then-submit request form, or the pending request. */
+export function StudentProfileUpdate({
+  me,
+  requests,
+}: {
+  me: StudentMe;
+  /** The student's own requests, newest first; null when they could not be loaded. */
+  requests: StudentProfileRequest[] | null;
+}) {
+  const pending = requests?.find((request) => request.status === 'PENDING');
+  return (
+    <>
+      <PageIntro title="Update My Details" />
+      <PortalCard
+        title="Update my details"
+        icon={PencilLineIcon}
+        action={{ href: '/student/profile', label: 'Back to My Profile' }}
+      >
+        {requests === null ? (
+          <p role="alert" className="text-sm text-danger-text">
+            Your update requests could not be loaded right now. Refresh the page to try again.
+          </p>
+        ) : pending ? (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-navy-950">
+              You have a request waiting for review. You can submit another once it is decided, or
+              cancel it to change what you asked for.
+            </p>
+            <ProfileRequestCard request={pending} />
+          </div>
+        ) : (
+          <ProfileUpdateForm me={me} />
+        )}
+      </PortalCard>
     </>
   );
 }
@@ -142,6 +156,15 @@ export function StudentProfileRequests({
           </div>
         </div>
       )}
+      <ProfileRequestList requests={requests} />
+    </>
+  );
+}
+
+/** The student's profile update requests, with honest unavailable and empty states. */
+export function ProfileRequestList({ requests }: { requests: StudentProfileRequest[] | null }) {
+  return (
+    <>
       {requests === null ? (
         <PortalCard title="Requests" icon={HistoryIcon}>
           <p role="alert" className="text-sm text-danger-text">
@@ -156,7 +179,7 @@ export function StudentProfileRequests({
             description="When you submit missing details, a photo or a correction, it will appear here with its decision."
           >
             <Link
-              href="/student/profile"
+              href="/student/profile/update"
               className="mt-2 rounded text-sm font-semibold text-brand hover:underline"
             >
               Update my details
@@ -194,7 +217,7 @@ function CurriculumSection({ curriculum }: { curriculum: RegistrationCurriculum 
           We could not load your syllabus and subjects. Please try again.
         </p>
         <a
-          href="/student/course"
+          href="/student/profile#course-details"
           className="mt-2 inline-flex min-h-10 items-center rounded text-brand underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           Reload course details
@@ -216,9 +239,9 @@ function CurriculumSection({ curriculum }: { curriculum: RegistrationCurriculum 
   return (
     <section aria-label={`Curriculum ${curriculum.name}`} className="mt-5 flex flex-col gap-3">
       <div>
-        <h4 className="text-sm font-semibold text-navy-950">
+        <h5 className="text-sm font-semibold text-navy-950">
           Curriculum: {curriculum.name} ({curriculum.versionCode})
-        </h4>
+        </h5>
         <p className="text-meta">
           {curriculum.structureType === 'YEAR_WISE' ? 'Year-wise' : 'Semester-wise'} ·{' '}
           {periodUnit(curriculum.structureType, curriculum.numberOfPeriods)}
@@ -271,18 +294,26 @@ export function StudentCourses({
     (curricula?.registrations ?? []).map((item) => [item.registrationId, item.curriculum]),
   );
   return (
-    <>
-      <PageIntro
-        title="Course Details"
-        description="Program and enrollment information for each of your university registrations."
-      />
+    <section
+      id="course-details"
+      aria-labelledby="course-details-heading"
+      className="mt-8 scroll-mt-6"
+    >
+      <h2 id="course-details-heading" className="mb-4 text-lg font-semibold text-navy-950">
+        Course Details
+      </h2>
       <div className="grid gap-5 xl:grid-cols-2">
         {me.registrations.map((registration) => (
-          <PortalCard key={registration.id} title={registration.program.name} icon={BookOpenIcon}>
+          <PortalCard
+            key={registration.id}
+            title={registration.program.name}
+            icon={BookOpenIcon}
+            headingLevel={3}
+          >
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <h3 className="break-all text-sm font-semibold text-navy-950">
+              <h4 className="break-all text-sm font-semibold text-navy-950">
                 {registration.registrationNumber}
-              </h3>
+              </h4>
               <RecordStatus status={registration.status} />
             </div>
             <DetailList
@@ -316,7 +347,7 @@ export function StudentCourses({
         ))}
       </div>
       {!me.registrations.length && (
-        <PortalCard title="Registrations" icon={BookOpenIcon}>
+        <PortalCard title="Registrations" icon={BookOpenIcon} headingLevel={3}>
           <PortalEmptyState
             icon={BookOpenIcon}
             title="No registrations on record"
@@ -324,7 +355,7 @@ export function StudentCourses({
           />
         </PortalCard>
       )}
-    </>
+    </section>
   );
 }
 

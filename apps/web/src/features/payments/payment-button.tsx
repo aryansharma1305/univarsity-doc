@@ -90,8 +90,10 @@ export function PaymentButtonPanel({
       <h3 id={id} className="text-sm font-semibold text-navy-950">
         {RAZORPAY_BUTTONS[service].label}
       </h3>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Payment status: {view ? PAYMENT_BUTTON_STATE_LABELS[view.status] : 'Unavailable'}
+      <p className="mt-2 text-sm font-medium text-navy-950">
+        {!view || (view.status === 'UNAVAILABLE' && !view.checkout)
+          ? 'Online payment not yet available'
+          : `Payment status: ${PAYMENT_BUTTON_STATE_LABELS[view.status]}`}
       </p>
       <p className="mt-2 text-sm text-muted-foreground">
         {view?.unavailableReason ??

@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser, ExaminationRow, StudentExaminations } from '@docversity/validation';
 import { ExamAppView } from '@/features/examinations/exam-app-view';
 import { ExaminationsView } from '@/features/examinations/examinations-view';
-import { StudentExaminationsPage } from '@/features/student-portal/student-examinations';
+import {
+  StudentExamApply,
+  StudentExaminationsPage,
+} from '@/features/student-portal/student-examinations';
 import { EMPTY_PAGE, REGISTRAR, VIEWER, mockFetch, renderWithProviders } from './render';
 
 vi.mock('next/navigation', () => ({
@@ -70,22 +73,30 @@ const data = (overrides: Partial<StudentExaminations> = {}): StudentExaminations
 });
 
 describe('student examinations page', () => {
-  it('links to the external application, states exams happen outside Docversity and shows year-wise periods', () => {
+  it('shows exactly three options; the exam panel is the configured external application', () => {
     render(<StudentExaminationsPage data={data()} />);
     expect(screen.getByRole('heading', { level: 1, name: 'Examinations' })).toBeInTheDocument();
-    expect(screen.getByText(/not in this portal/)).toBeInTheDocument();
-    expect(screen.getByText(/does not\s+register you for an examination/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open the official website/ })).toHaveAttribute(
+    const options = screen.getByRole('list', { name: 'Examination options' });
+    expect(within(options).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(options).getByRole('link', { name: 'Apply for Exam' })).toHaveAttribute(
       'href',
-      'https://exams.example.test',
+      '/student/examinations/apply',
     );
-    expect(screen.getByRole('link', { name: /for Android/ })).toHaveAttribute(
-      'rel',
-      'noopener noreferrer',
+    expect(within(options).getByRole('link', { name: 'Apply for Re-exam' })).toHaveAttribute(
+      'href',
+      '/student/examinations/re-exam',
     );
-    // No iOS link was configured → no iOS button.
-    expect(screen.queryByRole('link', { name: /iPhone/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Sign in with your registration number.')).toBeInTheDocument();
+    const panel = within(options).getByRole('link', { name: /Login to Exam Panel/ });
+    expect(panel).toHaveAttribute('href', 'https://exams.example.test');
+    expect(panel).toHaveAttribute('rel', 'noopener noreferrer');
+    // Other items (downloads, instructions, records) are no longer on this page.
+    expect(screen.queryByRole('link', { name: /for Android|iPhone/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Sign in with your registration number.')).not.toBeInTheDocument();
+  });
+
+  it('lists the course examination records under Apply for Exam, with year-wise periods', () => {
+    render(<StudentExamApply data={data()} />);
+    expect(screen.getByRole('heading', { level: 1, name: 'Apply for Exam' })).toBeInTheDocument();
     const periods = screen.getByRole('list', { name: 'Course periods' });
     expect(
       within(periods)
@@ -96,27 +107,27 @@ describe('student examinations page', () => {
   });
 
   it('shows honest states when nothing is configured, assigned or available', () => {
-    const view = render(
-      <StudentExaminationsPage
-        data={data({
-          applications: [],
-          registrations: [
-            {
-              registrationId: '01900000-0000-7000-8000-0000000000b2',
-              registrationNumber: 'TEST-REG-2',
-              program,
-              academicSession: session,
-              curriculum: null,
-              examinations: [],
-            },
-          ],
-        })}
-      />,
-    );
-    expect(screen.getByText('Examination application not configured yet')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /official website/ })).not.toBeInTheDocument();
+    const empty = data({
+      applications: [],
+      registrations: [
+        {
+          registrationId: '01900000-0000-7000-8000-0000000000b2',
+          registrationNumber: 'TEST-REG-2',
+          program,
+          academicSession: session,
+          curriculum: null,
+          examinations: [],
+        },
+      ],
+    });
+    const view = render(<StudentExaminationsPage data={empty} />);
+    expect(screen.getByText('Not yet available')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Login to Exam Panel/ })).not.toBeInTheDocument();
+    view.rerender(<StudentExamApply data={empty} />);
     expect(screen.getByText('No syllabus assigned yet')).toBeInTheDocument();
     view.rerender(<StudentExaminationsPage data={null} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('could not be loaded');
+    view.rerender(<StudentExamApply data={null} />);
     expect(screen.getByRole('alert')).toHaveTextContent('could not be loaded');
   });
 });

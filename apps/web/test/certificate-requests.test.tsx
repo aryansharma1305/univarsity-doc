@@ -31,6 +31,7 @@ vi.mock('@/features/certificate-eligibility/student-panel', () => ({
 import {
   CertificateRequestsView,
   CertificateRequestDetailView,
+  StudentCertificateApplications,
 } from '@/features/certificate-requests/views';
 function mount(node: React.ReactNode) {
   return render(
@@ -95,11 +96,39 @@ it('does not fetch or expose queues for unauthorized staff', () => {
   ).toBeInTheDocument();
   expect(mocks.list).not.toHaveBeenCalled();
 });
-it('shows honest unavailable catalogue and empty personal history', async () => {
+it('shows the sample link first, then exactly five certificates; unavailable ones never submit', async () => {
   mount(<CertificateRequestsView student />);
-  expect(await screen.findByRole('button', { name: 'Not available yet' })).toBeDisabled();
-  expect(await screen.findByText('No applications yet')).toBeVisible();
+  const sample = screen.getByRole('link', { name: 'View Certificate Sample' });
+  expect(sample).toHaveAttribute('href', '/student/certificate-requests/samples');
+  const list = await screen.findByRole('list', { name: 'Certificates' });
+  expect(
+    within(list)
+      .getAllByRole('heading')
+      .map((heading) => heading.textContent),
+  ).toEqual([
+    'Transcript',
+    'Provisional Certificate',
+    'Character Certificate',
+    'Migration Certificate',
+    'Course Completion Certificate',
+  ]);
+  // The catalogue enables nothing here, so every row honestly says "Not yet available".
+  const buttons = within(list).getAllByRole('button');
+  expect(buttons).toHaveLength(5);
+  for (const button of buttons) {
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Not yet available');
+  }
+  // Sample link precedes the list; no explanatory or extra sections remain.
+  expect(sample.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.queryByText(/Explore certificate services|Corrections unavailable/)).toBeNull();
   expect(mocks.submit).not.toHaveBeenCalled();
+  expect(mocks.list).not.toHaveBeenCalled();
+});
+it('lists the student’s own applications with an honest empty state (My Requests)', async () => {
+  mount(<StudentCertificateApplications />);
+  expect(await screen.findByText('No applications yet')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Certificate requests' })).toBeInTheDocument();
 });
 it('shows a student-visible timeline and submits only the version and response', async () => {
   mount(<CertificateRequestDetailView id="test-request" student />);
@@ -163,7 +192,7 @@ it('requires a summary before submitting an explicitly enabled synthetic service
   });
   mocks.submit.mockResolvedValue(row);
   mount(<CertificateRequestsView student />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Request certificate' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Apply for Transcript' }));
   fireEvent.change(screen.getByLabelText('Purpose (required)'), {
     target: { value: 'Further study' },
   });

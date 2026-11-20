@@ -2,128 +2,103 @@ import Link from 'next/link';
 import { PaymentButtonPanel } from '@/features/payments/payment-button';
 import {
   CalendarDaysIcon,
-  ClipboardPenLineIcon,
   ClipboardCheckIcon,
-  DownloadIcon,
+  ClipboardPenLineIcon,
   ExternalLinkIcon,
-  InfoIcon,
   MonitorSmartphoneIcon,
 } from 'lucide-react';
 import { EXAMINATION_KIND_LABELS, type StudentExaminations } from '@docversity/validation';
 import { PageIntro, PortalCard, PortalEmptyState } from './portal-ui';
 
-const linkButton =
-  'inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
+const optionClass =
+  'flex min-h-28 flex-col justify-between gap-4 rounded-2xl border border-border bg-card p-5 text-navy-950 transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
 
-function ExamApplications({ apps }: { apps: StudentExaminations['applications'] }) {
+function LoadError() {
   return (
-    <PortalCard title="Examination application" icon={MonitorSmartphoneIcon}>
-      <p className="mb-4 flex gap-2 rounded-lg bg-info-soft p-3 text-sm text-navy-950">
-        <InfoIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-        <span>
-          Examinations are taken in the university’s separate examination application,{' '}
-          <strong>not in this portal</strong>. Downloading or opening the application does not
-          register you for an examination — the university informs you about examinations through
-          its usual process.
-        </span>
+    <PortalCard title="Examinations" icon={ClipboardCheckIcon}>
+      <p role="alert" className="text-sm text-danger-text">
+        Your examination information could not be loaded right now. Refresh the page to try again.
       </p>
-      {apps.length === 0 ? (
-        <PortalEmptyState
-          icon={MonitorSmartphoneIcon}
-          title="Examination application not configured yet"
-          description="The university has not added its examination application link here yet. Contact the examination office for access."
-        />
-      ) : (
-        <div className="flex flex-col gap-5">
-          {apps.map((app) => (
-            <section key={app.id} aria-label={app.name} className="flex flex-col gap-3">
-              <h3 className="text-base font-semibold break-words text-navy-950">{app.name}</h3>
-              <div className="flex flex-wrap gap-2">
-                <a
-                  href={app.websiteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Open the official website of ${app.name} (opens in a new tab)`}
-                  className={`${linkButton} bg-primary text-primary-foreground hover:bg-brand-hover`}
-                >
-                  <ExternalLinkIcon aria-hidden="true" className="size-4" />
-                  Open official website
-                </a>
-                {app.androidUrl && (
-                  <a
-                    href={app.androidUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Download ${app.name} for Android (opens in a new tab)`}
-                    className={`${linkButton} border border-border bg-card text-navy-950 hover:bg-muted`}
-                  >
-                    <DownloadIcon aria-hidden="true" className="size-4" />
-                    Download for Android
-                  </a>
-                )}
-                {app.iosUrl && (
-                  <a
-                    href={app.iosUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Download ${app.name} for iPhone or iPad (opens in a new tab)`}
-                    className={`${linkButton} border border-border bg-card text-navy-950 hover:bg-muted`}
-                  >
-                    <DownloadIcon aria-hidden="true" className="size-4" />
-                    Download for iPhone / iPad
-                  </a>
-                )}
-              </div>
-              {app.instructions && (
-                <div className="rounded-lg border border-border p-3">
-                  <p className="text-meta mb-1">Instructions from the university</p>
-                  <p className="text-sm whitespace-pre-line text-navy-950">{app.instructions}</p>
-                </div>
-              )}
-            </section>
-          ))}
-        </div>
-      )}
     </PortalCard>
   );
 }
 
+/** Examinations: exactly three options. The exam panel is the university's external application. */
 export function StudentExaminationsPage({ data }: { data: StudentExaminations | null }) {
+  // shortcut: links to the first configured examination application; list all if several are used.
+  const panel = data?.applications[0];
   return (
     <>
-      <PageIntro
-        title="Examinations"
-        description="Links to the university’s examination application, and the examination records of your course by semester or year."
-      />
+      <PageIntro title="Examinations" />
       {data === null ? (
-        <PortalCard title="Examinations" icon={ClipboardCheckIcon}>
-          <p role="alert" className="text-sm text-danger-text">
-            Your examination information could not be loaded right now. Refresh the page to try
-            again.
-          </p>
+        <LoadError />
+      ) : (
+        <ul aria-label="Examination options" className="grid gap-4 sm:grid-cols-3">
+          <li>
+            <Link href="/student/examinations/apply" className={optionClass}>
+              <ClipboardCheckIcon aria-hidden="true" className="size-6 text-brand" />
+              <span className="font-semibold">Apply for Exam</span>
+            </Link>
+          </li>
+          <li>
+            <Link href="/student/examinations/re-exam" className={optionClass}>
+              <ClipboardPenLineIcon aria-hidden="true" className="size-6 text-brand" />
+              <span className="font-semibold">Apply for Re-exam</span>
+            </Link>
+          </li>
+          <li>
+            {panel ? (
+              <a
+                href={panel.websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Login to Exam Panel (opens in a new tab)"
+                className={optionClass}
+              >
+                <MonitorSmartphoneIcon aria-hidden="true" className="size-6 text-brand" />
+                <span className="flex items-center gap-2 font-semibold">
+                  Login to Exam Panel
+                  <ExternalLinkIcon aria-hidden="true" className="size-4" />
+                </span>
+              </a>
+            ) : (
+              <div className={`${optionClass} cursor-default hover:bg-card`}>
+                <MonitorSmartphoneIcon
+                  aria-hidden="true"
+                  className="size-6 text-muted-foreground"
+                />
+                <span>
+                  <span className="block font-semibold">Login to Exam Panel</span>
+                  <span className="mt-1 block text-sm text-muted-foreground">
+                    Not yet available
+                  </span>
+                </span>
+              </div>
+            )}
+          </li>
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** Apply for Exam: the examination records of the student's own courses, with the exam fee status. */
+export function StudentExamApply({ data }: { data: StudentExaminations | null }) {
+  return (
+    <>
+      <PageIntro title="Apply for Exam" />
+      {data === null ? (
+        <LoadError />
+      ) : data.registrations.length === 0 ? (
+        <PortalCard title="Examinations" icon={CalendarDaysIcon}>
+          <PortalEmptyState
+            icon={CalendarDaysIcon}
+            title="No registrations on record"
+            description="Contact the registrar’s office if you believe a registration is missing."
+          />
         </PortalCard>
       ) : (
         <div className="flex flex-col gap-5">
-          <ExamApplications apps={data.applications} />
-          <PortalCard
-            title="Re-examinations"
-            icon={ClipboardPenLineIcon}
-            action={{
-              href: '/student/examinations/re-exam/applications',
-              label: 'My applications',
-            }}
-          >
-            <p className="mb-3 text-sm text-navy-950">
-              Apply for a re-examination of a subject when the university has opened applications
-              for your course. Your details are taken from your registration.
-            </p>
-            <Link
-              href="/student/examinations/re-exam"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            >
-              Apply for a re-examination
-            </Link>
-          </PortalCard>
           {data.registrations.map((registration) => (
             <PortalCard
               key={registration.registrationId}
