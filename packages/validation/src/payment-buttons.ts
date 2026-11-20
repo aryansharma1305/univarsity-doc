@@ -25,14 +25,19 @@ export const paymentButtonViewSchema = z
     certificateFeeScope: z.literal('HARD_COPY_ONLY'),
     // Only isolated test policies may return a test embed. No runtime flag enables live collection.
     checkout: z
-      .object({
-        mode: z.literal('TEST'),
-        buttonId: z
-          .string()
-          .regex(/^pl_[A-Za-z0-9]{1,50}$/)
-          .refine((id) => !Object.values(RAZORPAY_BUTTONS).some((button) => button.id === id)),
-      })
-      .strict()
+      .union([
+        z
+          .object({
+            mode: z.literal('TEST'),
+            buttonId: z
+              .string()
+              .regex(/^pl_[A-Za-z0-9]{1,50}$/)
+              .refine((id) => !Object.values(RAZORPAY_BUTTONS).some((button) => button.id === id)),
+          })
+          .strict(),
+        // Orders API Standard Checkout: the server creates the order; the browser gets no amount here.
+        z.object({ mode: z.literal('TEST'), kind: z.literal('ORDER') }).strict(),
+      ])
       .nullable(),
     liveTransactionsEnabled: z.literal(false),
     qrFallbackEnabled: z.literal(false),
@@ -110,3 +115,115 @@ export type RazorpayCheckoutReturn = z.infer<typeof razorpayCheckoutReturnSchema
 export const razorpayCheckoutReturnResultSchema = z
   .object({ status: z.literal('AWAITING_CONFIRMATION') })
   .strict();
+
+/** Staff refund request for a PAID Razorpay test order. Amount omitted: the full remaining amount. */
+export const requestRazorpayRefundSchema = z
+  .object({
+    amountMinor: z.number().int().min(1).max(1_000_000_000).optional(),
+    // Reason code only (the university's reason catalogue is an open decision, plan D4).
+    reason: z.string().regex(/^[A-Z][A-Z_]{2,47}$/),
+  })
+  .strict();
+export type RequestRazorpayRefund = z.infer<typeof requestRazorpayRefundSchema>;
+
+const refundStatusSchema = z.enum([
+  'REQUESTED',
+  'APPROVED',
+  'PENDING',
+  'PROCESSED',
+  'FAILED',
+  'REJECTED',
+]);
+const staffNameSchema = z.object({ id: z.uuid(), name: z.string() }).nullable();
+export const razorpayRefundViewSchema = z
+  .object({
+    id: z.uuid(),
+    amountMinor: z.number().int(),
+    currency: z.string(),
+    reason: z.string(),
+    status: refundStatusSchema,
+    providerRefundId: z.string().nullable(),
+    failureReason: z.string().nullable(),
+    requestedBy: staffNameSchema,
+    approvedBy: staffNameSchema,
+    createdAt: z.iso.datetime(),
+    decidedAt: z.iso.datetime().nullable(),
+    events: z.array(z.object({ kind: z.string(), createdAt: z.iso.datetime() })),
+  })
+  .strict();
+export type RazorpayRefundView = z.infer<typeof razorpayRefundViewSchema>;
+
+/**
+ * Staff view of everything Razorpay did for one obligation (TEST mode only). `paymentState` maps the
+ * brief's states onto the existing model: PENDING (order open), PAID (matched capture; the
+ * obligation is SUBMITTED until staff verify), RECONCILIATION_REQUIRED (a flagged capture),
+ * FAILED/ABANDONED (closed without payment). AUTHORIZED never counts as paid.
+ */
+export const razorpayWorkspaceSchema = z
+  .object({
+    mode: z.literal('TEST'),
+    refunds: z.enum(['off', 'full_only', 'partial']),
+    orders: z.array(
+      z
+        .object({
+          id: z.uuid(),
+          attempt: z.number().int(),
+          status: z.enum(['RESERVED', 'CREATED', 'PAID', 'ABANDONED', 'CREATE_FAILED']),
+          paymentState: z.enum([
+            'PENDING',
+            'PAID',
+            'RECONCILIATION_REQUIRED',
+            'FAILED',
+            'ABANDONED',
+          ]),
+          refundState: z.enum(['NONE', 'REFUND_PENDING', 'PARTIALLY_REFUNDED', 'REFUNDED']),
+          refundableMinor: z.number().int(),
+          providerOrderId: z.string().nullable(),
+          providerPaymentId: z.string().nullable(),
+          amountMinor: z.number().int(),
+          currency: z.string(),
+          createdAt: z.iso.datetime(),
+          events: z.array(
+            z.object({
+              kind: z.string(),
+              reason: z.string().nullable(),
+              createdAt: z.iso.datetime(),
+            }),
+          ),
+        })
+        .strict(),
+    ),
+    refundRequests: z.array(razorpayRefundViewSchema),
+    audit: z.array(
+      z.object({ action: z.string(), actor: z.string().nullable(), createdAt: z.iso.datetime() }),
+    ),
+  })
+  .strict();
+export type RazorpayWorkspace = z.infer<typeof razorpayWorkspaceSchema>;
+
+/** The student's own Razorpay test attempts for one obligation (never another student's). */
+export const studentRazorpayHistorySchema = z
+  .object({
+    orders: z.array(
+      z
+        .object({
+          attempt: z.number().int(),
+          paymentState: z.enum([
+            'PENDING',
+            'PAID',
+            'RECONCILIATION_REQUIRED',
+            'FAILED',
+            'ABANDONED',
+          ]),
+          providerOrderId: z.string().nullable(),
+          providerPaymentId: z.string().nullable(),
+          amountMinor: z.number().int(),
+          currency: z.string(),
+          createdAt: z.iso.datetime(),
+          checkoutReturnedAt: z.iso.datetime().nullable(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type StudentRazorpayHistory = z.infer<typeof studentRazorpayHistorySchema>;

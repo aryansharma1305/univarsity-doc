@@ -2,3 +2,4 @@ export * from './primitives.js';
 export * from './services.js';
 export * from './parse-env.js';
 export * from './limits.js';
+export * from './razorpay.js';
