@@ -270,9 +270,31 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await checkerDocument.getByRole('button', { name: 'Confirm revocation', exact: true }).click();
     await expect(checkerDocument).toContainText('REVOKED');
     await checkerPage.getByRole('tab', { name: 'Policies', exact: true }).click();
-    const policyCard = checkerPage.getByRole('article').filter({ hasText: 'admission-letter' });
-    await policyCard.getByText('Review proposed rules', { exact: true }).click();
-    await expect(policyCard).toContainText('Public program');
+    for (const [service, audience] of [
+      ['admission-letter', 'Anyone with the document number or secure QR code'],
+      ['certificate', 'Anyone with the document number or secure QR code'],
+      ['registration', 'Only the signed-in student can check their own registration'],
+      ['result', 'Only the signed-in student can view their own published results'],
+    ] as const) {
+      await checkerPage.getByLabel('Verification service', { exact: true }).selectOption(service);
+      await expect(
+        checkerPage
+          .locator('form')
+          .filter({ has: checkerPage.getByLabel('Verification service', { exact: true }) }),
+      ).toContainText(audience);
+      const card = checkerPage
+        .getByRole('article')
+        .filter({
+          has: checkerPage.getByText(
+            new RegExp('^' + service + ' · APPROVED · Synthetic Public Verification Course$'),
+          ),
+        });
+      await expect(card).toContainText(audience);
+      await card.getByText('Review proposed rules', { exact: true }).click();
+      if (service === 'result')
+        await expect(card).toContainText('Independently reviewed and published results');
+      else await expect(card).toContainText('Program name');
+    }
     await checkerPage.setViewportSize({ width: 390, height: 844 });
     await expectNoHorizontalOverflow(checkerPage);
     await expectNoSeriousA11yViolations(checkerPage);
