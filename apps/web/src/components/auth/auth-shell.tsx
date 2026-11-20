@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ArrowLeftIcon, type LucideIcon } from 'lucide-react';
 import { Wordmark } from '@/components/brand/wordmark';
-import crest from '@/features/public-verification/university-logo.png';
+import crest from '@/features/public-verification/university-logo.webp';
 import { AuthAmbient } from './auth-ambient';
 import styles from './auth-shell.module.css';
 

@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import { cn } from '@docversity/ui';
-import logo from '@/features/public-verification/university-logo.png';
+import logo from '@/features/public-verification/university-logo.webp';
 
 /** Docversity mark: the official university logo (decorative beside the visible name). */
 export function DocversityMark({ className }: { className?: string }) {

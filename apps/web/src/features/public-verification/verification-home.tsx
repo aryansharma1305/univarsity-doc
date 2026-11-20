@@ -9,7 +9,7 @@ import { HeroSearch } from './hero-search';
 import { PublicHeader } from '@/components/public/public-header';
 import { LandingFooter } from './landing-sections';
 import { useLandingMotion } from './use-landing-motion';
-import crest from './university-logo.png';
+import crest from './university-logo.webp';
 import styles from './verification-home.module.css';
 
 /**
