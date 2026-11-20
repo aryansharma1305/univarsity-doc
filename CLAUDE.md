@@ -101,7 +101,7 @@ development placeholder) and `COOKIE_SECURE=true`.
 - **Object storage:** `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_TEST_BUCKET` (tests only; never equal to `S3_BUCKET`), `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_FORCE_PATH_STYLE`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_API_HOST_PORT`, `MINIO_CONSOLE_HOST_PORT`
 - **Sessions / auth:** `SESSION_SECRET`, `COOKIE_SECURE`, `SESSION_IDLE_TIMEOUT_SECONDS`, `SESSION_ABSOLUTE_TIMEOUT_SECONDS`, `LOGIN_RATE_LIMIT_WINDOW_SECONDS`, `LOGIN_MAX_ATTEMPTS_PER_ACCOUNT_IP`, `LOGIN_MAX_ATTEMPTS_PER_ACCOUNT`, `LOGIN_MAX_ATTEMPTS_PER_IP`, `LOGIN_MAX_TOTAL_ATTEMPTS_PER_IP`, `PASSWORD_RESET_TOKEN_TTL_SECONDS`, `REDIS_KEY_PREFIX` (optional, default `dv:`), `STAFF_MFA_ENCRYPTION_KEY` (required in production; never equal to `SESSION_SECRET`), `STAFF_MFA_ENFORCED`, `MFA_RATE_LIMIT_WINDOW_SECONDS`, `MFA_MAX_ATTEMPTS_PER_ACCOUNT_IP`, `MFA_MAX_ATTEMPTS_PER_ACCOUNT`, `MFA_MAX_ATTEMPTS_PER_IP`, `MFA_LOCKOUT_THRESHOLD`, `MFA_LOCKOUT_WINDOW_SECONDS`, `MFA_LOCKOUT_SECONDS`
 - **Student accounts:** `STUDENT_ACTIVATION_CODE_TTL_DAYS`, `STUDENT_ACTIVATION_MAX_FAILED_ATTEMPTS`
-- **Payments (off by default):** `PAYMENTS_RAZORPAY_MODE`, `PAYMENTS_RAZORPAY_LIVE_APPROVAL`, `PAYMENTS_ALLOWED_DEPLOYMENT`, `DOCVERSITY_DEPLOYMENT`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_ACCOUNT_ID`, `PAYMENTS_TEST_REGISTRATION_ALLOWLIST`
+- **Payments (off by default):** `PAYMENTS_RAZORPAY_MODE`, `PAYMENTS_RAZORPAY_LIVE_APPROVAL`, `PAYMENTS_ALLOWED_DEPLOYMENT`, `DOCVERSITY_DEPLOYMENT`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `RAZORPAY_ACCOUNT_ID`, `PAYMENTS_TEST_REGISTRATION_ALLOWLIST`, `PAYMENTS_RAZORPAY_REFUNDS`
 - **Imports:** `IMPORT_MAX_FILE_MB`, `IMPORT_MAX_UNCOMPRESSED_MB`, `IMPORT_MAX_ROWS`, `IMPORT_MAX_COLUMNS`, `IMPORT_BATCH_SIZE`
 
 Every app validates its environment with Zod at startup and fails fast with a readable message.
@@ -158,7 +158,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261020090000_program_certificate_eligibility` (12C: course certificate sets, proposer ≠ decider),
   `20261117090000_staff_mfa_first_login` (staff first-login flag, TOTP MFA, recovery codes; ADR-0021),
   `20261119090000_razorpay_test_orders` (Razorpay test-mode orders, order events, ignored webhooks; ADR-0022),
-  `20261120090000_razorpay_test_hardening` (synthetic-registration marker, create lease).
+  `20261120090000_razorpay_test_hardening` (synthetic-registration marker, create lease),
+  `20261121090000_razorpay_test_refunds` (maker-checker refunds, over-refund guard).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with

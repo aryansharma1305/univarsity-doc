@@ -38,6 +38,12 @@ RAZORPAY_TEST`; Razorpay calls run outside transactions under a 15 s create leas
    Razorpay's payments and the settlement recon, re-matches `PROVIDER_UNVERIFIED` captures, and
    alerts through the pluggable `PAYMENT_ALERT_SINK` (default: a structured warning log).
 
+8. Completion: a framework-free core (`@docversity/payments/server`) shared by the API and the
+   worker; Standard Checkout UI for students; a staff workspace; maker-checker refunds with an
+   over-refund trigger and idempotency keys, gated by `PAYMENTS_RAZORPAY_REFUNDS` (default off);
+   a scheduled worker reconciliation. Refund and payment states are derived, not new obligation
+   states (mapping in docs/development/razorpay-test-mode.md).
+
 This supersedes the plan's wording (sections 3.1 and 3.4) that a matched capture makes the
 obligation VERIFIED: it makes it SUBMITTED, and staff verify.
 

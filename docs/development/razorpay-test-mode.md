@@ -62,3 +62,46 @@ WHERE (o.status = 'PAID' AND r.id IS NULL)
 
 Not built: the web Checkout launcher, the staging reviewer-gate exception (plan 8.2), refund and
 dispute states and events, a scheduler for the reconciliation command, and anything for live mode.
+
+## Completion (checkout UI, staff workspace, refunds, worker job)
+
+**Shared core.** `@docversity/payments/server` holds every money decision once (matching, refunds,
+reconciliation, order abandonment). The API and the worker both call it; the worker image does
+not need the API.
+
+**State mapping (brief → existing model).** No obligation state was added; the Phase 9C obligation
+(`re_exam_payments`) keeps `AWAITING_PAYMENT → SUBMITTED → VERIFIED/REJECTED`, and staff still verify.
+
+| Brief state             | Where it lives                                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| PENDING                 | `razorpay_orders.status` RESERVED or CREATED, no FLAGGED event                                 |
+| AUTHORIZED              | Never stored as paid. Reconciliation reports `AUTHORIZED_UNCAPTURED`; Razorpay auto-refunds it |
+| CAPTURED / PAID         | order PAID + obligation SUBMITTED (signed capture, re-fetched, amount and currency exact)      |
+| FAILED                  | order CREATE_FAILED; a failed payment attempt leaves the order PENDING for a retry             |
+| RECONCILIATION_REQUIRED | an order with a FLAGGED event (reason code; refund candidates marked)                          |
+| ABANDONED               | order ABANDONED (manual submission, void, cancel, expiry, payability re-check)                 |
+| REFUND_PENDING          | derived: any refund REQUESTED / APPROVED / PENDING                                             |
+| PARTIALLY_REFUNDED      | derived: 0 < PROCESSED total < captured                                                        |
+| REFUNDED                | derived: PROCESSED total = captured                                                            |
+| refund FAILED           | `razorpay_refunds.status` FAILED (provider refusal or `refund.failed`)                         |
+
+**Student.** `/student/examinations/re-exam/[applicationId]/payment` shows "Pay online (TEST)" only
+when the server offers `checkout.kind = ORDER` (mode test, payable obligation, allowlisted and
+DB-marked synthetic registration). The server creates the order; the browser gets the public key
+id and order id only. States: preparing, open, verifying, awaiting confirmation, cancelled,
+failed, unavailable, network. History and an acknowledgement that is **not an official receipt**.
+
+**Staff.** The payment detail page shows the Razorpay TEST workspace (`reExamPayments.read`):
+orders, derived states, provider ids, refunds and the Razorpay audit trail. Search by `order_…`
+(exact) or the `pay_…` reference. Refund actions need `reExamPayments.verify`.
+
+**Refunds.** Disabled unless `PAYMENTS_RAZORPAY_REFUNDS` is `full_only` or `partial` (test mode only;
+default `off` because the university refund policy is open). One person requests, a different one
+approves or rejects (service check and DB CHECK). The DB trigger keeps live refunds ≤ the capture
+under the order lock. Each refund has a unique `refund-<hex>` key sent as `X-Refund-Idempotency` and
+a unique `rf_<hex>` receipt; signed `refund.*` webhooks are matched by receipt and move a refund
+forward only. A refund never changes the obligation or the application.
+
+**Worker.** In test mode the worker consumes the `payments` queue and upserts one job scheduler
+(`razorpay-reconcile`, every 15 minutes). Mode off schedules and consumes nothing.
+`pnpm --filter @docversity/api razorpay:reconcile` runs the same reconciliation by hand.
