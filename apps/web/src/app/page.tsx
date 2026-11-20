@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
 import { MOTION_GUARD } from '@/features/public-verification/motion-guard';
 import { VerificationHome } from '@/features/public-verification/verification-home';
 
@@ -20,11 +21,12 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION },
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     <>
       {/* Runs before paint; see MOTION_GUARD. Hides only the hero words while GSAP loads. */}
-      <script dangerouslySetInnerHTML={{ __html: MOTION_GUARD }} />
+      <script nonce={nonce} dangerouslySetInnerHTML={{ __html: MOTION_GUARD }} />
       <VerificationHome year={new Date().getFullYear()} />
     </>
   );
