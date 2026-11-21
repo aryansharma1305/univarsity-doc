@@ -1933,6 +1933,7 @@ model RazorpayTestRegistration {
 enum RazorpayRefundStatus {
   REQUESTED
   APPROVED
+  SENDING
   PENDING
   PROCESSED
   FAILED
@@ -1949,17 +1950,22 @@ model RazorpayRefund {
   currency          String                @db.Char(3)
   reason            String                @db.VarChar(48)
   status            RazorpayRefundStatus  @default(REQUESTED)
-  idempotencyKey    String                @unique @map("idempotency_key") @db.VarChar(64)
-  receipt           String                @unique @db.VarChar(40)
+  /// STAFF: requested and approved in Docversity. DASHBOARD: issued in the Razorpay dashboard and
+  /// recorded from a signed refund webhook (no requester, no key, provider status only).
+  source            String                @default("STAFF") @db.VarChar(12)
+  idempotencyKey    String?               @unique @map("idempotency_key") @db.VarChar(64)
+  receipt           String?               @unique @db.VarChar(40)
   providerRefundId  String?               @unique @map("provider_refund_id") @db.VarChar(64)
   failureReason     String?               @map("failure_reason") @db.VarChar(48)
-  requestedByUserId String                @map("requested_by_user_id") @db.Uuid
+  requestedByUserId String?               @map("requested_by_user_id") @db.Uuid
   approvedByUserId  String?               @map("approved_by_user_id") @db.Uuid
   decidedAt         DateTime?             @map("decided_at") @db.Timestamptz(3)
+  /// Short lease held by the one process sending this refund (APPROVED → SENDING).
+  sendLeaseUntil    DateTime?             @map("send_lease_until") @db.Timestamptz(3)
   createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
   order             RazorpayOrder         @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  requestedBy       User                  @relation("RazorpayRefundRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  requestedBy       User?                 @relation("RazorpayRefundRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
   approvedBy        User?                 @relation("RazorpayRefundApprover", fields: [approvedByUserId], references: [id], onDelete: Restrict)
   events            RazorpayRefundEvent[]
 
