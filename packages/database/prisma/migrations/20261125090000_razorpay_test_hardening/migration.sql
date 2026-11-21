@@ -24,7 +24,7 @@ ALTER TABLE "razorpay_test_registrations" ADD CONSTRAINT "razorpay_test_registra
 ALTER TABLE razorpay_test_registrations ADD CONSTRAINT razorpay_test_registrations_note
   CHECK (btrim(note) <> '');
 
--- Same rules as 20261119090000, plus: an order may only be created for a registration marked
+-- Same rules as 20261124090000, plus: an order may only be created for a registration marked
 -- synthetic in razorpay_test_registrations (the config allowlist alone is self-attested).
 CREATE OR REPLACE FUNCTION docversity_razorpay_orders_guard() RETURNS trigger
 LANGUAGE plpgsql AS $$

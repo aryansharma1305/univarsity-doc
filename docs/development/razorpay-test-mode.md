@@ -12,7 +12,7 @@ the webhook and both student routes answer 404 and no provider call is possible.
 | Events/signature | `packages/payments/src/razorpay.ts`                                                    |
 | Orders + match   | `apps/api/src/payment-buttons/razorpay-orders.service.ts`                              |
 | Webhook          | `apps/api/src/payment-buttons/payment-buttons.service.ts` (`webhook`)                  |
-| Tables           | migration `20261119090000_razorpay_test_orders`                                        |
+| Tables           | migration `20261124090000_razorpay_test_orders`                                        |
 
 Operator rules:
 
