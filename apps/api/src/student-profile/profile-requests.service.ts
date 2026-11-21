@@ -22,6 +22,7 @@ import {
   type SubmitProfileRequest,
 } from '@docversity/validation';
 import { AuditService } from '../audit/audit.service.js';
+import { NotificationsService } from '../communication/notifications.service.js';
 import { AppError, Errors } from '../common/app-error.js';
 import { toDateOnly } from '../common/dates.js';
 import { pageArgs, paginationMeta } from '../common/pagination.js';
@@ -138,6 +139,7 @@ export class ProfileRequestsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ------------------------------------------------------------------------------------------
@@ -528,6 +530,13 @@ export class ProfileRequestsService {
         },
         tx,
       );
+      await this.notifications.notifyStudent(tx, student.id, {
+        type: 'PROFILE_REQUEST_APPROVED',
+        title: 'Profile update approved',
+        body: 'Your requested profile changes were approved.',
+        link: '/student/profile/requests',
+        event: `profile-request:${id}:approved`,
+      });
     });
     return this.detail(id);
   }
@@ -560,6 +569,13 @@ export class ProfileRequestsService {
         },
         tx,
       );
+      await this.notifications.notifyStudent(tx, request.studentId, {
+        type: 'PROFILE_REQUEST_REJECTED',
+        title: 'Profile update not approved',
+        body: 'Your profile update request was not approved. Open it to see the reason.',
+        link: '/student/profile/requests',
+        event: `profile-request:${id}:rejected`,
+      });
     });
     return this.detail(id);
   }

@@ -1,7 +1,7 @@
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type DatabaseModels } from '@docversity/database';
-import { AUDIT_ACTIONS } from '@docversity/types';
+import { AUDIT_ACTIONS, PERMISSIONS } from '@docversity/types';
 import {
   certificateRequestSchema,
   certificateRequestListSchema,
@@ -13,6 +13,7 @@ import {
 } from '@docversity/validation';
 import { PrismaService } from '../database/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
+import { NotificationsService } from '../communication/notifications.service.js';
 import { Errors, AppError } from '../common/app-error.js';
 import { RateLimiter } from '../auth/rate-limiter.js';
 import { CertificatePoliciesService } from './certificate-policies.service.js';
@@ -44,6 +45,7 @@ export class CertificateRequestsService {
     private readonly audit: AuditService,
     private readonly policies: CertificatePoliciesService,
     private readonly limiter: RateLimiter,
+    private readonly notifications: NotificationsService,
   ) {}
   async throttle(id: string) {
     const r = await this.limiter.hit(
@@ -409,6 +411,27 @@ export class CertificateRequestsService {
         },
         tx,
       );
+      // Private review notes never notify; the student hears about decisions and requests only.
+      const event = `certificate-request:${id}:v${String(r.version + 1)}`;
+      if (!student && action !== 'RECORD_REVIEW')
+        await this.notifications.notifyStudent(tx, r.studentId, {
+          type: 'CERTIFICATE_REQUEST_UPDATED',
+          title: 'Certificate request updated',
+          body:
+            target === 'INFORMATION_REQUESTED'
+              ? 'The university needs more information for your certificate request.'
+              : 'There is an update on your certificate request.',
+          link: `/student/certificate-requests/${id}`,
+          event,
+        });
+      if (student && action === 'RESPOND')
+        await this.notifications.notifyStaff(tx, PERMISSIONS.certificateRequestsReview, {
+          type: 'CERTIFICATE_REQUEST_UPDATED',
+          title: 'Student responded to a certificate request',
+          body: 'A student provided the requested information.',
+          link: `/admin/certificate-requests/${id}`,
+          event,
+        });
     });
     return this.detail(id, student ? actor.studentId : undefined);
   }

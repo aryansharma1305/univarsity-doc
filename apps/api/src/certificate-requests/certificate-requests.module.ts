@@ -1,4 +1,5 @@
 import { PublicVerificationModule } from '../public-verification/public-verification.module.js';
+import { CommunicationModule } from '../communication/communication.module.js';
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import type { Request, Response, NextFunction } from 'express';
 import {
@@ -8,7 +9,7 @@ import {
 import { CertificateRequestsService } from './certificate-requests.service.js';
 import { CertificatePoliciesService } from './certificate-policies.service.js';
 @Module({
-  imports: [PublicVerificationModule],
+  imports: [PublicVerificationModule, CommunicationModule],
   controllers: [CertificateRequestsController, StudentCertificateRequestsController],
   providers: [CertificateRequestsService, CertificatePoliciesService],
   exports: [CertificatePoliciesService],
