@@ -36,11 +36,19 @@ identifiers, not secrets; treating them as passwords would let anyone harvest re
    parameters), `no-store`, uniform failure handling, and one audit event per check with hashed
    references only (never the credential).
 
+7. **Credential holders see the marksheet as printed.** The full marksheet (QR credential + policy
+   `documentWithCredential`) also shows the student's name, unmasked roll number and session, as the
+   paper marksheet does. Anonymous result search shows the chosen course and the examination name,
+   which are not personal data. Roll numbers are matched exactly (case-insensitive, never as a
+   pattern), and each client has an hourly per-course search budget on top of the per-minute guard.
+
 ## Consequences
 
 - The public UI can show the mentor layouts with real data as soon as the university approves fields.
 - Documents issued before a disclosure policy is approved gain the approved fields automatically;
   their PDFs open only for QR holders and only if `documentWithCredential` is approved.
 - Publications made before this migration have no marksheet credential (status-only verification).
+- Reviewers must consider combinations: approving REGISTRATION_NUMBER for certificates exposes a
+  number that can then be used for an anonymous registration lookup where that is also enabled.
 - Student photographs remain unavailable publicly; adding them needs a separate, explicitly approved
   design (consent, minimised image, credential-gated delivery).

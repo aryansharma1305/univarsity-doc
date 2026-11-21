@@ -45,7 +45,30 @@ export const REGISTRATION_MESSAGES = {
   REVOKED: 'This registration has been revoked by the university.',
 } as const;
 const NO_RESULT = 'No published result matches these details.';
-const NO_DOCUMENT = 'No approved, issued document matches these details.';
+
+/**
+ * One definition of "an officially issued document" for every public path (status and PDF): the
+ * snapshot matches the row, maker ≠ checker, approval and issue are recorded, the PDF and QR exist.
+ */
+export function issuedDocumentIntact(
+  c: DatabaseModels.CertificateModel | null,
+  snapshot: { registrationId: string; templateId: string },
+): c is DatabaseModels.CertificateModel {
+  return (
+    !!c &&
+    snapshot.registrationId === c.studentRegistrationId &&
+    snapshot.templateId === c.certificateTemplateId &&
+    !!c.generatedByUserId &&
+    !!c.approvedByUserId &&
+    c.generatedByUserId !== c.approvedByUserId &&
+    !!c.approvedAt &&
+    !!c.issuedByUserId &&
+    !!c.issuedAt &&
+    !!c.pdfHash &&
+    !!c.pdfStorageKey &&
+    !!c.verificationToken
+  );
+}
 
 /** "3 YEARS" / "18 MONTHS" as stated by the university; falls back to the period structure. */
 function duration(program: DatabaseModels.ProgramModel): string | undefined {
@@ -67,7 +90,7 @@ function pick(
   for (const field of disclosure.fields) {
     if (!allowed.includes(field)) continue;
     for (const [key, value] of Object.entries(candidates[field] ?? {}))
-      if (value !== undefined && value !== null && value !== '')
+      if (value) // drops missing and empty values
         Object.assign(details, { [key]: value });
   }
   return details;
@@ -128,9 +151,11 @@ export class AnonymousVerificationService {
 
   /** Registration by number, without a session. Called by the v2 check when no student is signed in. */
   async registration(
+    ip: string,
     reference: string,
     make: (s: Response['status'], m: string, f?: Partial<Response>) => Response,
   ) {
+    await this.hourly('public-verification-registration', ip, 120);
     const registration = await this.prisma.client.studentRegistration.findFirst({
       where: { registrationNumberNormalized: reference.toUpperCase() },
       include: {
@@ -140,7 +165,7 @@ export class AnonymousVerificationService {
     });
     const disclosure =
       registration && (await this.disclosure('registration', registration.programId));
-    const program = disclosure && registration ? await this.program(registration.programId) : null;
+    const program = disclosure ? await this.program(registration.programId) : null;
     if (!registration || !disclosure || !program) return make('NOT_FOUND', NO_REGISTRATION);
     const active = registration.status === 'ACTIVE';
     return make(active ? 'ACTIVE' : 'INACTIVE', REGISTRATION_MESSAGES[registration.status], {
@@ -188,16 +213,24 @@ export class AnonymousVerificationService {
   }
 
   /** Courses whose approved result policy allows anonymous search, with their real periods. */
+  private options: { at: number; value: PublicResultOptions } | null = null;
+
   async resultOptions(): Promise<PublicResultOptions> {
+    // shortcut: per-instance 60 s cache; a policy change shows here within a minute.
+    if (this.options && Date.now() - this.options.at < 60_000) return this.options.value;
     return this.guarded(async () => {
       const rows = await this.prisma.client.verificationPolicy.findMany({
         where: { service: 'result', status: 'APPROVED' },
         include: { program: true },
+        distinct: ['programId'],
         take: 500,
       });
+      const disclosures = await Promise.all(
+        rows.map((row) => this.disclosure('result', row.programId)),
+      );
       const programs = new Map<string, PublicResultOptions['programs'][number]>();
-      for (const row of rows) {
-        const disclosure = await this.disclosure('result', row.programId);
+      for (const [index, row] of rows.entries()) {
+        const disclosure = disclosures[index];
         const p = row.program;
         const count =
           p.periodCount ?? (p.academicStructure === 'SEMESTER_WISE' ? p.durationSemesters : null);
@@ -209,7 +242,11 @@ export class AnonymousVerificationService {
           periods: Array.from({ length: count }, (_, i) => i + 1),
         });
       }
-      return { programs: [...programs.values()].sort((a, b) => a.name.localeCompare(b.name)) };
+      const value = {
+        programs: [...programs.values()].sort((a, b) => a.name.localeCompare(b.name)),
+      };
+      this.options = { at: Date.now(), value };
+      return value;
     });
   }
 
@@ -217,16 +254,20 @@ export class AnonymousVerificationService {
   async resultSearch(input: PublicResultSearch, ip: string): Promise<Response> {
     const key = `${input.programId}:${input.rollNumber.toUpperCase()}:${input.periodNumber}`;
     return this.run('result', key, ip, async (make) => {
+      // Sequential roll numbers are guessable: cap how many one client can try per course.
+      await this.hourly('public-verification-result-search', `${ip}:${input.programId}`, 60);
       const disclosure = await this.disclosure('result', input.programId);
       const program = disclosure ? await this.program(input.programId) : null;
-      if (!disclosure || !program) return make('NOT_FOUND', NO_RESULT);
+      if (program?.status !== 'ACTIVE' || !disclosure) return make('NOT_FOUND', NO_RESULT);
+      // Exact, case-insensitive equality in SQL (never ILIKE: '_' must not act as a wildcard).
+      const ids = await this.prisma.client.$queryRaw<{ id: string }[]>`
+        SELECT id::text AS id FROM student_registrations
+         WHERE program_id = ${input.programId}::uuid
+           AND upper(roll_reference_number) = upper(${input.rollNumber})
+         LIMIT 2`;
       const matches = await this.prisma.client.studentRegistration.findMany({
-        where: {
-          programId: input.programId,
-          rollReferenceNumber: { equals: input.rollNumber, mode: 'insensitive' },
-        },
+        where: { id: { in: ids.map((row) => row.id) } },
         include: { academicSession: { select: { name: true } } },
-        take: 2,
       });
       // An ambiguous roll number never resolves to anyone.
       const registration = matches.length === 1 ? matches[0] : undefined;
@@ -298,7 +339,11 @@ export class AnonymousVerificationService {
   }
 
   /** The issued PDF for the holder of the document's QR credential, where the policy allows. */
-  async document(input: PublicDocumentRequest, ip: string): Promise<Buffer> {
+  document(input: PublicDocumentRequest, ip: string): Promise<Buffer> {
+    return this.guarded(() => this.readDocument(input, ip));
+  }
+
+  private async readDocument(input: PublicDocumentRequest, ip: string): Promise<Buffer> {
     const audit = (outcome: string) =>
       this.audit.writeAuditEvent({
         action: AUDIT_ACTIONS.publicVerificationChecked,
@@ -333,14 +378,12 @@ export class AnonymousVerificationService {
         : null;
     const disclosure = c && issuing ? await this.disclosure(input.service, c.programId) : null;
     if (
-      !c ||
+      !snapshot.success ||
+      !issuedDocumentIntact(c, snapshot.data) ||
       !issuing ||
       !disclosure?.documentWithCredential ||
       !c.pdfStorageKey ||
-      !c.pdfHash ||
-      !c.issuedByUserId ||
-      !c.approvedByUserId ||
-      c.generatedByUserId === c.approvedByUserId
+      !c.pdfHash
     ) {
       await audit('NOT_FOUND');
       throw Errors.notFound();
@@ -384,6 +427,22 @@ export class AnonymousVerificationService {
         {
           headers: { 'Retry-After': String(limit.retryAfterSeconds) },
         },
+      );
+  }
+
+  /** A per-client hourly budget on top of the per-minute guard (anti-harvesting). */
+  private async hourly(scope: string, principal: string, limit: number) {
+    const result = await this.limiter
+      .hit(scope, [{ key: this.hasher.hash(scope, principal), limit }], 3600)
+      .catch(() => {
+        throw verificationUnavailable();
+      });
+    if (result.limited)
+      throw new AppError(
+        HttpStatus.TOO_MANY_REQUESTS,
+        'PUBLIC_VERIFICATION_RATE_LIMITED',
+        'Too many requests. Please wait before trying again.',
+        { headers: { 'Retry-After': String(result.retryAfterSeconds) } },
       );
   }
 

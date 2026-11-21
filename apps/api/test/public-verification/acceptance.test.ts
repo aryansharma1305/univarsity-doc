@@ -971,6 +971,9 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
       none.body,
     );
     expect((await search({ rollNumber: bob.rollNumber, periodNumber: 1 })).body).toEqual(none.body);
+    // '_' is a literal character, never a SQL wildcard (no ILIKE-style probing).
+    const wildcard = `${alice.rollNumber.slice(0, -1)}_`;
+    expect((await search({ rollNumber: wildcard, periodNumber: 1 })).body).toEqual(none.body);
     expect(
       (await search({ rollNumber: alice.rollNumber, periodNumber: 1, registrationNumber: 'x' }))
         .status,

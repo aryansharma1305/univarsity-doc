@@ -17,6 +17,7 @@ import { verificationUnavailable } from './public-verification.service.js';
 import { AppError } from '../common/app-error.js';
 import {
   AnonymousVerificationService,
+  issuedDocumentIntact,
   mask,
   REGISTRATION_MESSAGES,
 } from './anonymous-verification.service.js';
@@ -84,7 +85,7 @@ export class OfficialVerificationService {
           // Anonymous registration lookup only where a course's approved policy authorises it.
           response =
             service === 'registration' && (await this.anonymous.anyAnonymous('registration'))
-              ? await this.anonymous.registration(input.reference ?? '', result)
+              ? await this.anonymous.registration(ip, input.reference ?? '', result)
               : result(
                   'AUTHENTICATION_REQUIRED',
                   'Sign in to your student account to check this record.',
@@ -158,22 +159,7 @@ export class OfficialVerificationService {
                   snapshot.data.policyId,
                 )
               : null;
-          if (
-            !c ||
-            !snapshot.success ||
-            !policy ||
-            snapshot.data.registrationId !== c.studentRegistrationId ||
-            snapshot.data.templateId !== c.certificateTemplateId ||
-            !c.generatedByUserId ||
-            !c.approvedByUserId ||
-            c.generatedByUserId === c.approvedByUserId ||
-            !c.approvedAt ||
-            !c.issuedByUserId ||
-            !c.issuedAt ||
-            !c.pdfHash ||
-            !c.pdfStorageKey ||
-            !c.verificationToken
-          )
+          if (!snapshot.success || !issuedDocumentIntact(c, snapshot.data) || !policy)
             response = result('NOT_FOUND', 'No approved, issued document matches these details.');
           else if (c.status !== 'ISSUED')
             response = result('REVOKED', 'This document has been revoked or replaced.');
