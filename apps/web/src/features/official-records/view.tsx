@@ -9,6 +9,7 @@ import {
   prepareOfficialDocumentSchema,
   prepareOfficialTemplateSchema,
   proposeVerificationPolicySchema,
+  publicVerificationServiceSchema,
   type Registration,
 } from '@docversity/validation';
 import { Button } from '@docversity/ui/components/button';
@@ -23,7 +24,7 @@ import { certificateRequestsApi } from '@/features/certificate-requests/api';
 import { resultReviewApi } from '@/features/result-review/api';
 import { officialApi as api } from './api';
 import { useListParams } from '@/hooks/use-list-params';
-const listKeys = ['tab'] as const;
+const listKeys = ['tab', 'service', 'type'] as const;
 function useOfficialList() {
   const { page, update, values } = useListParams(listKeys);
   return {
@@ -152,17 +153,27 @@ function PolicyPanel() {
   const user = useSessionUser(),
     manage = useCan(PERMISSIONS.verificationPoliciesManage),
     programs = useProgramOptions();
-  const { page, setPage } = useOfficialList();
-  const [service, setService] = useState('admission-letter'),
+  const { page, setPage, values } = useOfficialList();
+  const selectedService = publicVerificationServiceSchema.safeParse(values.service).data;
+  const [service, setService] = useState<string>(selectedService ?? 'admission-letter'),
     [application, setApplication] = useState(false);
   const query = useQuery({
-    queryKey: ['official', 'policies', page],
-    queryFn: () => api.policies({ page, pageSize: 25, sortOrder: 'desc' }),
+    queryKey: ['official', 'policies', page, selectedService],
+    queryFn: () =>
+      api.policies({ page, pageSize: 25, sortOrder: 'desc', service: selectedService }),
   });
   const operation = useAction();
   return (
     <>
       <h2 className="text-lg font-semibold">University verification policies</h2>
+      {selectedService && (
+        <p className="mt-2 text-sm">
+          Showing {selectedService.replaceAll('-', ' ')} policies.{' '}
+          <Link href="/admin/official-records?tab=policies" className="text-brand underline">
+            View all policies
+          </Link>
+        </p>
+      )}
       <p className="mt-2 max-w-prose text-sm text-muted-foreground">
         Proposals do not authorize disclosure. Approval requires a second authorized person and the
         server’s institutional approval gate. Never enter a provisional name as a confirmed legal
@@ -568,7 +579,7 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
   const search = values.search;
   const [term, setTerm] = useState(search),
     [registration, setRegistration] = useState<Registration | null>(null),
-    [typeOverride, setType] = useState(''),
+    [typeOverride, setType] = useState<string>(),
     [revoking, setRevoking] = useState(''),
     [verificationUrl, setVerificationUrl] = useState('');
   const operation = useAction();
@@ -578,12 +589,13 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
     enabled: !!initialRequest && generate,
   });
   const requestOwner = request.data?.student;
+  const documentType = prepareOfficialDocumentSchema.shape.documentType.safeParse(values.type).data;
   const type =
-    typeOverride ||
-    (prepareOfficialDocumentSchema.shape.documentType.safeParse(request.data?.certificateType)
-      .success
-      ? (request.data?.certificateType ?? 'ADMISSION_LETTER')
-      : 'ADMISSION_LETTER');
+    typeOverride ??
+    documentType ??
+    prepareOfficialDocumentSchema.shape.documentType.safeParse(request.data?.certificateType)
+      .data ??
+    'ADMISSION_LETTER';
   const registrations = useQuery({
     queryKey: ['official', 'registrations', search],
     queryFn: () => api.registrations(search, 1),
@@ -632,12 +644,20 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
     enabled: !!registration && generate,
   });
   const query = useQuery({
-    queryKey: ['official', 'documents', page],
-    queryFn: () => api.documents({ page, pageSize: 25, sortOrder: 'desc' }),
+    queryKey: ['official', 'documents', page, documentType],
+    queryFn: () => api.documents({ page, pageSize: 25, sortOrder: 'desc', documentType }),
   });
   return (
     <>
       <h2 className="text-lg font-semibold">Issue and revoke official documents</h2>
+      {documentType && (
+        <p className="mt-2 text-sm">
+          Showing {label(documentType).toLowerCase()} records.{' '}
+          <Link href="/admin/official-records" className="text-brand underline">
+            View all documents
+          </Link>
+        </p>
+      )}
       {verificationUrl && (
         <div role="status" className="my-4 rounded-xl border border-border bg-card p-5 text-sm">
           <p>The issued document’s secure verification link is ready.</p>
@@ -798,7 +818,7 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
                 name="documentType"
                 value={type}
                 onChange={(value) => {
-                  setType(value);
+                  setType(value || undefined);
                   setRequest('');
                 }}
               >
@@ -1281,7 +1301,7 @@ export function OfficialRecords({
       <Tabs
         value={values.tab || (initialResult ? 'results' : 'documents')}
         onValueChange={(tab) => {
-          update({ tab });
+          update({ tab, service: '', type: '' });
         }}
       >
         <TabsList className="mb-6 flex h-auto w-full flex-wrap justify-start gap-2 group-data-[orientation=horizontal]/tabs:h-auto">
@@ -1304,10 +1324,10 @@ export function OfficialRecords({
           )}
         </TabsList>
         <TabsContent value="documents">
-          <DocumentPanel initialRequest={initialRequest} />
+          <DocumentPanel key={values.type} initialRequest={initialRequest} />
         </TabsContent>
         <TabsContent value="policies">
-          <PolicyPanel />
+          <PolicyPanel key={values.service} />
         </TabsContent>
         <TabsContent value="templates">
           <TemplatePanel />

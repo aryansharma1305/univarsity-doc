@@ -5,19 +5,18 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowUpRightIcon } from 'lucide-react';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@docversity/ui/components/tabs';
-import { ADMIN_NAV } from '@/components/admin/nav';
-import { navGroup } from '@/components/admin/nav-groups';
+import { COMMUNICATION_UNAVAILABLE, NAV_GROUPS, visibleAdminNav } from '@/components/admin/nav';
 import { useSessionUser } from '@/components/providers/session-context';
-
-const GROUPS = ['Records', 'Academic', 'Examinations'] as const;
 
 export function WorkspaceNavigator() {
   const user = useSessionUser();
-  const links = ADMIN_NAV.filter(
-    (item) => !item.permission || user.permissions.includes(item.permission),
+  const links = visibleAdminNav(user.permissions);
+  const groups = NAV_GROUPS.filter(
+    (group) =>
+      group !== 'Workspace Navigation' &&
+      (group === 'Chat & Communication' || links.some((item) => item.group === group)),
   );
-  const groups = GROUPS.filter((group) => links.some((item) => navGroup(item.href) === group));
-  const [choice, setChoice] = useState<string>('Records');
+  const [choice, setChoice] = useState<string>('Admission');
   const selected = groups.find((group) => group === choice) ?? groups[0];
   const scope = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
@@ -83,13 +82,13 @@ export function WorkspaceNavigator() {
           <Tabs value={selected} onValueChange={setChoice}>
             <TabsList
               aria-label="Workspace categories"
-              className="h-auto w-full justify-start gap-1 rounded-none bg-transparent p-0"
+              className="w-full flex-wrap justify-start gap-1 rounded-none bg-transparent p-0 group-data-[orientation=horizontal]/tabs:h-auto"
             >
               {groups.map((group) => (
                 <TabsTrigger
                   key={group}
                   value={group}
-                  className="relative min-h-10 flex-none rounded-md px-3 text-white/70 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:shadow-none"
+                  className="relative h-auto min-h-10 flex-none rounded-md px-3 text-white/70 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:shadow-none"
                 >
                   {selected === group && (
                     <motion.span
@@ -108,9 +107,12 @@ export function WorkspaceNavigator() {
               <div data-workspace-rule className="h-px bg-white/20" />
               {groups.map((group) => (
                 <TabsContent key={group} value={group} className="mt-3">
+                  {group === 'Chat & Communication' && (
+                    <p className="text-sm text-white/75">{COMMUNICATION_UNAVAILABLE}</p>
+                  )}
                   <ul data-workspace-links className="grid gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
                     {links
-                      .filter((item) => navGroup(item.href) === group)
+                      .filter((item) => item.group === group)
                       .map((item) => (
                         <li key={item.href}>
                           <Link

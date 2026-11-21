@@ -97,7 +97,7 @@ test('examination application links and year-wise examination records reach the 
   const staff = await staffPage(browser, examAdmin);
   await staff
     .getByRole('complementary', { name: 'Admin navigation' })
-    .getByRole('link', { name: 'Examinations', exact: true })
+    .getByRole('link', { name: 'Exam Schedule', exact: true })
     .click();
   await expect(staff.getByRole('heading', { level: 1, name: 'Examinations' })).toBeVisible();
   await staff.getByRole('link', { name: 'Examination application' }).click();

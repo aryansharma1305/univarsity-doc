@@ -1,176 +1,327 @@
+import type { Route } from 'next';
 import type { Permission } from '@docversity/types';
 import { PERMISSIONS } from '@docversity/types';
 import {
   BuildingIcon,
+  CalendarRangeIcon,
   ClipboardCheckIcon,
   ClipboardPenLineIcon,
-  CalendarRangeIcon,
+  FileBadgeIcon,
   FileSpreadsheetIcon,
   GraduationCapIcon,
-  FileBadgeIcon,
   KeyRoundIcon,
-  QrCodeIcon,
-  WalletIcon,
-  LibraryIcon,
   LayoutDashboardIcon,
-  type LucideIcon,
+  LibraryIcon,
+  QrCodeIcon,
+  ShieldCheckIcon,
   UserRoundPenIcon,
   UsersIcon,
+  WalletIcon,
+  type LucideIcon,
 } from 'lucide-react';
 
+export const NAV_GROUPS = [
+  'Workspace Navigation',
+  'Admission',
+  'Certificates',
+  'Course Management',
+  'Subject Management',
+  'Examination',
+  'Schools & Departments',
+  'Imports & Reports',
+  'Academic Session',
+  'Chat & Communication',
+  'Settings & Administration',
+] as const;
+
 export interface AdminNavItem {
-  href:
-    | '/admin/official-records'
-    | '/admin/marksheet-templates'
-    | '/admin/certificate-requests'
-    | '/admin/certificate-templates'
-    | '/admin'
-    | '/admin/students'
-    | '/admin/imports'
-    | '/admin/results'
-    | '/admin/results/import'
-    | '/admin/student-accounts'
-    | '/admin/profile-requests'
-    | '/admin/historical-documents'
-    | '/admin/examinations'
-    | '/admin/re-exam-applications'
-    | '/admin/re-exam-payments'
-    | '/admin/settings/re-exam-payments'
-    | '/admin/programs'
-    | '/admin/subjects'
-    | '/admin/departments'
-    | '/admin/academic-sessions';
+  group: (typeof NAV_GROUPS)[number];
+  href: Route;
   label: string;
   icon: LucideIcon;
-  /** Hidden for users without this permission. */
-  permission?: Permission;
+  permissions?: readonly Permission[];
+  subsection?: string;
 }
 
-/**
- * Admin navigation. Only implemented workflows are listed; results currently expose preview imports.
- */
+const p = PERMISSIONS;
+
 export const ADMIN_NAV: readonly AdminNavItem[] = [
+  { group: 'Workspace Navigation', href: '/admin', label: 'Dashboard', icon: LayoutDashboardIcon },
+
   {
-    href: '/admin/official-records',
-    label: 'Official records',
-    icon: FileBadgeIcon,
-    permission: PERMISSIONS.certificatesRead,
+    group: 'Admission',
+    href: '/admin/students/new',
+    label: 'New Admission',
+    icon: UserRoundPenIcon,
+    permissions: [p.studentsWrite, p.registrationsWrite],
   },
   {
-    href: '/admin/certificate-requests',
-    label: 'Certificate Requests',
-    icon: FileBadgeIcon,
-    permission: PERMISSIONS.certificateRequestsRead,
-  },
-  { href: '/admin', label: 'Dashboard', icon: LayoutDashboardIcon },
-  {
-    href: '/admin/certificate-templates',
-    label: 'Certificate Templates',
-    icon: FileBadgeIcon,
-    permission: PERMISSIONS.templatesWrite,
-  },
-  {
-    href: '/admin/marksheet-templates',
-    label: 'Marksheet Templates',
-    icon: FileBadgeIcon,
-    permission: PERMISSIONS.templatesWrite,
-  },
-  {
+    group: 'Admission',
     href: '/admin/students',
     label: 'Students',
     icon: UsersIcon,
-    permission: PERMISSIONS.studentsRead,
+    permissions: [p.studentsRead],
   },
   {
-    href: '/admin/imports',
-    label: 'Imports',
-    icon: FileSpreadsheetIcon,
-    permission: PERMISSIONS.importsRead,
-  },
-  {
-    href: '/admin/results',
-    label: 'Draft Results',
-    icon: ClipboardPenLineIcon,
-    permission: PERMISSIONS.resultsRead,
-  },
-  {
-    href: '/admin/results/import',
-    label: 'Results Import',
-    icon: FileSpreadsheetIcon,
-    permission: PERMISSIONS.importsResultsRun,
-  },
-  {
+    group: 'Admission',
     href: '/admin/student-accounts',
     label: 'Student Accounts',
     icon: KeyRoundIcon,
-    permission: PERMISSIONS.studentAccountsRead,
+    permissions: [p.studentAccountsRead],
   },
   {
+    group: 'Admission',
+    href: '/admin/official-records?tab=policies&service=admission-letter',
+    label: 'Admission Letter Verification',
+    icon: ShieldCheckIcon,
+    permissions: [p.certificatesRead],
+  },
+  {
+    group: 'Admission',
+    href: '/admin/official-records?tab=documents&type=ADMISSION_LETTER',
+    label: 'Issue Admission Letters',
+    icon: FileBadgeIcon,
+    permissions: [p.certificatesRead],
+  },
+  {
+    group: 'Admission',
     href: '/admin/profile-requests',
-    label: 'Profile Requests',
+    label: 'Profile Update Requests',
     icon: UserRoundPenIcon,
-    permission: PERMISSIONS.studentProfileRequestsRead,
+    permissions: [p.studentProfileRequestsRead],
+  },
+
+  {
+    group: 'Certificates',
+    href: '/admin/certificate-requests',
+    label: 'Certificate Requests',
+    icon: ClipboardCheckIcon,
+    permissions: [p.certificateRequestsRead],
   },
   {
+    group: 'Certificates',
+    href: '/admin/official-records',
+    label: 'Official records',
+    icon: FileBadgeIcon,
+    permissions: [p.certificatesRead],
+  },
+  {
+    group: 'Certificates',
+    href: '/admin/official-records?tab=documents&type=TRANSCRIPT',
+    label: 'Transcript',
+    subsection: 'Generate Certificates',
+    icon: FileBadgeIcon,
+    permissions: [p.certificatesRead, p.certificatesGenerate],
+  },
+  {
+    group: 'Certificates',
+    href: '/admin/official-records?tab=documents&type=PROVISIONAL',
+    label: 'Provisional Certificate',
+    subsection: 'Generate Certificates',
+    icon: FileBadgeIcon,
+    permissions: [p.certificatesRead, p.certificatesGenerate],
+  },
+  {
+    group: 'Certificates',
+    href: '/admin/official-records?tab=documents&type=CHARACTER',
+    label: 'Character Certificate',
+    subsection: 'Generate Certificates',
+    icon: FileBadgeIcon,
+    permissions: [p.certificatesRead, p.certificatesGenerate],
+  },
+  {
+    group: 'Certificates',
+    href: '/admin/official-records?tab=policies&service=certificate',
+    label: 'Certificate Verification',
+    icon: ShieldCheckIcon,
+    permissions: [p.certificatesRead],
+  },
+  {
+    group: 'Certificates',
     href: '/admin/historical-documents',
     label: 'Historical Certificates',
     icon: FileBadgeIcon,
-    permission: PERMISSIONS.historicalDocumentsRead,
+    permissions: [p.historicalDocumentsRead],
   },
   {
-    href: '/admin/examinations',
-    label: 'Examinations',
-    icon: ClipboardCheckIcon,
-    permission: PERMISSIONS.examinationsRead,
+    group: 'Certificates',
+    href: '/admin/certificate-templates',
+    label: 'Certificate Templates',
+    icon: FileBadgeIcon,
+    permissions: [p.templatesWrite],
   },
+
   {
-    href: '/admin/re-exam-applications',
-    label: 'Re-exam Applications',
-    icon: ClipboardPenLineIcon,
-    permission: PERMISSIONS.reExamApplicationsRead,
-  },
-  {
-    href: '/admin/re-exam-payments',
-    label: 'Re-exam Payments',
-    icon: WalletIcon,
-    permission: PERMISSIONS.reExamPaymentsRead,
-  },
-  {
-    href: '/admin/settings/re-exam-payments',
-    label: 'Payment Settings',
-    icon: QrCodeIcon,
-    permission: PERMISSIONS.reExamPaymentsConfigure,
-  },
-  {
+    group: 'Course Management',
     href: '/admin/programs',
-    label: 'Course Management',
+    label: 'Manage Courses',
     icon: GraduationCapIcon,
-    permission: PERMISSIONS.programsRead,
+    permissions: [p.programsRead],
   },
+
   {
+    group: 'Subject Management',
     href: '/admin/subjects',
     label: 'Subject Catalogue',
     icon: LibraryIcon,
-    permission: PERMISSIONS.subjectsRead,
+    permissions: [p.subjectsRead],
   },
   {
-    href: '/admin/departments',
-    label: 'Departments',
-    icon: BuildingIcon,
-    permission: PERMISSIONS.departmentsRead,
+    group: 'Subject Management',
+    href: '/admin/programs?view=curricula',
+    label: 'Course-wise Subject Mapping',
+    icon: GraduationCapIcon,
+    permissions: [p.programsRead],
+  },
+
+  {
+    group: 'Examination',
+    href: '/admin/examinations/application',
+    label: 'Exam Form',
+    icon: ClipboardPenLineIcon,
+    permissions: [p.examinationsManage],
   },
   {
-    href: '/admin/academic-sessions',
-    label: 'Academic Sessions',
+    group: 'Examination',
+    href: '/admin/re-exam-applications',
+    label: 'Re-exam Applications',
+    icon: ClipboardPenLineIcon,
+    permissions: [p.reExamApplicationsRead],
+  },
+  {
+    group: 'Examination',
+    href: '/admin/re-exam-payments',
+    label: 'Re-exam Payments',
+    icon: WalletIcon,
+    permissions: [p.reExamPaymentsRead],
+  },
+  {
+    group: 'Examination',
+    href: '/admin/examinations',
+    label: 'Exam Schedule',
     icon: CalendarRangeIcon,
-    permission: PERMISSIONS.academicSessionsRead,
+    permissions: [p.examinationsRead],
+  },
+  {
+    group: 'Examination',
+    href: '/admin/results/review',
+    label: 'Result Management',
+    icon: ClipboardCheckIcon,
+    permissions: [p.resultsRead],
+  },
+  {
+    group: 'Examination',
+    href: '/admin/results/new',
+    label: 'Marks Entry',
+    icon: ClipboardPenLineIcon,
+    permissions: [p.resultsRead, p.resultsWrite],
+  },
+  {
+    group: 'Examination',
+    href: '/admin/results',
+    label: 'Draft Results',
+    icon: ClipboardPenLineIcon,
+    permissions: [p.resultsRead],
+  },
+  {
+    group: 'Examination',
+    href: '/admin/marksheet-templates',
+    label: 'Marksheet Templates',
+    icon: FileBadgeIcon,
+    permissions: [p.templatesWrite],
+  },
+
+  {
+    group: 'Schools & Departments',
+    href: '/admin/departments',
+    label: 'Manage Departments',
+    icon: BuildingIcon,
+    permissions: [p.departmentsRead],
+  },
+
+  {
+    group: 'Imports & Reports',
+    href: '/admin/results/import',
+    label: 'Result Import',
+    icon: FileSpreadsheetIcon,
+    permissions: [p.importsResultsRun],
+  },
+  {
+    group: 'Imports & Reports',
+    href: '/admin/imports/new',
+    label: 'Registration Import',
+    icon: FileSpreadsheetIcon,
+    permissions: [p.importsStudentsRun],
+  },
+  {
+    group: 'Imports & Reports',
+    href: '/admin/imports',
+    label: 'Imports',
+    icon: FileSpreadsheetIcon,
+    permissions: [p.importsRead],
+  },
+
+  {
+    group: 'Academic Session',
+    href: '/admin/academic-sessions',
+    label: 'Manage Academic Sessions',
+    icon: CalendarRangeIcon,
+    permissions: [p.academicSessionsRead],
+  },
+  {
+    group: 'Academic Session',
+    href: '/admin/students?view=session',
+    label: 'Session-wise Student Records',
+    icon: UsersIcon,
+    permissions: [p.studentsRead, p.academicSessionsRead],
+  },
+
+  {
+    group: 'Chat & Communication',
+    href: '/admin/official-records?tab=audit',
+    label: 'Verification Audit',
+    icon: ShieldCheckIcon,
+    permissions: [p.certificatesRead, p.auditRead],
+  },
+
+  {
+    group: 'Settings & Administration',
+    href: '/admin/settings/profile',
+    label: 'Admin Profile',
+    icon: UserRoundPenIcon,
+  },
+  {
+    group: 'Settings & Administration',
+    href: '/admin/settings/staff',
+    label: 'Staff Users & Roles',
+    icon: UsersIcon,
+    permissions: [p.usersManage],
+  },
+  {
+    group: 'Settings & Administration',
+    href: '/admin/settings/re-exam-payments',
+    label: 'Payment Settings',
+    icon: QrCodeIcon,
+    permissions: [p.reExamPaymentsConfigure],
   },
 ];
+
+export function visibleAdminNav(permissions: readonly string[]) {
+  return ADMIN_NAV.filter(
+    (item) => item.permissions?.every((value) => permissions.includes(value)) ?? true,
+  );
+}
+
+export const COMMUNICATION_UNAVAILABLE =
+  'Student messages, verification queries, and notifications are unavailable.';
 
 export const SEGMENT_LABELS: Record<string, string> = {
   'certificate-requests': 'Certificate Requests',
   'certificate-requests/*': 'Application',
   admin: 'Dashboard',
+  'official-records': 'Official records',
+  'settings/profile': 'Admin Profile',
+  'settings/staff': 'Staff Users & Roles',
   'certificate-templates': 'Certificate Templates',
   'marksheet-templates': 'Marksheet Templates',
   students: 'Students',

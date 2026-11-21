@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { ChevronsLeftIcon, ChevronsRightIcon, MenuIcon } from 'lucide-react';
-import { type ReactNode, useId, useState, useSyncExternalStore } from 'react';
+import { Fragment, type ReactNode, useId, useState, useSyncExternalStore } from 'react';
 import { cn } from '@docversity/ui';
 import { Button } from '@docversity/ui/components/button';
 import {
@@ -27,8 +27,8 @@ import { QueryProvider } from '@/components/providers/query-provider';
 import { SessionProvider } from '@/components/providers/session-context';
 import { AdminBreadcrumbs } from './admin-breadcrumbs';
 import { BreadcrumbLabelProvider } from './breadcrumb-context';
-import { ADMIN_NAV } from './nav';
-import { activeNavHref, NAV_GROUPS, navGroup } from './nav-groups';
+import { COMMUNICATION_UNAVAILABLE, NAV_GROUPS, visibleAdminNav } from './nav';
+import { activeNavHref } from './nav-groups';
 import { UserMenu } from './user-menu';
 
 const COLLAPSE_KEY = 'docversity.admin.sidebarCollapsed';
@@ -71,20 +71,19 @@ function NavLinks({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const groupId = useId();
   const reduce = useReducedMotion();
-  const items = ADMIN_NAV.filter(
-    (item) => !item.permission || user.permissions.includes(item.permission),
-  );
-  const activeHref = activeNavHref(pathname, items);
+  const items = visibleAdminNav(user.permissions);
+  const activeHref = activeNavHref(pathname, items, new URLSearchParams(searchParams.toString()));
   return (
     <LayoutGroup id={groupId}>
       <div className="space-y-5">
         {NAV_GROUPS.map((group) => {
-          const links = items.filter((item) => navGroup(item.href) === group);
-          if (!links.length) return null;
+          const links = items.filter((item) => item.group === group);
+          if (!links.length && group !== 'Chat & Communication') return null;
           return (
-            <section key={group} aria-label={group}>
+            <section key={group}>
               <h2
                 className={cn(
                   'mb-2 px-3 text-xs font-medium text-white/65',
@@ -93,47 +92,64 @@ function NavLinks({
               >
                 {group}
               </h2>
-              <ul className="space-y-1">
-                {links.map((item) => {
-                  const active = item.href === activeHref;
-                  const link = (
-                    <Link
-                      href={item.href}
-                      onClick={onNavigate}
-                      aria-current={active ? 'page' : undefined}
-                      className={cn(
-                        'relative flex min-h-10 items-center gap-3 rounded-md px-3 text-[13px] font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent',
-                        active && 'text-white',
-                        collapsed && 'justify-center px-0',
-                      )}
-                    >
-                      {active && (
-                        <motion.span
-                          aria-hidden="true"
-                          layoutId="current-section"
-                          initial={false}
-                          transition={{ duration: reduce ? 0 : 0.22, ease: [0.16, 1, 0.3, 1] }}
-                          className="absolute inset-0 rounded-md bg-brand"
-                        />
-                      )}
-                      <item.icon aria-hidden="true" className="relative size-[18px] shrink-0" />
-                      <span className={cn('relative', collapsed && 'sr-only')}>{item.label}</span>
-                    </Link>
-                  );
-                  return (
-                    <li key={item.href}>
-                      {collapsed ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>{link}</TooltipTrigger>
-                          <TooltipContent side="right">{item.label}</TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        link
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+              {group === 'Chat & Communication' && !collapsed && (
+                <p className="px-3 text-xs text-white/65">{COMMUNICATION_UNAVAILABLE}</p>
+              )}
+              {!!links.length && (
+                <ul className="space-y-1">
+                  {links.map((item, index) => {
+                    const active = item.href === activeHref;
+                    const link = (
+                      <Link
+                        href={item.href}
+                        onClick={onNavigate}
+                        aria-current={active ? 'page' : undefined}
+                        className={cn(
+                          'relative flex min-h-10 items-center gap-3 rounded-md px-3 text-[13px] font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent',
+                          active && 'text-white',
+                          collapsed ? 'justify-center px-0' : item.subsection && 'pl-6',
+                        )}
+                      >
+                        {active && (
+                          <motion.span
+                            aria-hidden="true"
+                            layoutId="current-section"
+                            initial={false}
+                            transition={{ duration: reduce ? 0 : 0.22, ease: [0.16, 1, 0.3, 1] }}
+                            className="absolute inset-0 rounded-md bg-brand"
+                          />
+                        )}
+                        <item.icon aria-hidden="true" className="relative size-[18px] shrink-0" />
+                        <span className={cn('relative', collapsed && 'sr-only')}>{item.label}</span>
+                      </Link>
+                    );
+                    return (
+                      <Fragment key={item.href}>
+                        {item.subsection && item.subsection !== links[index - 1]?.subsection && (
+                          <li
+                            className={cn(
+                              'px-3 pt-2 text-xs text-white/65',
+                              collapsed && 'sr-only',
+                            )}
+                          >
+                            <h3>{item.subsection}</h3>
+                          </li>
+                        )}
+                        <li>
+                          {collapsed ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>{link}</TooltipTrigger>
+                              <TooltipContent side="right">{item.label}</TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            link
+                          )}
+                        </li>
+                      </Fragment>
+                    );
+                  })}
+                </ul>
+              )}
             </section>
           );
         })}

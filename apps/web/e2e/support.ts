@@ -112,12 +112,12 @@ export async function expectNoHorizontalOverflow(page: Page): Promise<void> {
 }
 
 /** Clicks an admin section in the desktop sidebar (exact name, scoped to the sidebar). */
-export async function openSection(page: Page, name: string): Promise<void> {
+export async function openSection(page: Page, name: string, heading = name): Promise<void> {
   await page
     .getByRole('complementary', { name: 'Admin navigation' })
     .getByRole('link', { name, exact: true })
     .click();
-  await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
 }
 
 export async function studentSignIn(page: Page, student: StudentAccount): Promise<void> {

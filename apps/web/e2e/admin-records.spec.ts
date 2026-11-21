@@ -27,7 +27,7 @@ test('SUPER_ADMIN creates a department, program, session and student, then finds
   await capture(page, 'admin-dashboard-desktop');
 
   // Department
-  await openSection(page, 'Departments');
+  await openSection(page, 'Manage Departments', 'Departments');
   await page.getByRole('button', { name: 'Add department' }).first().click();
   const departmentDialog = page.getByRole('dialog');
   await departmentDialog.getByLabel('Code').fill(department);
@@ -47,7 +47,7 @@ test('SUPER_ADMIN creates a department, program, session and student, then finds
   await departmentDialog.getByRole('button', { name: 'Cancel' }).click();
 
   // Course (program) in that department
-  await openSection(page, 'Course Management');
+  await openSection(page, 'Manage Courses', 'Course Management');
   await page.getByRole('button', { name: 'Create course' }).first().click();
   const programDialog = page.getByRole('dialog');
   await programDialog.getByLabel('Course code').fill(program);
@@ -61,7 +61,7 @@ test('SUPER_ADMIN creates a department, program, session and student, then finds
   await expect(page.getByText(`Course ${program} created`)).toBeVisible();
 
   // Academic session
-  await openSection(page, 'Academic Sessions');
+  await openSection(page, 'Manage Academic Sessions', 'Academic Sessions');
   await page.getByRole('button', { name: 'Add session' }).first().click();
   const sessionDialog = page.getByRole('dialog');
   await sessionDialog.getByLabel('Code').fill(session);
