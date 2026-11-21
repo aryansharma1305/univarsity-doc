@@ -90,7 +90,8 @@ function pick(
   for (const field of disclosure.fields) {
     if (!allowed.includes(field)) continue;
     for (const [key, value] of Object.entries(candidates[field] ?? {}))
-      if (value) // drops missing and empty values
+      if (value)
+        // drops missing and empty values
         Object.assign(details, { [key]: value });
   }
   return details;
