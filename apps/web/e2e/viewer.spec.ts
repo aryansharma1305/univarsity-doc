@@ -26,13 +26,13 @@ test('VIEWER can read students but sees no create/edit actions', async ({ page }
   await expect(page.getByRole('button', { name: 'Add registration' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Edit registration/ })).toHaveCount(0);
 
-  for (const [link, button] of [
-    ['Departments', 'Add department'],
-    ['Course Management', 'Create course'],
-    ['Subject Catalogue', 'Add subject'],
-    ['Academic Sessions', 'Add session'],
+  for (const [link, heading, button] of [
+    ['Manage Departments', 'Departments', 'Add department'],
+    ['Manage Courses', 'Course Management', 'Create course'],
+    ['Subject Catalogue', 'Subject Catalogue', 'Add subject'],
+    ['Manage Academic Sessions', 'Academic Sessions', 'Add session'],
   ] as const) {
-    await openSection(page, link);
+    await openSection(page, link, heading);
     await expect(page.getByRole('button', { name: button })).toHaveCount(0);
   }
 

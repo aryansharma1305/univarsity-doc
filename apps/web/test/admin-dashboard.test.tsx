@@ -3,14 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AdminShell } from '@/components/admin/admin-shell';
-import { ADMIN_NAV } from '@/components/admin/nav';
-import { activeNavHref, navGroup } from '@/components/admin/nav-groups';
+import { ADMIN_NAV, NAV_GROUPS, visibleAdminNav } from '@/components/admin/nav';
+import { activeNavHref } from '@/components/admin/nav-groups';
 import { DashboardView } from '@/features/dashboard/dashboard-view';
 import { resetApiClient } from '@/lib/api';
 import { EMPTY_PAGE, mockFetch, renderWithProviders, VIEWER } from './render';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/admin/results/import',
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
 }));
 
@@ -33,11 +34,45 @@ afterEach(() => {
 });
 
 describe('UI-02 navigation and dashboard', () => {
-  it('selects the most specific destination and keeps unknown future routes visible', () => {
+  it('selects the most specific route or matching workspace filter', () => {
     expect(activeNavHref('/admin/results/import/preview', ADMIN_NAV)).toBe('/admin/results/import');
-    expect(activeNavHref('/admin/results/new', ADMIN_NAV)).toBe('/admin/results');
-    expect(navGroup('/admin/results/review')).toBe('Examinations');
-    expect(navGroup('/admin/future-workspace')).toBe('Workspace');
+    expect(activeNavHref('/admin/results/new', ADMIN_NAV)).toBe('/admin/results/new');
+    expect(activeNavHref('/admin/official-records', ADMIN_NAV)).toBe('/admin/official-records');
+    expect(
+      activeNavHref(
+        '/admin/official-records',
+        ADMIN_NAV,
+        new URLSearchParams('service=certificate&page=2&tab=policies'),
+      ),
+    ).toBe('/admin/official-records?tab=policies&service=certificate');
+    expect(activeNavHref('/admin/future-workspace', ADMIN_NAV)).toBeUndefined();
+  });
+
+  it('keeps the requested workspace groups ordered and gates write shortcuts', () => {
+    expect(NAV_GROUPS).toEqual([
+      'Workspace Navigation',
+      'Admission',
+      'Certificates',
+      'Course Management',
+      'Subject Management',
+      'Examination',
+      'Schools & Departments',
+      'Imports & Reports',
+      'Academic Session',
+      'Chat & Communication',
+      'Settings & Administration',
+    ]);
+    expect(visibleAdminNav(['students.write']).some((item) => item.label === 'New Admission')).toBe(
+      false,
+    );
+    expect(
+      visibleAdminNav(['students.write', 'registrations.write']).some(
+        (item) => item.label === 'New Admission',
+      ),
+    ).toBe(true);
+    expect(
+      visibleAdminNav(VIEWER.permissions).some((item) => item.label === 'Staff Users & Roles'),
+    ).toBe(false);
   });
 
   it('filters navigation by the existing permissions and persists sidebar collapse', async () => {
@@ -73,7 +108,7 @@ describe('UI-02 navigation and dashboard', () => {
     expect(await screen.findByText('123')).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Pending work' })).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('tab', { name: 'Examinations' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Examination' })).not.toBeInTheDocument();
   });
 
   it('shows a real pending total only for an authorized queue', async () => {
