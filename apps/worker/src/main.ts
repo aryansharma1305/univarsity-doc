@@ -5,7 +5,11 @@ import { razorpayPolicy } from '@docversity/payments/server';
 import { QUEUE_NAMES } from '@docversity/types';
 import { bullmqConnection } from './connection.ts';
 import { createWorkers } from './create-workers.ts';
-import { razorpayProcessor, scheduleRazorpayReconcile } from './razorpay.ts';
+import {
+  razorpayProcessor,
+  scheduleRazorpayReconcile,
+  unscheduleRazorpayReconcile,
+} from './razorpay.ts';
 import { loadRootEnv, loadWorkerEnv } from './env.ts';
 
 function log(message: string): void {
@@ -32,19 +36,23 @@ function main(): void {
     // Mode off (default, production): no payments queue is consumed or scheduled at all.
     ...(razorpayPolicy(env) ? { payments: razorpayProcessor({ prisma, env }) } : {}),
   });
-  if (razorpayPolicy(env)) {
+  {
     const queue = new Queue(QUEUE_NAMES.payments, {
       connection: bullmqConnection(env.REDIS_URL),
       prefix: env.QUEUE_PREFIX,
     });
-    void scheduleRazorpayReconcile(queue)
+    const enabled = razorpayPolicy(env) !== null;
+    void (enabled ? scheduleRazorpayReconcile(queue) : unscheduleRazorpayReconcile(queue))
       .then(() => {
-        log('razorpay: mode=test reconciliation scheduled');
+        if (enabled) log('razorpay: mode=test reconciliation scheduled');
       })
       .catch((error: unknown) => {
         log(
-          `razorpay: could not schedule reconciliation: ${error instanceof Error ? error.message : 'error'}`,
+          `razorpay: could not ${enabled ? 'schedule' : 'clear'} reconciliation: ${error instanceof Error ? error.message : 'error'}`,
         );
+      })
+      .finally(() => {
+        void queue.close();
       });
   }
 

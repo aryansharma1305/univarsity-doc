@@ -7,6 +7,7 @@ import {
   RAZORPAY_RECONCILE_EVERY_MS,
   razorpayProcessor,
   scheduleRazorpayReconcile,
+  unscheduleRazorpayReconcile,
 } from '../src/razorpay.ts';
 
 // Synthetic values only; no network (the HTTP port is a fake that must never be called here).
@@ -62,5 +63,19 @@ describe('worker Razorpay reconciliation job (SIMULATED, no services)', () => {
         opts: { attempts: 1, removeOnComplete: 50, removeOnFail: 50 },
       },
     ]);
+  });
+  it('removes a leftover schedule when the mode is off', async () => {
+    const removeJobScheduler = vi.fn(() => Promise.resolve(true));
+    await unscheduleRazorpayReconcile({ removeJobScheduler });
+    expect(removeJobScheduler).toHaveBeenCalledWith('razorpay-reconcile');
+  });
+  it('accepts only an https alert webhook URL', () => {
+    expect(() =>
+      loadWorkerEnv({ ...base, PAYMENTS_ALERT_WEBHOOK_URL: 'http://ntfy.example.invalid/x' }),
+    ).toThrow(/PAYMENTS_ALERT_WEBHOOK_URL/);
+    expect(
+      loadWorkerEnv({ ...base, PAYMENTS_ALERT_WEBHOOK_URL: 'https://ntfy.example.invalid/x' })
+        .PAYMENTS_ALERT_WEBHOOK_URL,
+    ).toBe('https://ntfy.example.invalid/x');
   });
 });

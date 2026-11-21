@@ -2,6 +2,7 @@ import type { Processor, Queue } from 'bullmq';
 import type { PrismaClient } from '@docversity/database';
 import { RazorpayClient, fetchRazorpayPort, type RazorpayHttpPort } from '@docversity/payments';
 import {
+  alertNotifier,
   prismaAuditWriter,
   razorpayPolicy,
   reconcileRazorpay,
@@ -42,9 +43,16 @@ export function razorpayProcessor(deps: RazorpayJobDeps): Processor {
       prisma: deps.prisma,
       client: new RazorpayClient(policy.keyId, policy.keySecret, deps.port ?? fetchRazorpayPort()),
       audit: prismaAuditWriter(deps.prisma),
-      notify: deps.notify ?? logAlert,
+      notify: deps.notify ?? alertNotifier(deps.env.PAYMENTS_ALERT_WEBHOOK_URL, logAlert),
     });
   };
+}
+
+/** Mode off: remove a schedule left by an earlier test-mode run, so nothing keeps firing. */
+export async function unscheduleRazorpayReconcile(
+  queue: Pick<Queue, 'removeJobScheduler'>,
+): Promise<void> {
+  await queue.removeJobScheduler('razorpay-reconcile');
 }
 
 /** Idempotent repeatable schedule (one scheduler id, so restarts never duplicate it). */
