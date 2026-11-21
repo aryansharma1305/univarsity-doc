@@ -48,7 +48,7 @@ export function StudentsView() {
   const canWriteRegistrations = useCan(PERMISSIONS.registrationsWrite);
   const canCreate = canEdit && canWriteRegistrations;
   const canImport = useCan(PERMISSIONS.importsStudentsRun);
-  const { values, page, update } = useListParams(['program', 'session', 'status'] as const);
+  const { values, page, update } = useListParams(['program', 'session', 'status', 'view'] as const);
   const query = useStudents({
     page,
     search: values.search || undefined,
@@ -112,8 +112,12 @@ export function StudentsView() {
   return (
     <>
       <PageHeader
-        title="Students"
-        description="Students and their registrations."
+        title={values.view === 'session' ? 'Session-wise Student Records' : 'Students'}
+        description={
+          values.view === 'session'
+            ? 'Choose an academic session to view its student registrations.'
+            : 'Students and their registrations.'
+        }
         actions={
           (canCreate || canImport) && (
             <>

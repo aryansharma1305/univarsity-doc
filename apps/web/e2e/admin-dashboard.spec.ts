@@ -56,10 +56,10 @@ test('workspace keyboard, role visibility and reduced motion', async ({ page }) 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await signIn(page, fixtures().viewer);
   await expect(page.getByRole('heading', { name: 'Pending work' })).toHaveCount(0);
-  const academic = page.getByRole('tab', { name: 'Academic', exact: true });
+  const academic = page.getByRole('tab', { name: 'Subject Management', exact: true });
   await academic.focus();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Examinations', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('tab', { name: 'Examination', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
   );
@@ -69,6 +69,32 @@ test('workspace keyboard, role visibility and reduced motion', async ({ page }) 
   await expect(page.getByRole('link', { name: 'Payment Settings', exact: true })).toHaveCount(0);
   await expectNoSeriousA11yViolations(page);
   await capture(page, 'ui02-viewer-reduced-motion');
+});
+
+test('workspace shortcuts open the selected policy and document type', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, fixtures().admin);
+
+  const sidebar = page.getByRole('navigation', { name: 'Sections', exact: true });
+  await sidebar.getByRole('link', { name: 'Admission Letter Verification', exact: true }).click();
+  await expect(page.getByRole('tab', { name: 'Policies', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByLabel('Verification service', { exact: true })).toHaveValue(
+    'admission-letter',
+  );
+
+  const transcript = sidebar.getByRole('link', { name: 'Transcript', exact: true });
+  await transcript.click();
+  await expect(transcript).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('tab', { name: 'Documents', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByLabel('Official document type', { exact: true })).toHaveValue(
+    'TRANSCRIPT',
+  );
 });
 
 test('dashboard loading and empty states remain honest', async ({ page }) => {

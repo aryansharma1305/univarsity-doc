@@ -33,7 +33,8 @@ const STATUS_FILTER = [
 export function ProgramsView() {
   const router = useRouter();
   const canWrite = useCan(PERMISSIONS.programsWrite);
-  const { values, page, update } = useListParams(['status', 'department'] as const);
+  const { values, page, update } = useListParams(['status', 'department', 'view'] as const);
+  const curriculumView = values.view === 'curricula';
   const query = usePrograms({
     page,
     search: values.search || undefined,
@@ -60,9 +61,13 @@ export function ProgramsView() {
 
   const actionsFor = (program: Program) => [
     {
-      label: 'Open course',
+      label: curriculumView ? 'Open curricula' : 'Open course',
       onSelect: () => {
-        router.push(`/admin/programs/${program.id}`);
+        router.push(
+          curriculumView
+            ? `/admin/programs/${program.id}/curricula`
+            : `/admin/programs/${program.id}`,
+        );
       },
     },
     ...(canWrite
@@ -90,7 +95,11 @@ export function ProgramsView() {
       header: 'Course',
       cell: ({ row }) => (
         <Link
-          href={`/admin/programs/${row.original.id}`}
+          href={
+            curriculumView
+              ? `/admin/programs/${row.original.id}/curricula`
+              : `/admin/programs/${row.original.id}`
+          }
           className="font-medium text-brand hover:underline"
         >
           {row.original.name}
@@ -128,8 +137,12 @@ export function ProgramsView() {
   return (
     <>
       <PageHeader
-        title="Course Management"
-        description="Courses (programs), their academic structure and curriculum versions."
+        title={curriculumView ? 'Course-wise Subject Mapping' : 'Course Management'}
+        description={
+          curriculumView
+            ? 'Choose a course to assign subjects and configure credits and marks in its curriculum.'
+            : 'Courses (programs), their academic structure and curriculum versions.'
+        }
         actions={
           canWrite && (
             <Button
