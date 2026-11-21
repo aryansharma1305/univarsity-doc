@@ -15,6 +15,11 @@ import { VerificationPoliciesService } from './verification-policies.service.js'
 import { OfficialResultsService } from './official-results.service.js';
 import { verificationUnavailable } from './public-verification.service.js';
 import { AppError } from '../common/app-error.js';
+import {
+  AnonymousVerificationService,
+  mask,
+  REGISTRATION_MESSAGES,
+} from './anonymous-verification.service.js';
 @Injectable()
 export class OfficialVerificationService {
   constructor(
@@ -24,6 +29,7 @@ export class OfficialVerificationService {
     private readonly audit: AuditService,
     private readonly hasher: IdentifierHasher,
     private readonly limiter: RateLimiter,
+    private readonly anonymous: AnonymousVerificationService,
   ) {}
   async check(
     service: PublicVerificationService,
@@ -75,10 +81,14 @@ export class OfficialVerificationService {
         if (input.token)
           response = result('INVALID', 'Use your registration number and student sign in.');
         else if (!studentId)
-          response = result(
-            'AUTHENTICATION_REQUIRED',
-            'Sign in to your student account to check this record.',
-          );
+          // Anonymous registration lookup only where a course's approved policy authorises it.
+          response =
+            service === 'registration' && (await this.anonymous.anyAnonymous('registration'))
+              ? await this.anonymous.registration(input.reference ?? '', result)
+              : result(
+                  'AUTHENTICATION_REQUIRED',
+                  'Sign in to your student account to check this record.',
+                );
         else {
           const registration = await this.prisma.client.studentRegistration.findFirst({
             where: {
@@ -100,10 +110,9 @@ export class OfficialVerificationService {
           else if (service === 'registration')
             response = result(
               registration.status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE',
-              registration.status === 'ACTIVE'
-                ? 'This registration is verified.'
-                : 'This registration is inactive or suspended.',
+              REGISTRATION_MESSAGES[registration.status],
               {
+                recordStatus: registration.status,
                 maskedReference: mask(registration.registrationNumber),
                 ...(policy.definition.discloseProgram
                   ? { program: registration.program.name }
@@ -112,6 +121,7 @@ export class OfficialVerificationService {
             );
           else {
             const rows = await this.results.list(studentId, {
+              owner: true,
               registrationId: registration.id,
               periodNumber: input.periodNumber,
               examinationId: input.examinationId,
@@ -181,6 +191,12 @@ export class OfficialVerificationService {
                 ...(policy.definition.discloseIssueDate && c.issueDate
                   ? { issueDate: c.issueDate.toISOString().slice(0, 10) }
                   : {}),
+                ...(await this.anonymous.documentDetails(
+                  service,
+                  c,
+                  c.issueDate?.toISOString().slice(0, 10),
+                  input.token !== undefined,
+                )),
               },
             );
         }
@@ -202,7 +218,4 @@ export class OfficialVerificationService {
       throw verificationUnavailable();
     }
   }
-}
-function mask(s: string) {
-  return `••••${s.length > 4 ? s.slice(-4) : s.slice(-1)}`;
 }

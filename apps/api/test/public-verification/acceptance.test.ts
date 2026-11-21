@@ -77,10 +77,12 @@ const s = {
   programSubjectId: '',
   examinationId: '',
   policies: {} as Record<Service, string>,
+  publicPolicies: {} as Record<Service, string>,
 };
 interface Learner {
   registrationId: string;
   registrationNumber: string;
+  rollNumber: string;
   agent: Agent;
 }
 let alice: Learner, bob: Learner;
@@ -89,6 +91,17 @@ const docs = {
   transcript: { id: '', number: '', token: '' },
 };
 let resultId = '';
+let marksheetToken = '';
+/** POST to an anonymous public-verification route (no student session), budgets reset first. */
+async function anon(path: string, body: Record<string, unknown>, app = on) {
+  await resetBudgets(app);
+  return http(app)
+    .post(`/api/v1/public/verify/${path}`)
+    .send({ contractVersion: 2, ...body });
+}
+const disclosed = (fields: string[], documentWithCredential: boolean) => ({
+  publicDisclosure: { anonymousLookup: true, fields, documentWithCredential },
+});
 const pdf = staticPdf('', 'ACCEPTANCE');
 
 async function resetBudgets(app: INestApplication) {
@@ -119,12 +132,14 @@ async function verify(
 }
 async function learner(prefix: string): Promise<Learner> {
   const registrationNumber = `000${prefix}${String(Date.now()).slice(-6)}${randomBytes(2).toString('hex').toUpperCase()}`;
+  const rollNumber = `ROLL-${prefix}-${randomBytes(3).toString('hex').toUpperCase()}`;
   const created = (
     await people.registrar
       .post('students', {
         student: { fullName: `Acceptance Learner ${prefix}` },
         registration: {
           registrationNumber,
+          rollReferenceNumber: rollNumber,
           programId: s.programId,
           academicSessionId: s.sessionId,
         },
@@ -152,7 +167,7 @@ async function learner(prefix: string): Promise<Learner> {
   expect((await activate(agent, { registrationNumber, activationCode: code ?? '' })).status).toBe(
     200,
   );
-  return { registrationId, registrationNumber, agent };
+  return { registrationId, registrationNumber, rollNumber, agent };
 }
 async function upload(by: Staff, metadata: Record<string, unknown>, file = pdf) {
   return by.agent
@@ -774,6 +789,224 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     await bob.agent.get(`/api/v1/student/results/${resultId}`).expect(404);
   });
 
+  it('B1 anonymous-disclosure policies: service allowlists are enforced; approver differs from proposer', async () => {
+    const propose = (service: Service, extra: Record<string, unknown>) =>
+      people.proposer.post('verification-policies', {
+        service,
+        programId: s.programId,
+        definition: {
+          ...DEFINITION,
+          ...(service === 'certificate' ? { application: APPLICATION } : {}),
+          ...extra,
+        },
+      });
+    // Fields a service may never disclose, and fields that do not exist, are refused.
+    expect((await propose('registration', disclosed(['RESULT_OUTCOME'], false))).status).toBe(400);
+    expect((await propose('registration', disclosed(['DATE_OF_BIRTH'], false))).status).toBe(400);
+    expect((await propose('result', disclosed(['STUDENT_PHOTO'], false))).status).toBe(400);
+    const wanted: Record<Service, ReturnType<typeof disclosed>> = {
+      registration: disclosed(
+        [
+          'STUDENT_NAME',
+          'REGISTRATION_NUMBER',
+          'PROGRAM',
+          'COURSE_LEVEL',
+          'COURSE_DURATION',
+          'ACADEMIC_SESSION',
+        ],
+        false,
+      ),
+      'admission-letter': disclosed(['STUDENT_NAME', 'PROGRAM', 'ISSUE_DATE'], true),
+      certificate: disclosed(['STUDENT_NAME', 'CERTIFICATE_TYPE', 'ISSUE_DATE'], true),
+      result: disclosed(['ACADEMIC_SESSION', 'RESULT_OUTCOME'], true),
+    };
+    for (const service of Object.keys(wanted) as Service[]) {
+      const p = (await propose(service, wanted[service]).expect(201)).body as { id: string };
+      await people.proposer.post(`verification-policies/${p.id}/approve`).expect(403);
+      await people.policyApprover.post(`verification-policies/${p.id}/approve`).expect(200);
+      s.publicPolicies[service] = p.id;
+    }
+  });
+
+  it('B2 registration without sign-in: approved fields only; unknown and not-enabled records look identical', async () => {
+    const r = await verify('registration', { reference: alice.registrationNumber });
+    expect(r.http).toBe(200);
+    expect(r.headers['cache-control']).toBe('no-store');
+    expect(r.body).toMatchObject({
+      status: 'ACTIVE',
+      recordStatus: 'ACTIVE',
+      message: 'This student registration is valid and active.',
+    });
+    expect(r.body?.details).toEqual({
+      studentName: 'Acceptance Learner A',
+      registrationNumber: alice.registrationNumber,
+      program: s.programName,
+      courseLevel: 'CERTIFICATE',
+      courseDuration: '1 year',
+      academicSession: 'Acceptance session',
+    });
+    // Never disclosed, whatever a policy says: no IDs, roll numbers, dates of birth or photos.
+    expect(JSON.stringify(r.body)).not.toMatch(/registrationId|studentId|ROLL-|dateOfBirth|photo/i);
+    // A registration in a course without an anonymous policy answers exactly like an unknown number.
+    const other = programSchema.parse(
+      (
+        await people.registrar
+          .post('programs', {
+            code: uniqueCode('ACO'),
+            name: 'Acceptance other course',
+            level: 'CERTIFICATE',
+          })
+          .expect(201)
+      ).body,
+    );
+    const hidden = `000H${randomBytes(4).toString('hex').toUpperCase()}`;
+    await people.registrar
+      .post('students', {
+        student: { fullName: 'Acceptance Hidden Learner' },
+        registration: {
+          registrationNumber: hidden,
+          programId: other.id,
+          academicSessionId: s.sessionId,
+        },
+      })
+      .expect(201);
+    const unknown = await verify('registration', { reference: '000NOPE0000' });
+    const notEnabled = await verify('registration', { reference: hidden });
+    expect(unknown.body?.status).toBe('NOT_FOUND');
+    expect(notEnabled.body).toEqual(unknown.body);
+    // The signed-in owner path is unchanged (no anonymous detail block).
+    const own = await verify(
+      'registration',
+      { reference: alice.registrationNumber },
+      { as: alice.agent },
+    );
+    expect(own.body?.status).toBe('ACTIVE');
+    expect(own.body?.details).toBeUndefined();
+  });
+
+  it('B3 documents without sign-in: approved fields; PDF only for the QR credential holder', async () => {
+    const byNumber = await verify('admission-letter', { reference: docs.admission.number });
+    expect(byNumber.body).toMatchObject({ status: 'VALID', documentAccess: false });
+    expect(byNumber.body?.details).toEqual({
+      studentName: 'Acceptance Learner A',
+      program: s.programName,
+      issueDate: '2026-11-01',
+    });
+    const byToken = await verify('admission-letter', { token: docs.admission.token });
+    expect(byToken.body?.documentAccess).toBe(true);
+    const transcript = await verify('certificate', { reference: docs.transcript.number });
+    expect(transcript.body?.details).toMatchObject({
+      certificateType: 'TRANSCRIPT',
+      issueDate: '2026-11-02',
+    });
+    const file = await anon('document', {
+      service: 'admission-letter',
+      token: docs.admission.token,
+    });
+    expect(file.status).toBe(200);
+    expect(file.headers['content-type']).toBe('application/pdf');
+    expect(file.headers['cache-control']).toBe('private, no-store');
+    expect(Buffer.from(file.body as Buffer).equals(pdf)).toBe(true);
+    // A document number is not a credential; a token only opens its own document kind.
+    expect(
+      (await anon('document', { service: 'admission-letter', reference: docs.admission.number }))
+        .status,
+    ).toBe(400);
+    expect(
+      (await anon('document', { service: 'certificate', token: docs.admission.token })).status,
+    ).toBe(404);
+    expect((await anon('document', { service: 'certificate', token: 'A'.repeat(43) })).status).toBe(
+      404,
+    );
+    expect(
+      (
+        await http(on)
+          .post('/api/v1/public/verify/document?token=x')
+          .send({ contractVersion: 2, service: 'certificate', token: docs.transcript.token })
+      ).status,
+    ).toBe(400);
+    const audits = await testDb().auditLog.findMany({
+      where: {
+        action: 'PUBLIC_VERIFICATION_CHECKED',
+        metadata: { path: ['kind'], equals: 'DOCUMENT' },
+      },
+    });
+    expect(audits.length).toBeGreaterThan(0);
+    expect(JSON.stringify(audits)).not.toContain(docs.admission.token);
+  });
+
+  it('B4 results without sign-in: course + roll + semester give a status only; marks need the QR credential', async () => {
+    const options = await anon('result-options', {});
+    expect(options.status).toBe(200);
+    expect((options.body as { programs: unknown[] }).programs).toContainEqual({
+      id: s.programId,
+      name: s.programName,
+      structure: 'SEMESTER',
+      periods: [1, 2],
+    });
+    const search = (body: Record<string, unknown>) =>
+      anon('result-search', { programId: s.programId, ...body });
+    const found = await search({ rollNumber: alice.rollNumber.toLowerCase(), periodNumber: 1 });
+    expect(found.status).toBe(200);
+    expect(found.body).toMatchObject({
+      status: 'VALID',
+      documentAccess: false,
+      details: {
+        program: s.programName,
+        rollNumber: `••••${alice.rollNumber.slice(-4)}`,
+        period: { structure: 'SEMESTER', number: 1 },
+        examination: 'Acceptance examination',
+        academicSession: 'Acceptance session',
+        outcome: 'PASS',
+      },
+    });
+    expect(JSON.stringify(found.body)).not.toMatch(/subjects|totalMarks|"85"|Acceptance Learner/);
+    // Unknown roll number, unpublished semester and wrong course are indistinguishable.
+    const none = await search({ rollNumber: 'ROLL-NOPE', periodNumber: 1 });
+    expect(none.body).toMatchObject({
+      status: 'NOT_FOUND',
+      message: 'No published result matches these details.',
+    });
+    expect((await search({ rollNumber: alice.rollNumber, periodNumber: 2 })).body).toEqual(
+      none.body,
+    );
+    expect((await search({ rollNumber: bob.rollNumber, periodNumber: 1 })).body).toEqual(none.body);
+    expect(
+      (await search({ rollNumber: alice.rollNumber, periodNumber: 1, registrationNumber: 'x' }))
+        .status,
+    ).toBe(400);
+
+    // The owner sees the marksheet QR link; it carries the credential in the fragment only.
+    const own = await verify(
+      'result',
+      { reference: alice.registrationNumber, periodNumber: 1 },
+      { as: alice.agent },
+    );
+    const url = own.body?.results?.[0]?.verificationUrl ?? '';
+    expect(url).toMatch(/\/verify\/result#token=[A-Za-z0-9_-]{43}$/);
+    marksheetToken = url.split('#token=')[1] ?? '';
+    const stored = await testDb().resultPublication.findUniqueOrThrow({ where: { resultId } });
+    expect(stored.verificationToken).toBe(marksheetToken);
+
+    const sheet = await anon('result-marksheet', { token: marksheetToken });
+    expect(sheet.body).toMatchObject({
+      status: 'VALID',
+      documentAccess: true,
+      details: {
+        studentName: 'Acceptance Learner A',
+        rollNumber: alice.rollNumber,
+        outcome: 'PASS',
+      },
+    });
+    const parsed = officialVerificationResponseSchema.parse(sheet.body);
+    expect(parsed.results?.[0]?.subjects[0]).toMatchObject({ totalMarks: '85', grade: 'A' });
+    expect(parsed.results?.[0]?.verificationUrl).toBeUndefined();
+    expect((await anon('result-marksheet', { token: 'B'.repeat(43) })).body).toMatchObject({
+      status: 'NOT_FOUND',
+    });
+    expect((await anon('result-marksheet', { token: 'short' })).status).toBe(400);
+  });
+
   it('A12 OFFICIAL_VERIFICATION_ENABLED=false: same records become UNAVAILABLE and OFFICIAL policies cannot be approved', async () => {
     expect(
       (await verify('admission-letter', { reference: docs.admission.number }, { app: off })).body
@@ -914,6 +1147,9 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     await alice.agent
       .get(`/api/v1/student/official-documents/${docs.transcript.id}/download`)
       .expect(404);
+    expect(
+      (await anon('document', { service: 'certificate', token: docs.transcript.token })).status,
+    ).toBe(404);
     // Revocation is terminal: a second revoke or re-issue is refused.
     await people.approver
       .post(`official-documents/${docs.transcript.id}/revoke`, { reason: 'again' })
@@ -929,6 +1165,18 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     ).toBe('UNPUBLISHED');
     const r = await testDb().result.findUniqueOrThrow({ where: { id: resultId } });
     expect(r.publicationStatus).toBe('WITHHELD');
+    expect((await anon('result-marksheet', { token: marksheetToken })).body).toMatchObject({
+      status: 'NOT_FOUND',
+    });
+    expect(
+      (
+        await anon('result-search', {
+          programId: s.programId,
+          rollNumber: alice.rollNumber,
+          periodNumber: 1,
+        })
+      ).body,
+    ).toMatchObject({ status: 'NOT_FOUND' });
     await people.approver
       .post(`official-results/${resultId}/publish`, {
         policyId: s.policies.result,
@@ -941,27 +1189,29 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     ).rejects.toThrow();
   });
 
-  it('A17 registration status is reflected; COMPLETED is reported as "inactive or suspended" (finding)', async () => {
-    const status = async () =>
+  it('A17 registration status is reflected with status-aware wording (owner and anonymous)', async () => {
+    const owner = async () =>
       (await verify('registration', { reference: bob.registrationNumber }, { as: bob.agent })).body;
-    await people.registrar
-      .patch(`registrations/${bob.registrationId}`, { status: 'COMPLETED' })
-      .expect(200);
-    // FINDING: a graduated (COMPLETED) registration gets the same status and message as a
-    // suspended one. See docs/development/public-verification-acceptance-20261117.md.
-    expect(await status()).toMatchObject({
-      status: 'INACTIVE',
-      message: 'This registration is inactive or suspended.',
-    });
-    await people.registrar
-      .patch(`registrations/${bob.registrationId}`, { status: 'SUSPENDED' })
-      .expect(200);
-    expect((await status())?.status).toBe('INACTIVE');
-    await people.policyApprover
-      .post(`verification-policies/${s.policies['admission-letter']}/withdraw`)
-      .expect(200);
+    const anonymous = async () =>
+      (await verify('registration', { reference: bob.registrationNumber })).body;
+    const cases = [
+      ['COMPLETED', 'This registration is valid. The student has completed the course.'],
+      ['SUSPENDED', 'This registration exists but is currently suspended.'],
+      ['REVOKED', 'This registration has been revoked by the university.'],
+    ] as const;
+    for (const [status, message] of cases) {
+      await people.registrar.patch(`registrations/${bob.registrationId}`, { status }).expect(200);
+      for (const body of [await owner(), await anonymous()])
+        expect(body).toMatchObject({ status: 'INACTIVE', recordStatus: status, message });
+    }
+    // Withdrawing every admission-letter policy turns the service off: no record is checked.
+    for (const id of [s.policies['admission-letter'], s.publicPolicies['admission-letter']])
+      await people.policyApprover.post(`verification-policies/${id}/withdraw`).expect(200);
     expect((await verify('admission-letter', { token: docs.admission.token })).body?.status).toBe(
       'UNAVAILABLE',
     );
+    expect(
+      (await anon('document', { service: 'admission-letter', token: docs.admission.token })).status,
+    ).toBe(404);
   });
 });

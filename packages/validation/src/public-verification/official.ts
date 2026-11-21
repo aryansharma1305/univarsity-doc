@@ -23,6 +23,63 @@ export const approvedCertificateApplicationSchema = certificateApplicationPolicy
     reviewAuthorityReference: text(200),
   })
   .strict();
+/**
+ * Anonymous (no sign-in) disclosure, per service. Only fields listed here can ever be returned to an
+ * anonymous visitor, and only those a policy explicitly lists. Photos, dates of birth, identity
+ * numbers, contact details and uploads are deliberately absent: they cannot be enabled by policy.
+ */
+export const PUBLIC_DISCLOSURE_FIELDS = {
+  registration: [
+    'STUDENT_NAME',
+    'REGISTRATION_NUMBER',
+    'REGISTRATION_DATE',
+    'PROGRAM',
+    'COURSE_LEVEL',
+    'COURSE_DURATION',
+    'SCHOOL',
+    'ACADEMIC_SESSION',
+    'ADMISSION_DATE',
+    'COMPLETION_DATE',
+  ],
+  'admission-letter': [
+    'STUDENT_NAME',
+    'REGISTRATION_NUMBER',
+    'PROGRAM',
+    'COURSE_LEVEL',
+    'COURSE_DURATION',
+    'SCHOOL',
+    'ISSUE_DATE',
+  ],
+  certificate: [
+    'STUDENT_NAME',
+    'REGISTRATION_NUMBER',
+    'PROGRAM',
+    'COURSE_LEVEL',
+    'COURSE_DURATION',
+    'SCHOOL',
+    'ISSUE_DATE',
+    'CERTIFICATE_TYPE',
+  ],
+  result: ['PROGRAM', 'ACADEMIC_SESSION', 'RESULT_OUTCOME'],
+} as const satisfies Record<z.infer<typeof publicVerificationServiceSchema>, readonly string[]>;
+export const publicDisclosureFieldSchema = z.enum([
+  ...new Set(Object.values(PUBLIC_DISCLOSURE_FIELDS).flat()),
+] as [string, ...string[]]);
+export type PublicDisclosureField = z.infer<typeof publicDisclosureFieldSchema>;
+export const publicDisclosureSchema = z
+  .object({
+    /** The university authorises lookups without a student session for this service and course. */
+    anonymousLookup: z.literal(true),
+    fields: z.array(publicDisclosureFieldSchema).max(20),
+    /**
+     * Certificates/admission letters: the issued PDF to a holder of the document's QR token.
+     * Results: the full marksheet to a holder of the publication's QR token. Never by number alone.
+     */
+    documentWithCredential: z.boolean(),
+  })
+  .strict();
+export type PublicDisclosure = z.infer<typeof publicDisclosureSchema>;
+
 export const verificationPolicyDefinitionSchema = z
   .object({
     usage: z.enum(['SYNTHETIC_ONLY', 'OFFICIAL']),
@@ -34,15 +91,28 @@ export const verificationPolicyDefinitionSchema = z
     // Registration and results use the existing student session, never DOB or a number alone.
     identityFactor: z.literal('AUTHENTICATED_OWNER'),
     resultMode: z.literal('REVIEWED_VALUES_ONLY'),
+    /** Absent = no anonymous lookup (the signed-in owner and QR paths are unchanged). */
+    publicDisclosure: publicDisclosureSchema.optional(),
   })
   .strict();
+export type VerificationPolicyDefinition = z.infer<typeof verificationPolicyDefinitionSchema>;
 export const proposeVerificationPolicySchema = z
   .object({
     service: publicVerificationServiceSchema,
     programId: z.uuid(),
     definition: verificationPolicyDefinitionSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const allowed: readonly string[] = PUBLIC_DISCLOSURE_FIELDS[value.service];
+    for (const field of value.definition.publicDisclosure?.fields ?? [])
+      if (!allowed.includes(field))
+        ctx.addIssue({
+          code: 'custom',
+          path: ['definition', 'publicDisclosure', 'fields'],
+          message: `${field} cannot be disclosed for ${value.service}.`,
+        });
+  });
 export const officialVerificationRequestSchema = z
   .object({
     contractVersion: z.literal(2),
@@ -90,8 +160,35 @@ export const officialPublishedResultSchema = z
     sgpa: z.string().nullable(),
     outcome: z.string().nullable(),
     subjects: z.array(officialSubjectSchema),
+    /** Owning student only: the marksheet's QR verification link (credential in the fragment). */
+    verificationUrl: z.url().optional(),
   })
   .strict();
+export const publicVerificationDetailsSchema = z
+  .object({
+    studentName: z.string(),
+    registrationNumber: z.string(),
+    registrationDate: z.iso.date(),
+    program: z.string(),
+    courseLevel: z.string(),
+    courseDuration: z.string(),
+    school: z.string(),
+    academicSession: z.string(),
+    admissionDate: z.iso.date(),
+    completionDate: z.iso.date(),
+    issueDate: z.iso.date(),
+    certificateType: z.string(),
+    rollNumber: z.string(),
+    period: z
+      .object({ structure: z.enum(['SEMESTER', 'YEAR']), number: z.number().int() })
+      .strict(),
+    examination: z.string(),
+    outcome: z.string(),
+  })
+  .partial()
+  .strict();
+export type PublicVerificationDetails = z.infer<typeof publicVerificationDetailsSchema>;
+
 export const officialVerificationResponseSchema = z
   .object({
     contractVersion: z.literal(2),
@@ -115,6 +212,12 @@ export const officialVerificationResponseSchema = z
     issueDate: z.string().optional(),
     maskedReference: z.string().optional(),
     results: z.array(officialPublishedResultSchema).max(100).optional(),
+    /** Anonymous lookups: only the fields the course's approved policy lists. */
+    details: publicVerificationDetailsSchema.optional(),
+    /** Registration status as recorded (ACTIVE, COMPLETED, SUSPENDED or REVOKED). */
+    recordStatus: z.enum(['ACTIVE', 'COMPLETED', 'SUSPENDED', 'REVOKED']).optional(),
+    /** The document PDF / full marksheet is available to this request's QR credential. */
+    documentAccess: z.boolean().optional(),
   })
   .strict();
 export const prepareOfficialDocumentSchema = z
@@ -311,3 +414,49 @@ export const verificationAuditListSchema = paginatedSchema(
     metadata: z.record(z.string(), z.unknown()).nullable(),
   }),
 );
+
+/** Anonymous result search: course + roll number + semester/year. Reveals a status, never marks. */
+export const publicResultSearchSchema = z
+  .object({
+    contractVersion: z.literal(2),
+    programId: z.uuid(),
+    rollNumber: z
+      .string()
+      .trim()
+      .min(1)
+      .max(64)
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
+    periodNumber: z.number().int().min(1).max(24),
+  })
+  .strict();
+export type PublicResultSearch = z.infer<typeof publicResultSearchSchema>;
+
+/** A QR credential (43-char random token) sent in the body — never in a URL query string. */
+export const publicCredentialSchema = z
+  .object({
+    contractVersion: z.literal(2),
+    token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  })
+  .strict();
+export type PublicCredential = z.infer<typeof publicCredentialSchema>;
+export const publicDocumentRequestSchema = publicCredentialSchema
+  .extend({ service: z.enum(['certificate', 'admission-letter']) })
+  .strict();
+export type PublicDocumentRequest = z.infer<typeof publicDocumentRequestSchema>;
+
+/** Courses whose approved result policy allows anonymous search, with their real period structure. */
+export const publicResultOptionsSchema = z
+  .object({
+    programs: z.array(
+      z
+        .object({
+          id: z.uuid(),
+          name: z.string(),
+          structure: z.enum(['SEMESTER', 'YEAR']),
+          periods: z.array(z.number().int().min(1)),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type PublicResultOptions = z.infer<typeof publicResultOptionsSchema>;
