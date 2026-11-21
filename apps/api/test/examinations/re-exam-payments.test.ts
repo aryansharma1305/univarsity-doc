@@ -1596,6 +1596,7 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
     let createFailure: { status: number; afterStore: boolean } | null = null;
     let malformedFetch = false;
     const refunds: { key: string; body: Record<string, unknown> & { id: string } }[] = [];
+    let nextRefundFailure: { status: number; afterStore: boolean } | null = null;
     const port: RazorpayHttpPort = (request) => {
       calls.push(request);
       if (request.method === 'POST' && request.path === '/orders') {
@@ -1644,7 +1645,17 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
         const key = request.headers['X-Refund-Idempotency'] ?? '';
         const prior = refunds.find((r) => r.key === key);
         if (prior) return Promise.resolve(reply(prior.body));
-        const body = JSON.parse(request.body ?? '{}') as { amount: number; receipt?: string };
+        const refundFailure = nextRefundFailure;
+        nextRefundFailure = null;
+        if (refundFailure && !refundFailure.afterStore)
+          return Promise.resolve(
+            reply({ error: { description: 'refused' } }, refundFailure.status),
+          );
+        const body = JSON.parse(request.body ?? '{}') as {
+          amount: number;
+          receipt?: string;
+          notes?: Record<string, string>;
+        };
         const refund = {
           id: `rfnd_${rid()}`,
           entity: 'refund',
@@ -1653,10 +1664,24 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
           payment_id: refundFor[1] ?? '',
           status: 'pending',
           receipt: body.receipt ?? null,
+          notes: body.notes ?? {},
         };
         refunds.push({ key, body: refund });
+        // Razorpay refunded, but the answer we get is an error (lost or garbled response).
+        if (refundFailure)
+          return Promise.resolve(
+            reply({ error: { description: 'refused' } }, refundFailure.status),
+          );
         return Promise.resolve(reply(refund));
       }
+      const refundsOf = /^\/payments\/(pay_[A-Za-z0-9]+)\/refunds$/.exec(request.path);
+      if (request.method === 'GET' && refundsOf)
+        return Promise.resolve(
+          reply({
+            entity: 'collection',
+            items: refunds.filter((r) => r.body.payment_id === refundsOf[1]).map((r) => r.body),
+          }),
+        );
       const oneRefund = /^\/refunds\/(rfnd_[A-Za-z0-9]+)$/.exec(request.path);
       const knownRefund = refunds.find((r) => r.body.id === oneRefund?.[1]);
       if (request.method === 'GET' && knownRefund) return Promise.resolve(reply(knownRefund.body));
@@ -1690,6 +1715,9 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
         malformedFetch = on;
       },
       refunds,
+      failNextRefund: (status: number, afterStore = false) => {
+        nextRefundFailure = { status, afterStore };
+      },
     };
   }
   type Provider = ReturnType<typeof provider>;
@@ -2577,16 +2605,16 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
           })
           .expect(200)
       ).body as { id: string };
-      // Maker-checker: the requester can neither approve nor reject.
+      // Approving needs reExamPayments.refundApprove (SUPER_ADMIN only by default).
       await approver.post(`payment-buttons/razorpay/refunds/${first.id}/approve`).expect(403);
-      await approver.post(`payment-buttons/razorpay/refunds/${second.id}/reject`).expect(403);
-      await approver2.post(`payment-buttons/razorpay/refunds/${second.id}/reject`).expect(200);
-      const approved = await approver2
+      await approver2.post(`payment-buttons/razorpay/refunds/${second.id}/reject`).expect(403);
+      await checker.post(`payment-buttons/razorpay/refunds/${second.id}/reject`).expect(200);
+      const approved = await checker
         .post(`payment-buttons/razorpay/refunds/${first.id}/approve`)
         .expect(200);
       expect(approved.body).toEqual({ id: first.id, status: 'PENDING' });
       // Idempotent: approving again sends nothing new.
-      await approver2.post(`payment-buttons/razorpay/refunds/${first.id}/approve`).expect(200);
+      await checker.post(`payment-buttons/razorpay/refunds/${first.id}/approve`).expect(200);
       const sent = fake.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/refund'));
       expect(sent).toHaveLength(1);
       const row = await testDb().razorpayRefund.findUniqueOrThrow({ where: { id: first.id } });
@@ -2648,6 +2676,7 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
         refundableMinor: p.due.amountMinor - partial,
       });
       expect(workspace.refundRequests.map((r) => r.status)).toEqual(['PROCESSED', 'REJECTED']);
+      expect(workspace.refundRequests.every((r) => r.source === 'STAFF')).toBe(true);
       expect(workspace.audit.map((a) => a.action)).toEqual(
         expect.arrayContaining([
           'RAZORPAY_REFUND_REQUESTED',
@@ -2656,10 +2685,219 @@ describe('Razorpay test-mode Orders pilot (synthetic secrets, fake provider port
           'RAZORPAY_REFUND_UPDATED',
         ]) as string[],
       );
+      // Maker-checker even with the approve permission: a SUPER_ADMIN cannot decide their own request.
+      const own = (
+        await maker
+          .post(`${base}/refunds`, { amountMinor: 1_000, reason: 'OVERPAYMENT' })
+          .expect(200)
+      ).body as { id: string };
+      await maker.post(`payment-buttons/razorpay/refunds/${own.id}/approve`).expect(403);
+      await maker.post(`payment-buttons/razorpay/refunds/${own.id}/reject`).expect(403);
+      await checker.post(`payment-buttons/razorpay/refunds/${own.id}/reject`).expect(200);
       // The academic application and the obligation never change because of a refund.
       expect(
         (await testDb().reExamPayment.findUniqueOrThrow({ where: { id: p.payment.id } })).status,
       ).toBe('SUBMITTED');
+    });
+
+    it('leases refund sends and never marks FAILED without a provider answer (concurrency, races, lost responses)', async () => {
+      const fake = provider();
+      const p = await paidOrder(fake);
+      await expectStatus(
+        deliver(captureEvent('order.paid', p.orderId, p.providerPaymentId, p.due.amountMinor)),
+        200,
+      );
+      enable([p.student.registrationId], fake, 'partial');
+      const base = `payment-buttons/razorpay/re-exam-payments/${p.payment.id}`;
+      const request = async () =>
+        (
+          (
+            await maker
+              .post(`${base}/refunds`, { amountMinor: 10_000, reason: 'OVERPAYMENT' })
+              .expect(200)
+          ).body as { id: string }
+        ).id;
+      const approve = (who: Staff, id: string) =>
+        who.post(`payment-buttons/razorpay/refunds/${id}/approve`);
+      const sends = async (id: string) => {
+        const key = (await testDb().razorpayRefund.findUniqueOrThrow({ where: { id } }))
+          .idempotencyKey;
+        return fake.calls.filter(
+          (c) =>
+            c.method === 'POST' &&
+            c.path.endsWith('/refund') &&
+            c.headers['X-Refund-Idempotency'] === key,
+        ).length;
+      };
+      const status = async (id: string) =>
+        (await testDb().razorpayRefund.findUniqueOrThrow({ where: { id } })).status;
+      // Two approvers at once: one send.
+      const r1 = await request();
+      const both = await Promise.all([approve(checker, r1), approve(thirdAdmin, r1)]);
+      expect(both.map((r) => r.status)).toEqual([200, 200]);
+      expect(await sends(r1)).toBe(1);
+      // Approval racing the worker's reconciliation: one send.
+      const reconciliation = app.get(RazorpayReconciliationService);
+      const r2 = await request();
+      await Promise.all([approve(checker, r2), reconciliation.run()]);
+      await reconciliation.run();
+      expect(await sends(r2)).toBe(1);
+      expect(await status(r2)).toBe('PENDING');
+      // Razorpay refunded but answered with an error: found by receipt, never FAILED.
+      fake.failNextRefund(400, true);
+      const r3 = await request();
+      expect((await approve(checker, r3).expect(200)).body).toEqual({ id: r3, status: 'PENDING' });
+      expect(
+        (await testDb().razorpayRefund.findUniqueOrThrow({ where: { id: r3 } })).providerRefundId,
+      ).toMatch(/^rfnd_/);
+      // Refused and not at Razorpay: stays SENDING with headroom reserved, and alerts.
+      const alerts = vi.spyOn(app.get(PaymentAlertsService), 'notify');
+      fake.failNextRefund(400, false);
+      const r4 = await request();
+      expect((await approve(checker, r4).expect(200)).body).toEqual({ id: r4, status: 'SENDING' });
+      expect(await testDb().razorpayRefund.findUniqueOrThrow({ where: { id: r4 } })).toMatchObject({
+        status: 'SENDING',
+        failureReason: 'REJECTED',
+      });
+      expect(alerts.mock.calls.map(([a]) => a.kind)).toContain('REFUND_FAILED');
+      const remaining = p.due.amountMinor - 40_000;
+      await maker
+        .post(`${base}/refunds`, { amountMinor: remaining + 1, reason: 'OVERPAYMENT' })
+        .expect(409);
+      // Reconciliation looks it up (nothing there), then resends with the same key.
+      await reconciliation.run();
+      expect(await status(r4)).toBe('PENDING');
+      expect(await sends(r4)).toBe(2);
+    });
+
+    it('refunds flagged refund-candidate captures and records dashboard refunds', async () => {
+      const fake = provider();
+      const a = await paidOrder(fake);
+      await testDb().reExamPayment.update({
+        where: { id: a.payment.id },
+        data: { status: 'VOID', voidedAt: new Date(), voidReason: 'SYNTHETIC_TEST' },
+      });
+      await expectStatus(createOrder(a.student.agent, a.payment.id), 409); // abandons the order
+      await expectStatus(
+        deliver(
+          captureEvent('payment.captured', a.orderId, a.providerPaymentId, a.due.amountMinor),
+        ),
+        200,
+      );
+      enable([a.student.registrationId], fake, 'partial');
+      const base = `payment-buttons/razorpay/re-exam-payments/${a.payment.id}`;
+      const ws = razorpayWorkspaceSchema.parse((await checker.get(base).expect(200)).body);
+      expect(ws.refundCandidates).toEqual([
+        expect.objectContaining({
+          providerPaymentId: a.providerPaymentId,
+          reason: 'ORDER_NOT_OPEN',
+          refundableMinor: a.due.amountMinor,
+        }) as unknown,
+      ]);
+      await maker.post(`${base}/refunds`, { reason: 'LATE_CAPTURE' }).expect(404); // no PAID order
+      const id = (
+        (
+          await maker
+            .post(`${base}/refunds`, {
+              providerPaymentId: a.providerPaymentId,
+              reason: 'LATE_CAPTURE',
+            })
+            .expect(200)
+        ).body as { id: string }
+      ).id;
+      await maker
+        .post(`${base}/refunds`, {
+          providerPaymentId: a.providerPaymentId,
+          amountMinor: 1,
+          reason: 'LATE_CAPTURE',
+        })
+        .expect(409);
+      expect(
+        (await checker.post(`payment-buttons/razorpay/refunds/${id}/approve`).expect(200)).body,
+      ).toEqual({ id, status: 'PENDING' });
+
+      // A refund made in the Razorpay dashboard for one of our payments is recorded, not ignored.
+      const b = await paidOrder(fake);
+      await expectStatus(
+        deliver(captureEvent('order.paid', b.orderId, b.providerPaymentId, b.due.amountMinor)),
+        200,
+      );
+      const dashboardRefund = (paymentId: string, refundId: string) => ({
+        entity: 'event',
+        account_id: merchant,
+        event: 'refund.processed',
+        created_at: Math.floor(Date.now() / 1000),
+        payload: {
+          refund: {
+            entity: {
+              id: refundId,
+              entity: 'refund',
+              amount: 5_000,
+              currency: 'INR',
+              payment_id: paymentId,
+              status: 'processed',
+              receipt: null,
+            },
+          },
+        },
+      });
+      await expectStatus(deliver(dashboardRefund(b.providerPaymentId, `rfnd_${rid()}`)), 200);
+      const recorded = await testDb().razorpayRefund.findFirstOrThrow({
+        where: { providerPaymentId: b.providerPaymentId },
+      });
+      expect(recorded).toMatchObject({
+        source: 'DASHBOARD',
+        status: 'PROCESSED',
+        requestedByUserId: null,
+      });
+      await maker
+        .post(`payment-buttons/razorpay/re-exam-payments/${b.payment.id}/refunds`, {
+          amountMinor: b.due.amountMinor,
+          reason: 'OVERPAYMENT',
+        })
+        .expect(409);
+      // A refund for a payment that is not ours is only recorded as ignored.
+      const strangerId = `evt_${randomUUID()}`;
+      await expectStatus(
+        deliver(dashboardRefund(`pay_${rid()}`, `rfnd_${rid()}`), strangerId),
+        200,
+      );
+      expect(
+        await testDb().razorpayWebhookIgnored.count({
+          where: { eventId: strangerId, reason: 'UNHANDLED_EVENT' },
+        }),
+      ).toBe(1);
+    });
+
+    it('never abandons an order while Razorpay has a created or authorized payment on it', async () => {
+      const fake = provider();
+      const o = await obligation();
+      enable([o.student.registrationId], fake);
+      const view = razorpayOrderViewSchema.parse(
+        (await expectStatus(createOrder(o.student.agent, o.payment.id), 200)).body,
+      );
+      const inFlight = `pay_${rid()}`;
+      fake.payments.set(inFlight, {
+        id: inFlight,
+        entity: 'payment',
+        amount: view.amountMinor,
+        currency: view.currency,
+        status: 'created',
+        captured: false,
+        amount_refunded: 0,
+        order_id: view.orderId,
+      });
+      const orders = app.get(RazorpayOrdersService);
+      orders.orderTtlMs = 0;
+      try {
+        await app.get(RazorpayReconciliationService).run();
+        expect((await orderRow(view.orderId)).status).toBe('CREATED');
+        fake.payments.delete(inFlight);
+        await app.get(RazorpayReconciliationService).run();
+        expect((await orderRow(view.orderId)).status).toBe('ABANDONED');
+      } finally {
+        orders.orderTtlMs = 30 * 60_000;
+      }
     });
 
     it('reconciles uncertain orders: stale reservation, authorized-uncaptured, never paid without capture', async () => {
