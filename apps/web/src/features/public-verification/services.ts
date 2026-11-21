@@ -20,7 +20,7 @@ export const SERVICES = {
   result: {
     title: 'Check Result',
     label: 'Registration number',
-    placeholder: 'Enter result code or registration number',
+    placeholder: 'Enter your registration number',
   },
 } satisfies Record<
   PublicVerificationService,

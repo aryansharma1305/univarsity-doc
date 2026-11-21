@@ -27,7 +27,7 @@ const services = [
     'Enter the code printed on the certificate',
   ],
   ['registration', 'Verify Registration', 'Registration number', 'Enter registration number'],
-  ['result', 'Check Result', 'Registration number', 'Enter result code or registration number'],
+  ['result', 'Check Result', 'Registration number', 'Enter your registration number'],
 ] as const;
 
 afterEach(() => {
@@ -46,7 +46,8 @@ it.each(services)(
       contractVersion: 2,
       service,
       status: 'UNAVAILABLE',
-      message: 'University verification approval is pending.',
+      message:
+        'The university has not enabled online verification for this service. No record was checked. Contact the university records office for help.',
     });
     render(<VerificationPanel service={service} />);
     expect(screen.getByRole('heading', { level: 1, name: title })).toBeInTheDocument();
@@ -63,7 +64,7 @@ it.each(services)(
     expect(request).toHaveBeenCalledWith('POST', `public/verify/${service}`, expect.anything(), {
       body: { contractVersion: 2, reference: '0000-SYNTHETIC-REFERENCE' },
     });
-    expect(screen.getByRole('status')).toHaveTextContent('approval is pending');
+    expect(screen.getByRole('status')).toHaveTextContent('No record was checked.');
     expect(screen.getByRole('status')).not.toHaveTextContent('0000-SYNTHETIC-REFERENCE');
     fireEvent.change(input, { target: { value: 'CHANGED-REFERENCE' } });
     expect(screen.getByRole('status')).toHaveTextContent('No record checked yet');
@@ -391,7 +392,8 @@ const unavailable = (service: string) => ({
   contractVersion: 2,
   service,
   status: 'UNAVAILABLE',
-  message: 'University verification approval is pending.',
+  message:
+    'The university has not enabled online verification for this service. No record was checked. Contact the university records office for help.',
 });
 const settle = () =>
   act(async () => {
