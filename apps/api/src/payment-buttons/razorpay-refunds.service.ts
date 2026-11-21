@@ -1,12 +1,18 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { refundState, submitApprovedRefund } from '@docversity/payments/server';
+import {
+  LIVE_REFUND_STATUSES,
+  REFUND_CANDIDATE,
+  refundState,
+  submitApprovedRefund,
+} from '@docversity/payments/server';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   ERROR_CODES,
   type RazorpayWorkspace,
   type RequestRazorpayRefund,
 } from '@docversity/validation';
+import type { Prisma } from '@docversity/database';
 import { PrismaService } from '../database/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AppError, Errors } from '../common/app-error.js';
@@ -19,7 +25,7 @@ import { paymentState } from './razorpay-orders.service.js';
 
 const conflict = (message: string) =>
   new AppError(HttpStatus.CONFLICT, ERROR_CODES.conflict, message);
-const LIVE = ['REQUESTED', 'APPROVED', 'PENDING', 'PROCESSED'] as const;
+const LIVE = LIVE_REFUND_STATUSES;
 
 /**
  * Razorpay TEST refunds with maker-checker: one staff member requests, a DIFFERENT one approves (DB
@@ -51,26 +57,39 @@ export class RazorpayRefundsService {
   ): Promise<{ id: string; status: string }> {
     const policy = this.enabledPolicy();
     const refund = await this.prisma.client.$transaction(async (tx) => {
-      const order = await tx.razorpayOrder.findFirst({ where: { paymentId, status: 'PAID' } });
-      if (!order?.providerPaymentId) throw Errors.notFound();
+      // The order's PAID payment, or a flagged refund-candidate capture on one of its orders.
+      const target = body.providerPaymentId
+        ? await this.candidate(tx, paymentId, body.providerPaymentId)
+        : await tx.razorpayOrder.findFirst({ where: { paymentId, status: 'PAID' } }).then((o) =>
+            o?.providerPaymentId
+              ? {
+                  order: o,
+                  providerPaymentId: o.providerPaymentId,
+                  capturedMinor: o.amountMinor,
+                  currency: o.currency,
+                }
+              : null,
+          );
+      if (!target) throw Errors.notFound();
+      const { order, providerPaymentId } = target;
       await tx.$queryRaw`SELECT id FROM razorpay_orders WHERE id = ${order.id}::uuid FOR UPDATE`;
       const live = await tx.razorpayRefund.aggregate({
-        where: { orderId: order.id, status: { in: [...LIVE] } },
+        where: { providerPaymentId, status: { in: [...LIVE] } },
         _sum: { amountMinor: true },
       });
-      const remaining = order.amountMinor - (live._sum.amountMinor ?? 0);
+      const remaining = target.capturedMinor - (live._sum.amountMinor ?? 0);
       const amount = body.amountMinor ?? remaining;
       if (remaining <= 0 || amount > remaining)
         throw conflict('The refund would exceed the amount captured for this payment.');
-      if (policy.refunds === 'full_only' && amount !== order.amountMinor)
+      if (policy.refunds === 'full_only' && amount !== target.capturedMinor)
         throw conflict('Only full refunds are allowed by the current refund policy.');
       const key = randomUUID().replaceAll('-', '');
       const created = await tx.razorpayRefund.create({
         data: {
           orderId: order.id,
-          providerPaymentId: order.providerPaymentId,
+          providerPaymentId,
           amountMinor: amount,
-          currency: order.currency,
+          currency: target.currency,
           reason: body.reason,
           idempotencyKey: `refund-${key}`,
           receipt: `rf_${key}`,
@@ -86,13 +105,43 @@ export class RazorpayRefundsService {
           action: AUDIT_ACTIONS.razorpayRefundRequested,
           entityType: 'RazorpayRefund',
           entityId: created.id,
-          metadata: { paymentId, orderId: order.id, amountMinor: amount, reason: body.reason },
+          metadata: {
+            paymentId,
+            orderId: order.id,
+            amountMinor: amount,
+            reason: body.reason,
+            flaggedCapture: body.providerPaymentId !== undefined,
+          },
         },
         tx,
       );
       return created;
     });
     return { id: refund.id, status: refund.status };
+  }
+
+  /** A capture flagged as a refund candidate on one of this obligation's orders, with its amount. */
+  private async candidate(
+    tx: Prisma.TransactionClient,
+    paymentId: string,
+    providerPaymentId: string,
+  ) {
+    const flag = await tx.razorpayOrderEvent.findFirst({
+      where: {
+        kind: 'FLAGGED',
+        providerPaymentId,
+        reason: { in: [...REFUND_CANDIDATE] },
+        order: { paymentId },
+      },
+      include: { order: true, receipt: true },
+    });
+    if (!flag?.receipt?.captured) return null;
+    return {
+      order: flag.order,
+      providerPaymentId,
+      capturedMinor: flag.receipt.amountMinor,
+      currency: flag.receipt.currency,
+    };
   }
 
   /** Approve (different person) and send; calling again on an APPROVED refund re-sends it safely. */
@@ -181,7 +230,7 @@ export class RazorpayRefundsService {
     const orders = await this.prisma.client.razorpayOrder.findMany({
       where: { paymentId },
       include: {
-        events: { orderBy: { createdAt: 'asc' } },
+        events: { orderBy: { createdAt: 'asc' }, include: { receipt: true } },
         refunds: {
           include: {
             events: { orderBy: { createdAt: 'asc' } },
@@ -210,7 +259,8 @@ export class RazorpayRefundsService {
       mode: 'TEST',
       refunds: policy.refunds,
       orders: orders.map((o) => {
-        const live = o.refunds
+        const mine = o.refunds.filter((r) => r.providerPaymentId === o.providerPaymentId);
+        const live = mine
           .filter((r) => (LIVE as readonly string[]).includes(r.status))
           .reduce((sum, r) => sum + r.amountMinor, 0);
         return {
@@ -218,7 +268,7 @@ export class RazorpayRefundsService {
           attempt: o.attempt,
           status: o.status,
           paymentState: paymentState(o.status, o.events),
-          refundState: o.status === 'PAID' ? refundState(o.amountMinor, o.refunds) : 'NONE',
+          refundState: o.status === 'PAID' ? refundState(o.amountMinor, mine) : 'NONE',
           refundableMinor: o.status === 'PAID' ? Math.max(0, o.amountMinor - live) : 0,
           providerOrderId: o.providerOrderId,
           providerPaymentId: o.providerPaymentId,
@@ -239,6 +289,8 @@ export class RazorpayRefundsService {
           currency: r.currency,
           reason: r.reason,
           status: r.status,
+          source: r.source === 'DASHBOARD' ? ('DASHBOARD' as const) : ('STAFF' as const),
+          providerPaymentId: r.providerPaymentId,
           providerRefundId: r.providerRefundId,
           failureReason: r.failureReason,
           requestedBy: person(r.requestedBy),
@@ -248,6 +300,37 @@ export class RazorpayRefundsService {
           events: r.events.map((e) => ({ kind: e.kind, createdAt: e.createdAt.toISOString() })),
         })),
       ),
+      refundCandidates: orders.flatMap((o) => {
+        const seen = new Set<string>();
+        return o.events
+          .filter(
+            (e) =>
+              e.kind === 'FLAGGED' &&
+              e.providerPaymentId &&
+              e.receipt?.captured &&
+              REFUND_CANDIDATE.has(e.reason ?? '') &&
+              !seen.has(e.providerPaymentId) &&
+              seen.add(e.providerPaymentId),
+          )
+          .map((e) => {
+            const pid = e.providerPaymentId ?? '';
+            const live = o.refunds
+              .filter(
+                (r) =>
+                  r.providerPaymentId === pid && (LIVE as readonly string[]).includes(r.status),
+              )
+              .reduce((sum, r) => sum + r.amountMinor, 0);
+            const amount = e.receipt?.amountMinor ?? 0;
+            return {
+              orderId: o.id,
+              providerPaymentId: pid,
+              reason: e.reason ?? '',
+              amountMinor: amount,
+              currency: e.receipt?.currency ?? o.currency,
+              refundableMinor: Math.max(0, amount - live),
+            };
+          });
+      }),
       audit: audit.map((a) => ({
         action: a.action,
         actor: a.actor?.displayName ?? null,

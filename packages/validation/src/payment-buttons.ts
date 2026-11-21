@@ -120,6 +120,11 @@ export const razorpayCheckoutReturnResultSchema = z
 export const requestRazorpayRefundSchema = z
   .object({
     amountMinor: z.number().int().min(1).max(1_000_000_000).optional(),
+    /** Refund a flagged refund-candidate capture instead of the order's PAID payment. */
+    providerPaymentId: z
+      .string()
+      .regex(/^pay_[A-Za-z0-9]{1,50}$/)
+      .optional(),
     // Reason code only (the university's reason catalogue is an open decision, plan D4).
     reason: z.string().regex(/^[A-Z][A-Z_]{2,47}$/),
   })
@@ -129,6 +134,7 @@ export type RequestRazorpayRefund = z.infer<typeof requestRazorpayRefundSchema>;
 const refundStatusSchema = z.enum([
   'REQUESTED',
   'APPROVED',
+  'SENDING',
   'PENDING',
   'PROCESSED',
   'FAILED',
@@ -142,6 +148,8 @@ export const razorpayRefundViewSchema = z
     currency: z.string(),
     reason: z.string(),
     status: refundStatusSchema,
+    source: z.enum(['STAFF', 'DASHBOARD']),
+    providerPaymentId: z.string(),
     providerRefundId: z.string().nullable(),
     failureReason: z.string().nullable(),
     requestedBy: staffNameSchema,
@@ -194,6 +202,19 @@ export const razorpayWorkspaceSchema = z
         .strict(),
     ),
     refundRequests: z.array(razorpayRefundViewSchema),
+    /** Flagged captures that money must go back for (late capture on a closed order, mismatch…). */
+    refundCandidates: z.array(
+      z
+        .object({
+          orderId: z.uuid(),
+          providerPaymentId: z.string(),
+          reason: z.string(),
+          amountMinor: z.number().int(),
+          currency: z.string(),
+          refundableMinor: z.number().int(),
+        })
+        .strict(),
+    ),
     audit: z.array(
       z.object({ action: z.string(), actor: z.string().nullable(), createdAt: z.iso.datetime() }),
     ),

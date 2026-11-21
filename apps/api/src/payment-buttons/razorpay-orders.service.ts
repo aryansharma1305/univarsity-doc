@@ -61,7 +61,7 @@ export function paymentState(
 
 /** An unpaid CREATED order is offered for this long, then abandoned and replaced. */
 const ORDER_TTL_MS = 30 * 60_000;
-const CREATE_LEASE_MS = 15_000;
+const CREATE_LEASE_MS = 25_000;
 const WAIT_FOR_CREATE_MS = 10_000;
 
 export type ObligationForCheckout = Prisma.ReExamPaymentGetPayload<{

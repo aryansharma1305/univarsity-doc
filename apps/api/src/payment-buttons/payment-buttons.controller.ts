@@ -121,7 +121,7 @@ export class StaffRazorpayController {
   @Post('refunds/:refundId/approve')
   @HttpCode(200)
   @ApiSecurity('csrf')
-  @RequirePermissions(PERMISSIONS.reExamPaymentsVerify)
+  @RequirePermissions(PERMISSIONS.reExamPaymentsRefundApprove)
   approveRefund(
     @CurrentAuth() auth: AuthContext,
     @Param('refundId', UuidParamPipe) refundId: string,
@@ -131,7 +131,7 @@ export class StaffRazorpayController {
   @Post('refunds/:refundId/reject')
   @HttpCode(200)
   @ApiSecurity('csrf')
-  @RequirePermissions(PERMISSIONS.reExamPaymentsVerify)
+  @RequirePermissions(PERMISSIONS.reExamPaymentsRefundApprove)
   rejectRefund(
     @CurrentAuth() auth: AuthContext,
     @Param('refundId', UuidParamPipe) refundId: string,

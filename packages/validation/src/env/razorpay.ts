@@ -50,6 +50,14 @@ export const razorpayEnvSchema = z.object({
    * The university refund policy (plan D4) is undecided, so nothing enables this by default.
    */
   PAYMENTS_RAZORPAY_REFUNDS: z.enum(['off', 'full_only', 'partial']).default('off'),
+  /**
+   * Optional alert delivery (ops decision): an https endpoint that accepts a JSON POST (ntfy topic,
+   * chat relay or mail gateway). Unset: alerts are structured warning log lines only.
+   */
+  PAYMENTS_ALERT_WEBHOOK_URL: z
+    .url()
+    .refine((value) => value.startsWith('https://'), 'must be an https URL')
+    .optional(),
 });
 export type RazorpayEnv = z.infer<typeof razorpayEnvSchema>;
 
