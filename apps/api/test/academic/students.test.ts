@@ -1,3 +1,4 @@
+import type { StudentList } from '@docversity/validation';
 import type { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -296,6 +297,109 @@ describe('student list and activity', () => {
     const none = await viewer.get(`students?search=${marker}&status=SUSPENDED`).expect(200);
     expect((none.body as { meta: { total: number } }).meta.total).toBe(0);
     await viewer.get('students?sortBy=dateOfBirth').expect(400);
+  });
+
+  it('shows the latest matching registration in the selected academic session', async () => {
+    const studentInput = newStudent();
+    const { id: studentId } = (await registrar.post('students', studentInput).expect(201))
+      .body as Detail;
+    const newerSession = (
+      await registrar
+        .post('academic-sessions', {
+          code: uniqueCode('SES'),
+          name: '2027',
+          status: 'ACTIVE',
+        })
+        .expect(201)
+    ).body as { id: string };
+    const sameSessionNumber = uniqueCode('REG');
+    const newerSessionNumber = uniqueCode('REG');
+    await registrar
+      .post('registrations', {
+        ...studentInput.registration,
+        studentId,
+        registrationNumber: sameSessionNumber,
+        status: 'SUSPENDED',
+      })
+      .expect(201);
+    await registrar
+      .post('registrations', {
+        ...studentInput.registration,
+        studentId,
+        registrationNumber: newerSessionNumber,
+        academicSessionId: newerSession.id,
+      })
+      .expect(201);
+
+    const list = async (filters = '') => {
+      const search = encodeURIComponent(studentInput.student.fullName);
+      return (await viewer.get(`students?search=${search}${filters}`).expect(200))
+        .body as StudentList;
+    };
+    const sessionFilter = `&academicSessionId=${ids.sessionId}`;
+    const scoped = await list(sessionFilter);
+    expect(scoped.meta.total).toBe(1);
+    expect(scoped.data).toMatchObject([
+      {
+        id: studentId,
+        latestRegistration: {
+          registrationNumber: sameSessionNumber,
+          academicSession: { id: ids.sessionId },
+        },
+        registrationCount: 3,
+      },
+    ]);
+    expect(
+      (await list(`${sessionFilter}&status=ACTIVE`)).data[0]?.latestRegistration,
+    ).toMatchObject({
+      registrationNumber: studentInput.registration.registrationNumber,
+      academicSession: { id: ids.sessionId },
+    });
+    expect((await list(`&academicSessionId=${newerSession.id}`)).data).toMatchObject([
+      {
+        id: studentId,
+        latestRegistration: {
+          registrationNumber: newerSessionNumber,
+          academicSession: { id: newerSession.id },
+        },
+      },
+    ]);
+    expect((await list()).data[0]?.latestRegistration).toMatchObject({
+      registrationNumber: newerSessionNumber,
+      academicSession: { id: newerSession.id },
+    });
+  });
+
+  it('sorts and pages session-scoped students with their own registrations under existing permissions', async () => {
+    const marker = uniqueCode('SESSION-PAGE');
+    const later = newStudent({ student: { fullName: `${marker} Zoe` } });
+    const earlier = newStudent({ student: { fullName: `${marker} Ada` } });
+    const laterStudent = (await registrar.post('students', later).expect(201)).body as Detail;
+    const earlierStudent = (await registrar.post('students', earlier).expect(201)).body as Detail;
+    const query = `students?search=${marker}&academicSessionId=${ids.sessionId}&pageSize=1&sortBy=fullName&sortOrder=asc`;
+
+    const first = (await viewer.get(`${query}&page=1`).expect(200)).body as StudentList;
+    const second = (await viewer.get(`${query}&page=2`).expect(200)).body as StudentList;
+    expect(first).toMatchObject({
+      meta: { page: 1, pageSize: 1, total: 2, totalPages: 2 },
+      data: [
+        {
+          id: earlierStudent.id,
+          latestRegistration: { registrationNumber: earlier.registration.registrationNumber },
+        },
+      ],
+    });
+    expect(second).toMatchObject({
+      meta: { page: 2, pageSize: 1, total: 2, totalPages: 2 },
+      data: [
+        {
+          id: laterStudent.id,
+          latestRegistration: { registrationNumber: later.registration.registrationNumber },
+        },
+      ],
+    });
+    const unauthorized = await staff(app, []);
+    await unauthorized.get(query).expect(403);
   });
 
   it('returns safe activity summaries for the student and their registrations', async () => {
