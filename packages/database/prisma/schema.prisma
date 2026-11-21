@@ -456,6 +456,9 @@ model Student {
   certificateRequestEvents CertificateRequestEvent[]
   reExamPayments           ReExamPayment[]
   uploads                  StudentUpload[]
+  messageThreads           MessageThread[]
+  verificationQueries      VerificationQuery[]
+  notifications            Notification[]
 
   @@map("students")
 }
@@ -1461,31 +1464,37 @@ model User {
   verificationPoliciesApproved VerificationPolicy[] @relation("VerificationPolicyApprover")
   officialPublications         ResultPublication[]
 
-  razorpayReconciliations    RazorpayReconciliation[]
-  retotalingEvents           RetotalingEvent[]
-  preparedSyntheticReleases  SyntheticRelease[]       @relation("SyntheticReleasePreparer")
-  approvedSyntheticReleases  SyntheticRelease[]       @relation("SyntheticReleaseApprover")
-  publishedSyntheticReleases SyntheticRelease[]       @relation("SyntheticReleasePublisher")
-  migrationDryRuns           LegacyMigrationBatch[]
-  resultReviewEvents         ResultReviewEvent[]
-  draftBatches               ResultDraftBatch[]
-  id                         String                   @id @default(uuid(7)) @db.Uuid
+  razorpayReconciliations     RazorpayReconciliation[]
+  retotalingEvents            RetotalingEvent[]
+  preparedSyntheticReleases   SyntheticRelease[]       @relation("SyntheticReleasePreparer")
+  approvedSyntheticReleases   SyntheticRelease[]       @relation("SyntheticReleaseApprover")
+  publishedSyntheticReleases  SyntheticRelease[]       @relation("SyntheticReleasePublisher")
+  migrationDryRuns            LegacyMigrationBatch[]
+  resultReviewEvents          ResultReviewEvent[]
+  draftBatches                ResultDraftBatch[]
+  messageThreadsResolved      MessageThread[]          @relation("MessageThreadResolvedBy")
+  threadMessages              ThreadMessage[]
+  verificationQueryResponses  VerificationQuery[]      @relation("VerificationQueryRespondedBy")
+  verificationQueriesResolved VerificationQuery[]      @relation("VerificationQueryResolvedBy")
+  notifications               Notification[]
+
+  id                     String     @id @default(uuid(7)) @db.Uuid
   /// Stored lower-case (CHECK) so uniqueness is case-insensitive.
-  email                      String                   @unique @db.VarChar(254)
-  displayName                String                   @map("display_name") @db.VarChar(120)
+  email                  String     @unique @db.VarChar(254)
+  displayName            String     @map("display_name") @db.VarChar(120)
   /// Argon2id hash (Phase 3). Null = cannot sign in with a password.
-  passwordHash               String?                  @map("password_hash")
-  status                     UserStatus               @default(ACTIVE)
+  passwordHash           String?    @map("password_hash")
+  status                 UserStatus @default(ACTIVE)
   /// Staff must choose a new password before reaching anything else (set by the CLI and by access resets).
-  passwordChangeRequired     Boolean                  @default(false) @map("password_change_required")
+  passwordChangeRequired Boolean    @default(false) @map("password_change_required")
   /// AES-256-GCM ciphertext of the RFC 6238 TOTP secret (key: STAFF_MFA_ENCRYPTION_KEY). Null = no MFA.
-  mfaTotpSecretEnc           String?                  @map("mfa_totp_secret_enc")
+  mfaTotpSecretEnc       String?    @map("mfa_totp_secret_enc")
   /// Highest TOTP time-step accepted so far (replay protection: a step is never accepted twice).
-  mfaTotpLastUsedStep        BigInt?                  @map("mfa_totp_last_used_step")
+  mfaTotpLastUsedStep    BigInt?    @map("mfa_totp_last_used_step")
   /// When the authenticator was confirmed. Non-null exactly when mfaTotpSecretEnc is set (CHECK).
-  mfaEnabledAt               DateTime?                @map("mfa_enabled_at") @db.Timestamptz(3)
-  createdAt                  DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                  DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  mfaEnabledAt           DateTime?  @map("mfa_enabled_at") @db.Timestamptz(3)
+  createdAt              DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   mfaRecoveryCodes StaffMfaRecoveryCode[]
 
@@ -1959,4 +1968,149 @@ model ResultPublication {
   publishedAt     DateTime @default(now()) @map("published_at") @db.Timestamptz(3)
 
   @@map("result_publications")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Chat & Communication: student messages, verification support queries, in-app notifications.
+// In-app only — no email, SMS or WhatsApp delivery exists.
+// ---------------------------------------------------------------------------------------------
+
+enum MessageThreadStatus {
+  OPEN
+  RESOLVED
+}
+
+enum MessageAuthor {
+  STUDENT
+  STAFF
+}
+
+/// A private conversation between one student and the administration (shared staff inbox).
+model MessageThread {
+  id               String              @id @default(uuid(7)) @db.Uuid
+  studentId        String              @map("student_id") @db.Uuid
+  subject          String              @db.VarChar(200)
+  status           MessageThreadStatus @default(OPEN)
+  lastMessageAt    DateTime            @map("last_message_at") @db.Timestamptz(3)
+  /// Read markers: the student's, and the shared staff inbox's.
+  studentReadAt    DateTime?           @map("student_read_at") @db.Timestamptz(3)
+  staffReadAt      DateTime?           @map("staff_read_at") @db.Timestamptz(3)
+  resolvedAt       DateTime?           @map("resolved_at") @db.Timestamptz(3)
+  resolvedByUserId String?             @map("resolved_by_user_id") @db.Uuid
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student    Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  resolvedBy User?           @relation("MessageThreadResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: Restrict)
+  messages   ThreadMessage[]
+
+  @@index([studentId, lastMessageAt])
+  @@index([status, lastMessageAt])
+  @@map("message_threads")
+}
+
+/// One message in a thread. Append-only (database trigger).
+model ThreadMessage {
+  id           String        @id @default(uuid(7)) @db.Uuid
+  threadId     String        @map("thread_id") @db.Uuid
+  author       MessageAuthor
+  /// The staff author; NULL for the student (the thread's student is the author).
+  authorUserId String?       @map("author_user_id") @db.Uuid
+  body         String        @db.VarChar(4000)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  thread     MessageThread @relation(fields: [threadId], references: [id], onDelete: Restrict)
+  authorUser User?         @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([threadId, createdAt])
+  @@map("thread_messages")
+}
+
+enum VerificationQuerySource {
+  STUDENT
+  PUBLIC
+}
+
+enum VerificationQueryCategory {
+  RECORD_NOT_FOUND
+  DETAILS_MISMATCH
+  HOW_TO_VERIFY
+  OTHER
+}
+
+enum VerificationQueryStatus {
+  OPEN
+  ANSWERED
+  RESOLVED
+}
+
+/// A verification support query. Never discloses records: staff answers are free text shown only to
+/// the requester (the student, or a public requester holding the reference + access code).
+model VerificationQuery {
+  id                String                    @id @default(uuid(7)) @db.Uuid
+  /// Public reference, e.g. VQ-7KQ2M9XA.
+  reference         String                    @db.VarChar(16)
+  source            VerificationQuerySource
+  studentId         String?                   @map("student_id") @db.Uuid
+  requesterName     String                    @map("requester_name") @db.VarChar(200)
+  organization      String?                   @db.VarChar(200)
+  contactEmail      String?                   @map("contact_email") @db.VarChar(254)
+  category          VerificationQueryCategory
+  /// What the requester was checking (e.g. a certificate number) — as typed, never resolved.
+  documentReference String?                   @map("document_reference") @db.VarChar(100)
+  message           String                    @db.VarChar(4000)
+  /// HMAC of the public access code (PUBLIC only); the code itself is shown once.
+  accessCodeHash    String?                   @map("access_code_hash") @db.Char(64)
+  status            VerificationQueryStatus   @default(OPEN)
+  response          String?                   @db.VarChar(4000)
+  respondedByUserId String?                   @map("responded_by_user_id") @db.Uuid
+  respondedAt       DateTime?                 @map("responded_at") @db.Timestamptz(3)
+  resolvedByUserId  String?                   @map("resolved_by_user_id") @db.Uuid
+  resolvedAt        DateTime?                 @map("resolved_at") @db.Timestamptz(3)
+  version           Int                       @default(1)
+  createdAt         DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student     Student? @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  respondedBy User?    @relation("VerificationQueryRespondedBy", fields: [respondedByUserId], references: [id], onDelete: Restrict)
+  resolvedBy  User?    @relation("VerificationQueryResolvedBy", fields: [resolvedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([reference])
+  @@index([status, createdAt])
+  @@index([studentId, createdAt])
+  @@map("verification_queries")
+}
+
+enum NotificationType {
+  MESSAGE_RECEIVED
+  MESSAGE_REPLY
+  PROFILE_REQUEST_APPROVED
+  PROFILE_REQUEST_REJECTED
+  CERTIFICATE_REQUEST_UPDATED
+  VERIFICATION_QUERY_RECEIVED
+  VERIFICATION_QUERY_ANSWERED
+}
+
+/// An in-app notification for exactly one recipient (a student or a staff user). Minimal copy: no
+/// grades, identity numbers or message text; the link opens the authorised page.
+model Notification {
+  id        String           @id @default(uuid(7)) @db.Uuid
+  studentId String?          @map("student_id") @db.Uuid
+  userId    String?          @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(200)
+  body      String           @db.VarChar(500)
+  link      String?          @db.VarChar(300)
+  /// Idempotency: one notification per recipient and event.
+  dedupeKey String           @map("dedupe_key") @db.VarChar(200)
+  readAt    DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  student Student? @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([dedupeKey])
+  @@index([studentId, createdAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
