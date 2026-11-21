@@ -269,15 +269,23 @@ export async function matchCapture(
 // ---------------------------------------------------------------------------------------------
 
 export type RefundState = 'NONE' | 'REFUND_PENDING' | 'PARTIALLY_REFUNDED' | 'REFUNDED';
+/** Statuses that hold refund headroom and are, or may be, money already leaving (DB trigger too). */
+export const LIVE_REFUND_STATUSES = [
+  'REQUESTED',
+  'APPROVED',
+  'SENDING',
+  'PENDING',
+  'PROCESSED',
+] as const;
 /**
- * Refund state of a PAID order, derived from its refunds (no duplicated status column):
- * any REQUESTED/APPROVED/PENDING refund → REFUND_PENDING; otherwise the PROCESSED total decides.
+ * Refund state of a payment, derived from its refunds (no duplicated status column):
+ * any REQUESTED/APPROVED/SENDING/PENDING refund → REFUND_PENDING; otherwise the PROCESSED total.
  */
 export function refundState(
   capturedMinor: number,
   refunds: readonly { status: string; amountMinor: number }[],
 ): RefundState {
-  if (refunds.some((r) => ['REQUESTED', 'APPROVED', 'PENDING'].includes(r.status)))
+  if (refunds.some((r) => ['REQUESTED', 'APPROVED', 'SENDING', 'PENDING'].includes(r.status)))
     return 'REFUND_PENDING';
   const processed = refunds
     .filter((r) => r.status === 'PROCESSED')
@@ -290,47 +298,133 @@ const STATUS_FROM_PROVIDER = {
   processed: 'PROCESSED',
   failed: 'FAILED',
 } as const;
+/** One sender at a time; a crashed sender's lease expires and the next one looks up first. */
+export const REFUND_SEND_LEASE_MS = 25_000;
 
 /**
- * Sends an APPROVED refund to Razorpay outside any transaction, with its stored idempotency key,
- * then records the provider id and status. Safe to repeat: Razorpay deduplicates on the key, and
- * only an APPROVED or PENDING row is updated.
+ * Sends an APPROVED refund to Razorpay outside any transaction, under a send lease
+ * (APPROVED → SENDING). FAILED is recorded only when Razorpay itself reports it: an ambiguous or
+ * refused send stays SENDING (headroom stays reserved) after looking the refund up at the provider
+ * by its receipt; reconciliation resolves it later. A resend reuses the same idempotency key.
  */
 export async function submitApprovedRefund(
   prisma: PrismaClient,
   client: RazorpayClient,
   audit: AuditWriter,
   refundId: string,
+  now: () => Date = () => new Date(),
 ): Promise<{ status: string; alert: PaymentAlert | null }> {
-  const refund = await prisma.razorpayRefund.findUniqueOrThrow({ where: { id: refundId } });
-  if (refund.status !== 'APPROVED') return { status: refund.status, alert: null };
+  const claim = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM razorpay_refunds WHERE id = ${refundId}::uuid FOR UPDATE`;
+    const row = await tx.razorpayRefund.findUniqueOrThrow({ where: { id: refundId } });
+    const leased = row.sendLeaseUntil !== null && row.sendLeaseUntil > now();
+    if (row.source !== 'STAFF' || !['APPROVED', 'SENDING'].includes(row.status) || leased)
+      return { row, claimed: false, retry: false };
+    await tx.razorpayRefund.update({
+      where: { id: refundId },
+      data: {
+        status: 'SENDING',
+        sendLeaseUntil: new Date(now().getTime() + REFUND_SEND_LEASE_MS),
+      },
+    });
+    await tx.razorpayRefundEvent.create({ data: { refundId, kind: 'SUBMITTED' } });
+    return { row, claimed: true, retry: row.status === 'SENDING' };
+  });
+  const refund = claim.row;
+  if (!claim.claimed) return { status: refund.status, alert: null };
+  const release = () =>
+    prisma.razorpayRefund.updateMany({
+      where: { id: refundId, status: 'SENDING' },
+      data: { sendLeaseUntil: null },
+    });
+  // A previous attempt may have reached Razorpay: look it up before sending again.
+  if (claim.retry) {
+    const found = await findProviderRefund(client, refund).catch(() => undefined);
+    if (found) {
+      const status = STATUS_FROM_PROVIDER[found.status];
+      await recordRefundStatus(prisma, audit, refundId, status, found.id, null, 'PROVIDER_LOOKUP');
+      return { status, alert: null };
+    }
+    if (found === undefined) {
+      await release();
+      return { status: 'SENDING', alert: null };
+    }
+  }
   let remote;
   try {
     remote = await client.createRefund(refund.providerPaymentId, {
       amountMinor: refund.amountMinor,
-      idempotencyKey: refund.idempotencyKey,
-      receipt: refund.receipt,
+      idempotencyKey: refund.idempotencyKey ?? '',
+      ...(refund.receipt ? { receipt: refund.receipt } : {}),
       notes: { refund_id: refund.id, mode: 'TEST' },
     });
   } catch (error) {
     if (!(error instanceof RazorpayApiError)) throw error;
-    // Transient: stays APPROVED and is retried (same key) by the next approval call or the worker.
-    if (error.transient) return { status: 'APPROVED', alert: null };
-    await recordRefundStatus(prisma, audit, refund.id, 'FAILED', null, error.code);
+    // The response is lost or refused, but Razorpay may still have refunded: ask before deciding.
+    const found = await findProviderRefund(client, refund).catch(() => undefined);
+    if (found) {
+      const status = STATUS_FROM_PROVIDER[found.status];
+      await recordRefundStatus(prisma, audit, refundId, status, found.id, null, 'PROVIDER_LOOKUP');
+      return { status, alert: null };
+    }
+    if (error.transient || found === undefined) {
+      await release();
+      return { status: 'SENDING', alert: null };
+    }
+    // Definitely not at Razorpay and refused: keep SENDING (headroom reserved) for a person.
+    await prisma.$transaction(async (tx) => {
+      await tx.razorpayRefund.update({
+        where: { id: refundId },
+        data: { failureReason: error.code, sendLeaseUntil: null },
+      });
+      await tx.razorpayRefundEvent.create({ data: { refundId, kind: 'SEND_REJECTED' } });
+      await audit(
+        {
+          action: AUDIT_ACTIONS.razorpayRefundUpdated,
+          entityType: 'RazorpayRefund',
+          entityId: refundId,
+          metadata: { status: 'SENDING', sendRejected: error.code, source: 'API' },
+        },
+        tx,
+      );
+    });
     return {
-      status: 'FAILED',
+      status: 'SENDING',
       alert: {
         kind: 'REFUND_FAILED',
         severity: 'critical',
-        details: { refundId: refund.id, code: error.code },
+        details: { refundId, code: error.code, providerRefundFound: false },
       },
     };
   }
-  if (remote.amount !== refund.amountMinor || remote.payment_id !== refund.providerPaymentId)
+  if (remote.amount !== refund.amountMinor || remote.payment_id !== refund.providerPaymentId) {
+    await release();
     throw new RazorpayApiError('MALFORMED_RESPONSE');
+  }
   const status = STATUS_FROM_PROVIDER[remote.status];
-  await recordRefundStatus(prisma, audit, refund.id, status, remote.id, null);
+  await recordRefundStatus(prisma, audit, refundId, status, remote.id, null, 'API');
   return { status, alert: null };
+}
+
+/** The provider's refund for this request: by receipt or our refund id in notes. null = none. */
+async function findProviderRefund(
+  client: RazorpayClient,
+  refund: {
+    id: string;
+    providerPaymentId: string;
+    receipt: string | null;
+    providerRefundId: string | null;
+  },
+) {
+  if (refund.providerRefundId) return client.fetchRefund(refund.providerRefundId);
+  const refunds = await client.fetchPaymentRefunds(refund.providerPaymentId);
+  return (
+    refunds.find(
+      (r) =>
+        (refund.receipt !== null && r.receipt === refund.receipt) ||
+        r.notes?.refund_id === refund.id,
+    ) ?? null
+  );
 }
 
 async function recordRefundStatus(
@@ -340,6 +434,7 @@ async function recordRefundStatus(
   status: 'PENDING' | 'PROCESSED' | 'FAILED',
   providerRefundId: string | null,
   failureReason: string | null,
+  source: 'API' | 'PROVIDER_LOOKUP' | 'RECONCILIATION',
 ) {
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM razorpay_refunds WHERE id = ${refundId}::uuid FOR UPDATE`;
@@ -349,6 +444,7 @@ async function recordRefundStatus(
       where: { id: refundId },
       data: {
         status,
+        sendLeaseUntil: null,
         ...(providerRefundId && !row.providerRefundId ? { providerRefundId } : {}),
         ...(failureReason ? { failureReason } : {}),
       },
@@ -359,30 +455,45 @@ async function recordRefundStatus(
         action: AUDIT_ACTIONS.razorpayRefundUpdated,
         entityType: 'RazorpayRefund',
         entityId: refundId,
-        metadata: { status, failureReason, source: 'API' },
+        metadata: { status, failureReason, source },
       },
       tx,
     );
   });
 }
 
-/** Forward-only refund status (mirrors the DB trigger). */
+/** Forward-only refund status (mirrors the DB trigger). FAILED only after the provider answered. */
 function advances(from: string, to: string): boolean {
   return (
-    (from === 'APPROVED' && ['PENDING', 'PROCESSED', 'FAILED'].includes(to)) ||
+    (from === 'SENDING' && ['PENDING', 'PROCESSED', 'FAILED'].includes(to)) ||
     (from === 'PENDING' && ['PROCESSED', 'FAILED'].includes(to))
   );
 }
 
+/** Our order holding this provider payment: its PAID payment, or a captured receipt on it. */
+async function orderOfProviderPayment(tx: Prisma.TransactionClient, providerPaymentId: string) {
+  const paid = await tx.razorpayOrder.findUnique({ where: { providerPaymentId } });
+  if (paid) return paid;
+  const receipt = await tx.razorpayWebhookReceipt.findFirst({
+    where: { providerPaymentId, captured: true, providerOrderId: { not: null } },
+    orderBy: { createdAt: 'asc' },
+  });
+  return receipt?.providerOrderId
+    ? tx.razorpayOrder.findUnique({ where: { providerOrderId: receipt.providerOrderId } })
+    : null;
+}
+
 /**
- * Applies a signed refund.* event to the refund Docversity issued (matched by our receipt, or by the
- * provider refund id). Events for refunds made elsewhere (dashboard) are recorded as ignored.
+ * Applies a signed refund.* event. Refunds Docversity issued are matched by provider refund id or
+ * our receipt and move forward only. A refund made in the Razorpay dashboard for one of our
+ * payments (PAID or a flagged capture) is recorded as a DASHBOARD refund so headroom and states
+ * stay true; anything else is reported as UNKNOWN_REFUND.
  */
 export async function applyRefundEvent(
   tx: Prisma.TransactionClient,
   audit: AuditWriter,
   evidence: RazorpayRefundEvidence,
-): Promise<'APPLIED' | 'UNCHANGED' | 'UNKNOWN_REFUND'> {
+): Promise<'APPLIED' | 'UNCHANGED' | 'RECORDED_DASHBOARD' | 'UNKNOWN_REFUND'> {
   const refund = await tx.razorpayRefund.findFirst({
     where: {
       OR: [
@@ -391,21 +502,61 @@ export async function applyRefundEvent(
       ],
     },
   });
+  const status = STATUS_FROM_PROVIDER[evidence.status];
+  if (!refund) {
+    const order = await orderOfProviderPayment(tx, evidence.providerPaymentId);
+    if (!order) return 'UNKNOWN_REFUND';
+    await tx.$queryRaw`SELECT id FROM razorpay_orders WHERE id = ${order.id}::uuid FOR UPDATE`;
+    const created = await tx.razorpayRefund.create({
+      data: {
+        orderId: order.id,
+        providerPaymentId: evidence.providerPaymentId,
+        amountMinor: evidence.amountMinor,
+        currency: evidence.currency,
+        reason: 'DASHBOARD_REFUND',
+        status,
+        source: 'DASHBOARD',
+        providerRefundId: evidence.providerRefundId,
+      },
+    });
+    await tx.razorpayRefundEvent.create({
+      data: {
+        refundId: created.id,
+        kind: 'DASHBOARD',
+        eventId: evidence.eventId,
+        bodySha256: evidence.bodySha256,
+      },
+    });
+    await audit(
+      {
+        action: AUDIT_ACTIONS.razorpayRefundUpdated,
+        entityType: 'RazorpayRefund',
+        entityId: created.id,
+        metadata: { status, eventType: evidence.eventType, source: 'DASHBOARD', orderId: order.id },
+      },
+      tx,
+    );
+    return 'RECORDED_DASHBOARD';
+  }
   if (
-    refund?.providerPaymentId !== evidence.providerPaymentId ||
+    refund.providerPaymentId !== evidence.providerPaymentId ||
     refund.amountMinor !== evidence.amountMinor ||
     refund.currency !== evidence.currency
   )
     return 'UNKNOWN_REFUND';
   await tx.$queryRaw`SELECT id FROM razorpay_refunds WHERE id = ${refund.id}::uuid FOR UPDATE`;
   const row = await tx.razorpayRefund.findUniqueOrThrow({ where: { id: refund.id } });
-  const status = STATUS_FROM_PROVIDER[evidence.status];
+  // A webhook can arrive before our send finished (APPROVED): it proves the provider has it.
+  if (row.status === 'APPROVED')
+    await tx.razorpayRefund.update({ where: { id: row.id }, data: { status: 'SENDING' } });
+  const from = row.status === 'APPROVED' ? 'SENDING' : row.status;
   // Out-of-order safe: an event never moves a refund backwards.
-  if (!advances(row.status, status)) return 'UNCHANGED';
+  if (!advances(from, status)) return 'UNCHANGED';
   await tx.razorpayRefund.update({
     where: { id: row.id },
     data: {
       status,
+      sendLeaseUntil: null,
       ...(row.providerRefundId ? {} : { providerRefundId: evidence.providerRefundId }),
       ...(status === 'FAILED' ? { failureReason: 'PROVIDER_FAILED' } : {}),
     },
@@ -490,11 +641,21 @@ export async function reconcileRazorpay(deps: ReconcileDeps): Promise<Reconcilia
   const now = deps.now ?? new Date();
   const ttl = deps.orderTtlMs ?? 30 * 60_000;
   const since = new Date(now.getTime() - (deps.lookbackDays ?? 3) * 86_400_000);
-  const orders = await prisma.razorpayOrder.findMany({
-    where: { status: { in: ['RESERVED', 'CREATED', 'PAID'] }, updatedAt: { gte: since } },
-    orderBy: { createdAt: 'asc' },
-    take: 500,
-  });
+  // Paged by id (UUIDv7, time-ordered) so every recent order is visited, not only the oldest batch.
+  const orders: Awaited<ReturnType<typeof prisma.razorpayOrder.findMany>> = [];
+  for (let page = 0; page < 50; page++) {
+    const batch = await prisma.razorpayOrder.findMany({
+      where: {
+        status: { in: ['RESERVED', 'CREATED', 'PAID'] },
+        updatedAt: { gte: since },
+        ...(orders.length > 0 ? { id: { gt: orders[orders.length - 1]?.id } } : {}),
+      },
+      orderBy: { id: 'asc' },
+      take: 200,
+    });
+    orders.push(...batch);
+    if (batch.length < 200) break;
+  }
   const issues: ReconciliationIssue[] = [];
   let rematched = 0;
   let closed = 0;
@@ -532,24 +693,32 @@ export async function reconcileRazorpay(deps: ReconcileDeps): Promise<Reconcilia
       const payments = await client.fetchOrderPayments(providerOrderId);
       if (order.status === 'PAID') {
         const paid = payments.find((p) => p.id === order.providerPaymentId);
-        const refunded = await prisma.razorpayRefund.aggregate({
-          where: { orderId: order.id, status: 'PROCESSED' },
-          _sum: { amountMinor: true },
-        });
-        const expectedRefunded = refunded._sum.amountMinor ?? 0;
+        // Razorpay's amount_refunded includes pending refunds; SENDING may or may not be there yet.
+        const sum = async (statuses: ('PENDING' | 'PROCESSED' | 'SENDING')[]) =>
+          (
+            await prisma.razorpayRefund.aggregate({
+              where: { providerPaymentId: order.providerPaymentId ?? '', status: { in: statuses } },
+              _sum: { amountMinor: true },
+            })
+          )._sum.amountMinor ?? 0;
+        const known = await sum(['PENDING', 'PROCESSED']);
+        const sending = await sum(['SENDING']);
         if (!paid)
           issue('PAID_ORDER_PAYMENT_MISSING', order.id, order.providerPaymentId, order.amountMinor);
         else if (
           paid.amount !== order.amountMinor ||
           paid.currency !== order.currency ||
           !paid.captured ||
-          paid.amount_refunded !== expectedRefunded
+          paid.amount_refunded < known ||
+          paid.amount_refunded > known + sending
         )
           issue(
             'PAID_ORDER_DRIFT',
             order.id,
             paid.id,
-            paid.amount_refunded - expectedRefunded || order.amountMinor - paid.amount,
+            paid.amount !== order.amountMinor
+              ? order.amountMinor - paid.amount
+              : paid.amount_refunded - known,
           );
         continue;
       }
@@ -584,7 +753,9 @@ export async function reconcileRazorpay(deps: ReconcileDeps): Promise<Reconcilia
       }
       const authorized = payments.filter((p) => p.status === 'authorized' && !p.captured);
       for (const payment of authorized) issue('AUTHORIZED_UNCAPTURED', order.id, payment.id);
-      if (captured.length === 0 && authorized.length === 0 && stale(order.createdAt)) {
+      // Never abandon while Razorpay still has a payment in flight on the order.
+      const inFlight = payments.some((p) => ['created', 'authorized'].includes(p.status));
+      if (captured.length === 0 && !inFlight && stale(order.createdAt)) {
         await prisma.$transaction((tx) =>
           abandonOpenRazorpayOrders(tx, { id: order.id, status: 'CREATED' }, 'EXPIRED'),
         );
@@ -596,18 +767,20 @@ export async function reconcileRazorpay(deps: ReconcileDeps): Promise<Reconcilia
     }
   }
 
-  // Refunds that are approved but unsent (transient failure) or still pending at Razorpay.
+  // Refunds approved but not sent, stuck SENDING (lease expired; looked up before any resend),
+  // or still PENDING at Razorpay.
   let refundsAdvanced = 0;
   const refunds = await prisma.razorpayRefund.findMany({
-    where: { status: { in: ['APPROVED', 'PENDING'] } },
-    take: 200,
+    where: { source: 'STAFF', status: { in: ['APPROVED', 'SENDING', 'PENDING'] } },
+    orderBy: { id: 'asc' },
+    take: 500,
   });
   for (const refund of refunds) {
     try {
-      if (refund.status === 'APPROVED') {
-        const result = await submitApprovedRefund(prisma, client, audit, refund.id);
-        if (result.status !== 'APPROVED') refundsAdvanced++;
-        if (result.status === 'FAILED')
+      if (refund.status === 'APPROVED' || refund.status === 'SENDING') {
+        const result = await submitApprovedRefund(prisma, client, audit, refund.id, () => now);
+        if (!['APPROVED', 'SENDING'].includes(result.status)) refundsAdvanced++;
+        if (result.status === 'FAILED' || result.alert)
           issue('REFUND_FAILED', refund.orderId, refund.providerPaymentId);
       } else if (refund.providerRefundId) {
         const remote = await client.fetchRefund(refund.providerRefundId);
@@ -620,6 +793,7 @@ export async function reconcileRazorpay(deps: ReconcileDeps): Promise<Reconcilia
             status,
             null,
             status === 'FAILED' ? 'PROVIDER_FAILED' : null,
+            'RECONCILIATION',
           );
           refundsAdvanced++;
           if (status === 'FAILED') issue('REFUND_FAILED', refund.orderId, refund.providerPaymentId);
@@ -704,5 +878,35 @@ export function prismaAuditWriter(prisma: PrismaClient): AuditWriter {
         metadata: (entry.metadata ?? {}) as Prisma.InputJsonValue,
       },
     });
+  };
+}
+
+/**
+ * Alert delivery chosen by ops: with PAYMENTS_ALERT_WEBHOOK_URL (https) every alert is POSTed as
+ * JSON (works with ntfy, Slack-compatible relays or a mail gateway); otherwise `fallback` (log).
+ * Never throws and never sends secrets: alerts carry ids and codes only.
+ */
+export function alertNotifier(
+  url: string | undefined,
+  fallback: AlertNotifier,
+  fetchImpl: typeof fetch = fetch,
+): AlertNotifier {
+  if (!url) return fallback;
+  return async (alert) => {
+    try {
+      const response = await fetchImpl(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Title: `Docversity payments: ${alert.kind}`,
+        },
+        body: JSON.stringify({ source: 'docversity-payments', mode: 'TEST', ...alert }),
+        redirect: 'error',
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) await fallback(alert);
+    } catch {
+      await fallback(alert);
+    }
   };
 }

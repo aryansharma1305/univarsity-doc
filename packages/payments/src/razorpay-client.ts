@@ -98,7 +98,9 @@ const refundSchema = z.object({
   payment_id: z.string().regex(/^pay_[A-Za-z0-9]{1,50}$/),
   status: z.enum(['pending', 'processed', 'failed']),
   receipt: z.string().max(40).nullish(),
+  notes: z.record(z.string(), z.unknown()).nullish(),
 });
+const refundListSchema = z.object({ items: z.array(refundSchema).max(100) });
 const paymentListSchema = z.object({ items: z.array(paymentSchema).max(100) });
 const reconRowSchema = z.object({
   type: z.string().max(32),
@@ -201,6 +203,12 @@ export class RazorpayClient {
     if (!valid) throw new RazorpayApiError('INVALID_REQUEST');
     const query = `year=${String(day.year)}&month=${String(day.month)}&day=${String(day.day)}&count=1000`;
     return (await this.call(reconListSchema, 'GET', `/settlements/recon/combined?${query}`)).items;
+  }
+
+  /** Refunds of one payment (GET /payments/{id}/refunds), to resolve a lost or refused send. */
+  async fetchPaymentRefunds(paymentId: string): Promise<RazorpayRefund[]> {
+    if (!/^pay_[A-Za-z0-9]{1,50}$/.test(paymentId)) throw new RazorpayApiError('INVALID_REQUEST');
+    return (await this.call(refundListSchema, 'GET', `/payments/${paymentId}/refunds`)).items;
   }
 
   fetchRefund(refundId: string): Promise<RazorpayRefund> {
