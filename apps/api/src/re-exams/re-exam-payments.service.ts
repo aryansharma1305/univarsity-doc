@@ -43,6 +43,7 @@ import {
 import { type PreparedFile, prepareEvidence, sha256Of } from './payment-files.js';
 import type { MockPaymentProvider, MockWebhookHeaders } from '@docversity/payments';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
+import { abandonOpenRazorpayOrders } from '../payment-buttons/razorpay-order-abandon.js';
 import type { UploadedPaymentFile } from './payment-upload.interceptor.js';
 
 const ENTITY = 'ReExamPayment';
@@ -132,6 +133,7 @@ const paymentInclude = {
       periodLabel: true,
     },
   },
+  razorpayOrders: { where: { status: 'PAID' }, select: { id: true }, take: 1 },
 } as const;
 type PaymentRecord = Prisma.ReExamPaymentGetPayload<{ include: typeof paymentInclude }>;
 
@@ -156,6 +158,7 @@ function toRow(p: PaymentRecord): ReExamPaymentRow {
     subject: { code: p.application.subjectCode, name: p.application.subjectName },
     transactionReference: p.transactionReference,
     hasEvidence: p.evidenceStorageKey !== null,
+    providerSource: p.razorpayOrders.length > 0 ? 'RAZORPAY_TEST' : 'MANUAL',
   };
 }
 
@@ -407,6 +410,7 @@ export class ReExamPaymentsService {
         }
         if (live?.destinationId === destination.id) return;
         if (live) {
+          await abandonOpenRazorpayOrders(tx, { paymentId: live.id }, 'OBLIGATION_VOIDED');
           await tx.reExamPayment.update({
             where: { id: live.id },
             data: {
@@ -581,6 +585,8 @@ export class ReExamPaymentsService {
     }
     const lockedBlock = applicationBlock(locked.application);
     if (lockedBlock) throw conflict(lockedBlock);
+    // A manual submission closes any Razorpay test order, so the same fee cannot be paid twice.
+    await abandonOpenRazorpayOrders(tx, { paymentId }, 'MANUALLY_SUBMITTED');
     await tx.reExamPayment.update({
       where: { id: paymentId },
       data: {
@@ -657,6 +663,10 @@ export class ReExamPaymentsService {
                 { application: { subjectCode: { contains: query.search, mode: 'insensitive' } } },
                 ...(normalized.length >= 4
                   ? [{ transactionReferenceNormalized: { contains: normalized } }]
+                  : []),
+                // Razorpay test order ids (order_…) are exact-match only.
+                ...(/^order_[A-Za-z0-9]{1,50}$/.test(query.search.trim())
+                  ? [{ razorpayOrders: { some: { providerOrderId: query.search.trim() } } }]
                   : []),
               ],
             }

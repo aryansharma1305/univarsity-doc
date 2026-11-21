@@ -1,6 +1,13 @@
 import { Injectable, HttpStatus } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { verifyRazorpayWebhook } from '@docversity/payments';
+import { applyRefundEvent } from '@docversity/payments/server';
+import {
+  classifyRazorpayEvent,
+  isRazorpayEventId,
+  razorpaySignatureMatches,
+  type RazorpayIgnoreReason,
+} from '@docversity/payments';
+import type { Prisma } from '@docversity/database';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   ERROR_CODES,
@@ -12,8 +19,9 @@ import { AuditService } from '../audit/audit.service.js';
 import { RateLimiter } from '../auth/rate-limiter.js';
 import { IdentifierHasher } from '../auth/identifier-hasher.js';
 import { AppError, Errors } from '../common/app-error.js';
-import { isUsable } from '../re-exams/payment-destinations.service.js';
 import { PaymentButtonPolicyService } from './payment-button-policy.service.js';
+import { REFUND_CANDIDATE, RazorpayOrdersService, payable } from './razorpay-orders.service.js';
+import { PaymentAlertsService, type PaymentAlert } from './payment-alerts.service.js';
 const conflict = () =>
   new AppError(
     HttpStatus.CONFLICT,
@@ -43,6 +51,8 @@ export class PaymentButtonsService {
     private readonly audit: AuditService,
     private readonly limiter: RateLimiter,
     private readonly hasher: IdentifierHasher,
+    private readonly orders: RazorpayOrdersService,
+    private readonly alerts: PaymentAlertsService,
   ) {}
 
   async exam(studentId: string, registrationId: string, examinationId: string) {
@@ -96,69 +106,198 @@ export class PaymentButtonsService {
           : payment.status === 'REJECTED'
             ? 'FAILED'
             : 'PENDING';
-    const fixture = this.policy.fixture();
-    const destination = await this.prisma.client.reExamPaymentDestination.findUnique({
-      where: { id: payment.destinationId },
-    });
+    // Test-mode collection uses the Orders API (POST student/re-exam-payments/:id/razorpay-order);
+    // the panel never embeds a Payment Button. Mode off: no policy, no extra query, no checkout.
+    const policy = this.policy.fixture();
     if (
-      fixture?.registrationIds.includes(app.studentRegistrationId) &&
+      policy &&
       payment.status === 'AWAITING_PAYMENT' &&
-      app.feeStatus === 'ASSESSED' &&
-      !['CANCELLED', 'REJECTED'].includes(app.status) &&
-      destination &&
-      isUsable(destination)
+      policy.registrationIds.includes(app.studentRegistrationId) &&
+      (await this.prisma.client.razorpayTestRegistration.findUnique({
+        where: { registrationId: app.studentRegistrationId },
+      })) &&
+      payable(
+        await this.prisma.client.reExamPayment.findUnique({
+          where: { id: payment.id },
+          include: { application: true, destination: true },
+        }),
+      )
     ) {
-      view.checkout = { mode: 'TEST', buttonId: fixture.reExamTestButtonId };
+      view.checkout = { mode: 'TEST', kind: 'ORDER' };
       view.unavailableReason = null;
     }
     return view;
   }
-  async webhook(raw: Buffer, signature: unknown, eventId: unknown, ip: string) {
-    const fixture = this.policy.requireFixture();
-    const rate = await this.limiter.hit(
-      'razorpay-webhook',
-      [{ key: this.hasher.hash('razorpay-webhook', ip), limit: 60 }],
-      60,
-    );
-    if (rate.limited) throw Errors.rateLimited(rate.retryAfterSeconds);
-    let event;
-    try {
-      event = verifyRazorpayWebhook(
-        raw,
-        signature,
-        eventId,
-        fixture.webhookSecret,
-        fixture.merchantId,
+  async webhook(raw: unknown, signature: unknown, eventId: unknown, ip: string) {
+    // Mode off: 404 before any rate limiting, verification or database access (unchanged).
+    const policy = this.policy.requireFixture();
+    if (
+      !isRazorpayEventId(eventId) ||
+      !razorpaySignatureMatches(raw, signature, policy.webhookSecret)
+    ) {
+      // Only unverified requests are rate limited: a verified delivery is never answered 429.
+      const rate = await this.limiter.hit(
+        'razorpay-webhook',
+        [{ key: this.hasher.hash('razorpay-webhook', ip), limit: 60 }],
+        60,
       );
-    } catch {
+      if (rate.limited) throw Errors.rateLimited(rate.retryAfterSeconds);
       throw Errors.validation([
         { path: 'webhook', message: 'Payment notification could not be verified.' },
       ]);
     }
-    return this.prisma.client.$transaction(async (tx) => {
-      // The header is not signed: bind it to the original body, and never attribute from this header.
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${event.eventId}))`;
-      const prior = await tx.razorpayWebhookReceipt.findUnique({
-        where: { eventId: event.eventId },
-      });
-      if (prior) {
-        if (prior.bodySha256 !== event.bodySha256) throw conflict();
-        return { received: true, attributed: false };
-      }
-      const receipt = await tx.razorpayWebhookReceipt.create({
-        data: { id: randomUUID(), ...event },
-      });
-      await this.audit.writeAuditEvent(
-        {
-          action: AUDIT_ACTIONS.razorpayWebhookReceived,
-          entityType: 'RazorpayWebhookReceipt',
-          entityId: receipt.id,
-          metadata: { eventType: event.eventType, automaticallyAttributed: false },
-        },
-        tx,
-      );
-      return { received: true, attributed: false };
-    });
+    const event = classifyRazorpayEvent(raw, eventId, policy.merchantId);
+    const summary =
+      event.outcome === 'HANDLED'
+        ? {
+            eventId,
+            eventType: event.evidence.eventType as string,
+            bodySha256: event.evidence.bodySha256,
+            providerCreatedAt: event.evidence.providerCreatedAt as Date | null,
+          }
+        : event.outcome === 'REFUND'
+          ? {
+              eventId,
+              eventType: event.refund.eventType as string,
+              bodySha256: event.refund.bodySha256,
+              providerCreatedAt: null,
+            }
+          : {
+              eventId,
+              eventType: event.eventType,
+              bodySha256: event.bodySha256,
+              providerCreatedAt: event.providerCreatedAt,
+            };
+    // Re-fetch the current payment before acting on an order-bound capture (never trust event order),
+    // but not for a replay: a known event id never causes a provider call.
+    const known =
+      (await this.prisma.client.razorpayWebhookReceipt.count({ where: { eventId } })) > 0 ||
+      (await this.prisma.client.razorpayWebhookIgnored.count({ where: { eventId } })) > 0 ||
+      (await this.prisma.client.razorpayRefundEvent.count({ where: { eventId } })) > 0;
+    const current =
+      event.outcome === 'HANDLED' && !known
+        ? await this.orders.currentPayment(event.evidence)
+        : null;
+    // From here on the body is authentic: every outcome is 2xx unless our own storage fails (5xx).
+    const alert = await this.prisma.client.$transaction(
+      async (tx): Promise<PaymentAlert | null> => {
+        // The header is not signed: bind it to the original body, and never attribute from this header.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId}))`;
+        const priorDigest =
+          (await tx.razorpayWebhookReceipt.findUnique({ where: { eventId } }))?.bodySha256 ??
+          (await tx.razorpayRefundEvent.findUnique({ where: { eventId } }))?.bodySha256 ??
+          (
+            await tx.razorpayWebhookIgnored.findFirst({
+              where: { eventId, reason: { not: 'DIGEST_CONFLICT' } },
+            })
+          )?.bodySha256;
+        if (priorDigest === summary.bodySha256) return null; // replay: no side effect
+        // Same id, different signed body: authentic, so never 4xx (24 h of 4xx disables the webhook).
+        if (priorDigest !== undefined) {
+          await this.ignore(tx, { ...summary, reason: 'DIGEST_CONFLICT' });
+          return {
+            kind: 'WEBHOOK_DIGEST_CONFLICT',
+            severity: 'critical',
+            details: { eventId, eventType: summary.eventType },
+          };
+        }
+        if (event.outcome === 'IGNORED') {
+          await this.ignore(tx, { ...summary, reason: event.reason });
+          return event.reason === 'ACCOUNT_MISMATCH'
+            ? {
+                kind: 'WEBHOOK_ACCOUNT_MISMATCH',
+                severity: 'critical',
+                details: { eventId, eventType: summary.eventType },
+              }
+            : null;
+        }
+        if (event.outcome === 'REFUND') {
+          const applied = await applyRefundEvent(
+            tx,
+            (entry, t) => this.audit.writeAuditEvent(entry, t),
+            event.refund,
+          );
+          if (applied === 'UNKNOWN_REFUND')
+            // A refund not issued through Docversity (e.g. the dashboard): recorded, never applied.
+            await this.ignore(tx, { ...summary, reason: 'UNHANDLED_EVENT' });
+          else if (applied === 'UNCHANGED') {
+            const known = await tx.razorpayRefund.findFirstOrThrow({
+              where: {
+                OR: [
+                  { providerRefundId: event.refund.providerRefundId },
+                  ...(event.refund.receipt ? [{ receipt: event.refund.receipt }] : []),
+                ],
+              },
+            });
+            // Stale or out-of-order: kept for dedupe, never moves the refund backwards.
+            await tx.razorpayRefundEvent.create({
+              data: {
+                refundId: known.id,
+                kind: 'WEBHOOK_IGNORED',
+                eventId,
+                bodySha256: summary.bodySha256,
+              },
+            });
+          }
+          return null;
+        }
+        const receipt = await tx.razorpayWebhookReceipt.create({
+          data: { id: randomUUID(), ...event.evidence },
+        });
+        const match =
+          event.evidence.captured && event.evidence.providerOrderId
+            ? await this.orders.matchCapture(tx, receipt, current)
+            : null;
+        await this.audit.writeAuditEvent(
+          {
+            action: AUDIT_ACTIONS.razorpayWebhookReceived,
+            entityType: 'RazorpayWebhookReceipt',
+            entityId: receipt.id,
+            metadata: {
+              eventType: event.evidence.eventType,
+              automaticallyAttributed: match?.matched ?? false,
+              ...(match && !match.matched ? { reason: match.reason } : {}),
+            },
+          },
+          tx,
+        );
+        return match && !match.matched && match.reason !== 'UNKNOWN_ORDER'
+          ? {
+              kind: 'CAPTURE_FLAGGED',
+              severity: REFUND_CANDIDATE.has(match.reason) ? 'critical' : 'warning',
+              details: {
+                receiptId: receipt.id,
+                reason: match.reason,
+                refundCandidate: REFUND_CANDIDATE.has(match.reason),
+              },
+            }
+          : null;
+      },
+    );
+    if (alert) await this.alerts.notify(alert);
+    // Identical body for every verified outcome, so responses reveal nothing about matching.
+    return { received: true, attributed: false } as const;
+  }
+  private async ignore(
+    tx: Prisma.TransactionClient,
+    row: {
+      eventId: string;
+      eventType: string | null;
+      bodySha256: string;
+      providerCreatedAt: Date | null;
+      reason: RazorpayIgnoreReason | 'DIGEST_CONFLICT';
+    },
+  ) {
+    const ignored = await tx.razorpayWebhookIgnored.create({ data: row });
+    await this.audit.writeAuditEvent(
+      {
+        action: AUDIT_ACTIONS.razorpayWebhookIgnored,
+        entityType: 'RazorpayWebhookIgnored',
+        entityId: ignored.id,
+        metadata: { eventType: row.eventType, reason: row.reason },
+      },
+      tx,
+    );
   }
   async receipts(id: string) {
     const payment = await this.prisma.client.reExamPayment.findUnique({

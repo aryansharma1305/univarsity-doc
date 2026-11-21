@@ -8,13 +8,14 @@ import {
   type PaymentButtonView,
 } from '@docversity/validation';
 import { studentRequest } from '@/lib/api';
+import { RazorpayOrderCheckout } from './razorpay-checkout';
 
 /** Each mount owns its form/script. React owns only the container, not provider-mutated children. */
 export function RazorpayTestEmbed({
   checkout,
   label,
 }: {
-  checkout: NonNullable<PaymentButtonView['checkout']>;
+  checkout: Extract<NonNullable<PaymentButtonView['checkout']>, { buttonId: string }>;
   label: string;
 }) {
   const root = useRef<HTMLDivElement>(null);
@@ -98,11 +99,14 @@ export function PaymentButtonPanel({
       <p className="mt-2 text-sm text-muted-foreground">
         {view?.unavailableReason ??
           (view?.checkout
-            ? 'Use test details only. Staff must verify the provider record and application ownership.'
+            ? 'Use test details only. Staff verify every payment before it counts.'
             : 'Online payment is currently unavailable. No transaction can be started here.')}
       </p>
-      {view?.checkout && view.status === 'PENDING' && (
+      {view?.checkout && view.status === 'PENDING' && 'buttonId' in view.checkout && (
         <RazorpayTestEmbed checkout={view.checkout} label={RAZORPAY_BUTTONS[service].label} />
+      )}
+      {view?.checkout && 'kind' in view.checkout && view.paymentId && (
+        <RazorpayOrderCheckout paymentId={view.paymentId} />
       )}
     </section>
   );

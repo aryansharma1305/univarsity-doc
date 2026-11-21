@@ -86,6 +86,11 @@ export const PERMISSIONS = {
   reExamPaymentsRead: 'reExamPayments.read',
   /** Confirm or reject a submitted payment after checking the university's own account. */
   reExamPaymentsVerify: 'reExamPayments.verify',
+  /**
+   * Approve or reject a Razorpay TEST refund that someone else requested (maker-checker). Granted to
+   * SUPER_ADMIN only until the university names refund approvers (plan D6).
+   */
+  reExamPaymentsRefundApprove: 'reExamPayments.refundApprove',
   templatesRead: 'templates.read',
   templatesWrite: 'templates.write',
   /** Import history, rows and error reports. */

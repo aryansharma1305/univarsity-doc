@@ -6,6 +6,8 @@ export const QUEUE_NAMES = {
   system: 'system',
   /** Spreadsheet imports: parse → validate → commit (Phase 5: students). */
   imports: 'imports',
+  /** Razorpay TEST-mode reconciliation; consumed only when PAYMENTS_RAZORPAY_MODE=test. */
+  payments: 'payments',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -30,3 +32,8 @@ export const IMPORT_JOB_NAMES = {
 } as const;
 
 export type ImportJobName = (typeof IMPORT_JOB_NAMES)[keyof typeof IMPORT_JOB_NAMES];
+
+export const PAYMENT_JOB_NAMES = {
+  /** Scheduled reconciliation of Razorpay test orders and refunds (no payload). */
+  razorpayReconcile: 'razorpay.reconcile',
+} as const;

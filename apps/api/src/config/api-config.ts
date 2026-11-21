@@ -1,5 +1,9 @@
 import {
+  PAYMENTS_FORBIDDEN_DEPLOYMENT,
+  RAZORPAY_LIVE_APPROVAL_REF,
   databaseEnvSchema,
+  razorpayEnvSchema,
+  refineRazorpayEnv,
   envBoolean,
   httpUrl,
   importLimitsEnvSchema,
@@ -140,6 +144,8 @@ export const apiEnvSchema = z
     /** Wrong codes entered for a registration before its open code is revoked. */
     STUDENT_ACTIVATION_MAX_FAILED_ATTEMPTS: z.coerce.number().int().min(3).max(100).default(10),
 
+    ...razorpayEnvSchema.shape,
+
     ...databaseEnvSchema.shape,
     ...redisEnvSchema.shape,
     ...storageEnvSchema.shape,
@@ -147,6 +153,7 @@ export const apiEnvSchema = z
     ...importLimitsEnvSchema.shape,
   })
   .superRefine((env, ctx) => {
+    refineRazorpayEnv(env, ctx, env);
     if (env.SESSION_ABSOLUTE_TIMEOUT_SECONDS < env.SESSION_IDLE_TIMEOUT_SECONDS) {
       ctx.addIssue({
         code: 'custom',
@@ -213,6 +220,8 @@ export const apiEnvSchema = z
       });
     }
   });
+
+export { PAYMENTS_FORBIDDEN_DEPLOYMENT, RAZORPAY_LIVE_APPROVAL_REF };
 
 export type ApiConfig = z.infer<typeof apiEnvSchema>;
 

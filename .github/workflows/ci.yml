@@ -26,6 +26,15 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      # Razorpay keys are runtime secrets only: fail on anything shaped like a real key id or an
+      # assigned RAZORPAY_* secret anywhere in the tree (tests use short synthetic ids).
+      - name: Razorpay credential scan
+        run: |
+          if git grep -nIE 'rzp_(test|live)_[A-Za-z0-9]{14}|^[[:space:]]*RAZORPAY_(KEY_SECRET|WEBHOOK_SECRET|KEY_ID|ACCOUNT_ID)=[^[:space:]]'; then
+            echo "Razorpay credential-like value committed" >&2
+            exit 1
+          fi
+
       - name: Set up pnpm (version from package.json "packageManager")
         uses: pnpm/action-setup@v6
 

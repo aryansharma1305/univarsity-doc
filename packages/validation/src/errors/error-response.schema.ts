@@ -48,6 +48,8 @@ export const ERROR_CODES = {
   forbidden: 'FORBIDDEN',
   notFound: 'NOT_FOUND',
   conflict: 'CONFLICT',
+  /** The payment provider could not be reached or refused the request; nothing was charged. */
+  paymentProviderUnavailable: 'PAYMENT_PROVIDER_UNAVAILABLE',
   documentNotEditable: 'DOCUMENT_NOT_EDITABLE',
   documentNotReady: 'DOCUMENT_NOT_READY',
   curriculumNotEditable: 'CURRICULUM_NOT_EDITABLE',

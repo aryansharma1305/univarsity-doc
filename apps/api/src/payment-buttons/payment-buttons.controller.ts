@@ -4,6 +4,16 @@ import type { Request } from 'express';
 import { PERMISSIONS } from '@docversity/types';
 import {
   paymentButtonViewSchema,
+  razorpayCheckoutReturnResultSchema,
+  razorpayCheckoutReturnSchema,
+  razorpayOrderViewSchema,
+  razorpayWorkspaceSchema,
+  requestRazorpayRefundSchema,
+  resolveRazorpayRefundSchema,
+  type ResolveRazorpayRefund,
+  studentRazorpayHistorySchema,
+  type RazorpayCheckoutReturn,
+  type RequestRazorpayRefund,
   razorpayReceiptsSchema,
   razorpayReconciliationSchema,
   razorpayWebhookResponseSchema,
@@ -25,6 +35,8 @@ import { UuidParamPipe } from '../common/uuid-param.pipe.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { openApiRequestSchema } from '../common/openapi.js';
 import { PaymentButtonsService } from './payment-buttons.service.js';
+import { RazorpayOrdersService } from './razorpay-orders.service.js';
+import { RazorpayRefundsService } from './razorpay-refunds.service.js';
 
 @ApiTags('payment-buttons')
 @ApiCookieAuth('studentSession')
@@ -50,6 +62,95 @@ export class StudentPaymentButtonsController {
   @ApiOkResponse({ standardSchema: paymentButtonViewSchema })
   certificate(@CurrentStudent() student: StudentContext, @Param('id', UuidParamPipe) id: string) {
     return this.service.certificate(student.studentId, id);
+  }
+}
+/** Test-mode Orders API checkout for an own re-exam obligation. 404 unless PAYMENTS_RAZORPAY_MODE=test. */
+@ApiTags('payment-buttons')
+@ApiCookieAuth('studentSession')
+@StudentRoute()
+@Controller('student/re-exam-payments')
+export class StudentRazorpayOrdersController {
+  constructor(private readonly orders: RazorpayOrdersService) {}
+  @Post(':id/razorpay-order')
+  @HttpCode(200)
+  @ApiSecurity('csrf')
+  @ApiOkResponse({ standardSchema: razorpayOrderViewSchema })
+  order(@CurrentStudent() student: StudentContext, @Param('id', UuidParamPipe) id: string) {
+    return this.orders.create(student.studentId, student.accountId, id);
+  }
+  @Get(':id/razorpay')
+  @ApiOkResponse({ standardSchema: studentRazorpayHistorySchema })
+  history(@CurrentStudent() student: StudentContext, @Param('id', UuidParamPipe) id: string) {
+    return this.orders.studentHistory(student.studentId, id);
+  }
+  @Post(':id/razorpay-return')
+  @HttpCode(200)
+  @ApiSecurity('csrf')
+  @ApiBody({ schema: openApiRequestSchema(razorpayCheckoutReturnSchema) })
+  @ApiOkResponse({ standardSchema: razorpayCheckoutReturnResultSchema })
+  checkoutReturn(
+    @CurrentStudent() student: StudentContext,
+    @Param('id', UuidParamPipe) id: string,
+    @Body(new ZodValidationPipe(razorpayCheckoutReturnSchema)) body: RazorpayCheckoutReturn,
+  ) {
+    return this.orders.checkoutReturn(student.studentId, student.accountId, id, body);
+  }
+}
+/** Staff Razorpay TEST workspace and maker-checker refunds. 404 unless PAYMENTS_RAZORPAY_MODE=test. */
+@ApiTags('payment-buttons')
+@ApiCookieAuth('session')
+@Controller('payment-buttons/razorpay')
+export class StaffRazorpayController {
+  constructor(private readonly refunds: RazorpayRefundsService) {}
+  @Get('re-exam-payments/:id')
+  @RequirePermissions(PERMISSIONS.reExamPaymentsRead)
+  @ApiOkResponse({ standardSchema: razorpayWorkspaceSchema })
+  workspace(@Param('id', UuidParamPipe) id: string) {
+    return this.refunds.workspace(id);
+  }
+  @Post('re-exam-payments/:id/refunds')
+  @HttpCode(200)
+  @ApiSecurity('csrf')
+  @RequirePermissions(PERMISSIONS.reExamPaymentsVerify)
+  @ApiBody({ schema: openApiRequestSchema(requestRazorpayRefundSchema) })
+  requestRefund(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidParamPipe) id: string,
+    @Body(new ZodValidationPipe(requestRazorpayRefundSchema)) body: RequestRazorpayRefund,
+  ) {
+    return this.refunds.request(id, body, auth.user.id);
+  }
+  @Post('refunds/:refundId/approve')
+  @HttpCode(200)
+  @ApiSecurity('csrf')
+  @RequirePermissions(PERMISSIONS.reExamPaymentsRefundApprove)
+  approveRefund(
+    @CurrentAuth() auth: AuthContext,
+    @Param('refundId', UuidParamPipe) refundId: string,
+  ) {
+    return this.refunds.approve(refundId, auth.user.id);
+  }
+  @Post('refunds/:refundId/resolve')
+  @HttpCode(200)
+  @ApiSecurity('csrf')
+  @RequirePermissions(PERMISSIONS.reExamPaymentsRefundApprove)
+  @ApiBody({ schema: openApiRequestSchema(resolveRazorpayRefundSchema) })
+  resolveRefund(
+    @CurrentAuth() auth: AuthContext,
+    @Param('refundId', UuidParamPipe) refundId: string,
+    @Body(new ZodValidationPipe(resolveRazorpayRefundSchema)) body: ResolveRazorpayRefund,
+  ) {
+    return this.refunds.resolve(refundId, body.action, auth.user.id);
+  }
+  @Post('refunds/:refundId/reject')
+  @HttpCode(200)
+  @ApiSecurity('csrf')
+  @RequirePermissions(PERMISSIONS.reExamPaymentsRefundApprove)
+  rejectRefund(
+    @CurrentAuth() auth: AuthContext,
+    @Param('refundId', UuidParamPipe) refundId: string,
+  ) {
+    return this.refunds.reject(refundId, auth.user.id);
   }
 }
 @ApiTags('payment-buttons')
@@ -86,7 +187,7 @@ export class RazorpayWebhookController {
   @ApiOkResponse({ standardSchema: razorpayWebhookResponseSchema })
   webhook(@Req() request: Request) {
     return this.service.webhook(
-      request.body as Buffer,
+      request.body,
       request.header('x-razorpay-signature'),
       request.header('x-razorpay-event-id'),
       request.ip ?? 'unknown',

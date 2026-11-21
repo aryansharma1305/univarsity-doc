@@ -2,12 +2,16 @@
   "name": "@docversity/payments",
   "version": "0.0.0",
   "private": true,
-  "description": "Provider-neutral payment contract and isolated synthetic sandbox adapter; no live collection.",
+  "description": "Razorpay test-mode client and server core, plus the synthetic sandbox adapter; no live collection.",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
     }
   },
   "files": [
@@ -22,6 +26,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@docversity/database": "workspace:*",
+    "@docversity/types": "workspace:*",
+    "@docversity/validation": "workspace:*",
     "zod": "4.6.5"
   },
   "devDependencies": {

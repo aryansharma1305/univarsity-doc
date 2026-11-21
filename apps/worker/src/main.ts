@@ -1,6 +1,15 @@
 import { createPrismaClient } from '@docversity/database';
 import { S3ObjectStorage } from '@docversity/storage';
+import { Queue } from 'bullmq';
+import { razorpayPolicy } from '@docversity/payments/server';
+import { QUEUE_NAMES } from '@docversity/types';
+import { bullmqConnection } from './connection.ts';
 import { createWorkers } from './create-workers.ts';
+import {
+  razorpayProcessor,
+  scheduleRazorpayReconcile,
+  unscheduleRazorpayReconcile,
+} from './razorpay.ts';
 import { loadRootEnv, loadWorkerEnv } from './env.ts';
 
 function log(message: string): void {
@@ -24,7 +33,31 @@ function main(): void {
       engine: { prisma, storage, limits: env },
       concurrency: env.IMPORT_CONCURRENCY,
     },
+    // Mode off (default, production): no payments queue is consumed or scheduled at all.
+    ...(razorpayPolicy(env) ? { payments: razorpayProcessor({ prisma, env }) } : {}),
   });
+  {
+    const queue = new Queue(QUEUE_NAMES.payments, {
+      connection: bullmqConnection(env.REDIS_URL),
+      prefix: env.QUEUE_PREFIX,
+    });
+    // Mode off still clears a schedule left by an earlier test-mode run on the same Redis/prefix.
+    // Kept deliberately: the worker already holds Redis connections for its other queues, this one
+    // is closed right after, and "a schedule may exist" cannot be known without asking Redis.
+    const enabled = razorpayPolicy(env) !== null;
+    void (enabled ? scheduleRazorpayReconcile(queue) : unscheduleRazorpayReconcile(queue))
+      .then(() => {
+        if (enabled) log('razorpay: mode=test reconciliation scheduled');
+      })
+      .catch((error: unknown) => {
+        log(
+          `razorpay: could not ${enabled ? 'schedule' : 'clear'} reconciliation: ${error instanceof Error ? error.message : 'error'}`,
+        );
+      })
+      .finally(() => {
+        void queue.close();
+      });
+  }
 
   // While Redis is unavailable BullMQ retries continuously. Log each distinct error once instead
   // of once per retry; the suppression resets when the worker is ready or completes a job.
