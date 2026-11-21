@@ -30,9 +30,10 @@ export class RazorpayReconciliationService {
     private readonly alerts: PaymentAlertsService,
   ) {}
 
-  run(now = new Date(), lookbackDays = 3): Promise<ReconciliationSummary> {
+  // async: a disabled mode is a rejected promise (404), never a synchronous throw.
+  async run(now = new Date(), lookbackDays = 3): Promise<ReconciliationSummary> {
     this.policy.requireFixture();
-    return reconcileRazorpay({
+    return await reconcileRazorpay({
       prisma: this.prisma.client,
       client: this.gateway.client(),
       audit: (entry, tx) => this.audit.writeAuditEvent(entry, tx),

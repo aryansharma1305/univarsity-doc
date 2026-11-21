@@ -108,7 +108,8 @@ export class RazorpayRefundsService {
           ERROR_CODES.forbidden,
           'A refund must be approved by someone other than the person who requested it.',
         );
-      if (row.status === 'APPROVED') return;
+      // Idempotent: an approved refund (sent or not) is never approved or sent twice.
+      if (['APPROVED', 'PENDING', 'PROCESSED', 'FAILED'].includes(row.status)) return;
       if (row.status !== 'REQUESTED') throw conflict('This refund has already been decided.');
       await tx.razorpayRefund.update({
         where: { id: refundId },
