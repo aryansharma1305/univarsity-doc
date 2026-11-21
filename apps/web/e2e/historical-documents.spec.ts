@@ -141,8 +141,15 @@ test('staff upload, publish, replace and withdraw; the student sees only their p
   });
   await expect(card).toContainText('LEG/2019/00042');
   await expect(card).toContainText('Not independently verified');
-  await expect(portal.locator('main input, main form')).toHaveCount(0);
-  await expect(portal.getByRole('button', { name: /upload|delete|replace|edit/i })).toHaveCount(0);
+  // University-issued documents stay read-only for the student; the separate "My uploads"
+  // section (student-owned files) is the only place with upload controls on this page.
+  const universityDocuments = portal.locator(
+    'section[aria-labelledby="university-documents-heading"]',
+  );
+  await expect(universityDocuments.locator('input, form')).toHaveCount(0);
+  await expect(
+    universityDocuments.getByRole('button', { name: /upload|delete|replace|edit/i }),
+  ).toHaveCount(0);
   const download = await portal.request.get(`/api/v1/student/documents/${shared.documentId}/file`);
   expect(download.status()).toBe(200);
   expect(download.headers()['content-type']).toBe('application/pdf');

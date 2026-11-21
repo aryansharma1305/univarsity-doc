@@ -77,7 +77,12 @@ test('student finds, previews and downloads the fixed sample across all sizes wi
   const afterResponse = await page.request.get('/api/v1/student/documents');
   expect(afterResponse.status()).toBe(200);
   expect(studentDocumentListSchema.parse(await afterResponse.json())).toEqual(initialDocuments);
-  await expect(page.locator('main').getByRole('article')).toHaveCount(initialDocuments.data.length);
+  // Downloading a sample never creates a document for the student.
+  await page.goto('/student/documents');
+  await expect(page.getByRole('heading', { level: 2, name: 'My uploads' })).toBeVisible();
+  await expect(
+    page.locator('section[aria-labelledby="university-documents-heading"]').getByRole('article'),
+  ).toHaveCount(initialDocuments.data.length);
   const staff = await page.request.get('/api/v1/certificate-templates');
   expect(staff.status()).toBe(401);
 });
