@@ -297,7 +297,7 @@ export function StudentCourses({
     <section
       id="course-details"
       aria-labelledby="course-details-heading"
-      className="mt-8 scroll-mt-6"
+      className="mt-8 scroll-mt-24"
     >
       <h2 id="course-details-heading" className="mb-4 text-lg font-semibold text-navy-950">
         Course Details

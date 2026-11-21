@@ -46,7 +46,7 @@ export function StudentExaminationsPage({ data }: { data: StudentExaminations | 
               <span className="font-semibold">Apply for Re-exam</span>
             </Link>
           </li>
-          <li>
+          <li id="exam-panel" className="scroll-mt-24">
             {panel ? (
               <a
                 href={panel.websiteUrl}

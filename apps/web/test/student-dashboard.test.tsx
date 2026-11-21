@@ -100,6 +100,24 @@ describe('student dashboard and read-only pages', () => {
     expect(STUDENT_NAV.map((item) => item.label)).not.toContain('Course Details');
   });
 
+  it('lists the requested sub-items under My Profile, Examinations and Results only', () => {
+    const children = Object.fromEntries(
+      STUDENT_NAV.map((item) => [item.label, item.children?.map((child) => child.label) ?? []]),
+    );
+    expect(children['My Profile']).toEqual(['Course Details', 'Update My Details']);
+    expect(children.Examinations).toEqual([
+      'Apply for Exam',
+      'Apply for Re-exam',
+      'Login to Exam Panel',
+    ]);
+    expect(children.Results).toEqual(['View Result']);
+    expect(STUDENT_NAV.filter((item) => item.children).map((item) => item.label)).toEqual([
+      'My Profile',
+      'Examinations',
+      'Results',
+    ]);
+  });
+
   it('offers only existing student destinations and never infers a current period', () => {
     render(
       <StudentOverview

@@ -42,7 +42,7 @@ test('a student submits a missing DOB and photo; a registrar approves; the profi
   await page.goto('/student/profile');
   // The profile is read-only; the existing form opens only from "Update My Details".
   await expect(page.getByRole('button', { name: 'Review changes' })).toHaveCount(0);
-  await page.getByRole('link', { name: 'Update My Details' }).click();
+  await page.getByRole('main').getByRole('link', { name: 'Update My Details' }).click();
   await expect(page).toHaveURL(/\/student\/profile\/update$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Update My Details' })).toBeVisible();
   await expectNoSeriousA11yViolations(page);

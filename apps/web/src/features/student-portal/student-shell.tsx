@@ -39,61 +39,85 @@ const MOBILE_LABELS: Record<string, string> = {
 function StudentNavigation({
   onNavigate,
   mobile = false,
-  secondary = false,
 }: {
   onNavigate?: () => void;
   mobile?: boolean;
-  secondary?: boolean;
 }) {
   const pathname = usePathname();
   const group = useId();
   const reduce = useReducedMotion();
+  // The drawer lists every section so sub-pages stay reachable on small screens.
   const items = mobile
     ? STUDENT_NAV.filter((item) => PRIMARY_MOBILE.includes(item.href))
-    : secondary
-      ? STUDENT_NAV.filter((item) => !PRIMARY_MOBILE.includes(item.href))
-      : STUDENT_NAV;
+    : STUDENT_NAV;
   return (
     <LayoutGroup id={group}>
       <nav
         aria-label={mobile ? 'Student quick navigation' : 'Student'}
-        className={cn(mobile ? 'grid grid-cols-4 gap-1' : 'flex flex-col gap-1 px-4 py-5')}
+        className={cn(
+          mobile
+            ? 'grid grid-cols-4 gap-1'
+            : 'flex min-h-0 flex-col gap-1 overflow-y-auto px-4 py-5',
+        )}
       >
-        {items.map(({ href, label, icon: Icon, available }) => {
+        {items.map(({ href, label, icon: Icon, available, children }) => {
           const active = isStudentNavActive(pathname, href);
           return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onNavigate}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'relative flex min-h-12 items-center gap-3 rounded-lg text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
-                mobile
-                  ? 'flex-col justify-center gap-1 px-1 py-2 text-[11px] text-muted-foreground'
-                  : 'px-3 py-3 text-muted-foreground hover:bg-secondary hover:text-navy-950',
-                active && 'text-brand',
-              )}
-            >
-              {active && (
-                <motion.span
-                  layoutId="student-section"
-                  aria-hidden="true"
-                  initial={false}
-                  transition={{ duration: reduce ? 0 : 0.22, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute inset-0 rounded-lg bg-secondary"
-                />
-              )}
-              <Icon aria-hidden="true" className="relative size-5 shrink-0" />
-              <span className={cn('relative min-w-0', !mobile && 'flex-1')}>
-                {mobile ? MOBILE_LABELS[href] : label}
-              </span>
-              {!available && (
-                <span className="relative">
-                  <SoonBadge />
+            <div key={href} className={cn(!mobile && 'flex flex-col gap-1')}>
+              <Link
+                href={href}
+                onClick={onNavigate}
+                aria-current={active ? 'page' : undefined}
+                className={cn(
+                  'relative flex min-h-12 items-center gap-3 rounded-lg text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
+                  mobile
+                    ? 'flex-col justify-center gap-1 px-1 py-2 text-[11px] text-muted-foreground'
+                    : 'px-3 py-3 text-muted-foreground hover:bg-secondary hover:text-navy-950',
+                  active && 'text-brand',
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="student-section"
+                    aria-hidden="true"
+                    initial={false}
+                    transition={{ duration: reduce ? 0 : 0.22, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute inset-0 rounded-lg bg-secondary"
+                  />
+                )}
+                <Icon aria-hidden="true" className="relative size-5 shrink-0" />
+                <span className={cn('relative min-w-0', !mobile && 'flex-1')}>
+                  {mobile ? MOBILE_LABELS[href] : label}
                 </span>
+                {!available && (
+                  <span className="relative">
+                    <SoonBadge />
+                  </span>
+                )}
+              </Link>
+              {!mobile && children && (
+                <ul aria-label={label} className="ml-6 flex flex-col border-l border-border pl-3">
+                  {children.map((child) => {
+                    // Sub-items are highlighted visually; aria-current stays on the section link.
+                    const childActive = !child.href.includes('#') && pathname === child.href;
+                    return (
+                      <li key={child.href}>
+                        <Link
+                          href={child.href}
+                          onClick={onNavigate}
+                          className={cn(
+                            'flex min-h-10 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-navy-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
+                            childActive && 'font-medium text-brand',
+                          )}
+                        >
+                          {child.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
-            </Link>
+            </div>
           );
         })}
       </nav>
@@ -190,7 +214,6 @@ export function StudentShell({
                   </SheetDescription>
                 </SheetHeader>
                 <StudentNavigation
-                  secondary
                   onNavigate={() => {
                     setOpen(false);
                   }}

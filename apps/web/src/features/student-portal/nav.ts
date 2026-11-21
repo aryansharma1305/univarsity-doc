@@ -9,6 +9,7 @@ import {
   SettingsIcon,
   UserRoundIcon,
 } from 'lucide-react';
+import type { Route } from 'next';
 
 export type StudentNavHref =
   | '/student'
@@ -35,19 +36,41 @@ export interface StudentNavItem {
   icon: LucideIcon;
   /** Planned modules are reachable (they explain their status) but marked "Soon" — never faked. */
   available: boolean;
+  /** Sub-pages listed under the section in the sidebar and drawer (not in the mobile quick bar). */
+  children?: readonly { href: Route; label: string }[];
 }
 
 export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/student', label: 'Dashboard', icon: LayoutDashboardIcon, available: true },
-  { href: '/student/profile', label: 'My Profile', icon: UserRoundIcon, available: true },
+  {
+    href: '/student/profile',
+    label: 'My Profile',
+    icon: UserRoundIcon,
+    available: true,
+    children: [
+      { href: '/student/profile#course-details', label: 'Course Details' },
+      { href: '/student/profile/update', label: 'Update My Details' },
+    ],
+  },
   { href: '/student/requests', label: 'My Requests', icon: HistoryIcon, available: true },
   {
     href: '/student/examinations',
     label: 'Examinations',
     icon: ClipboardCheckIcon,
     available: true,
+    children: [
+      { href: '/student/examinations/apply', label: 'Apply for Exam' },
+      { href: '/student/examinations/re-exam', label: 'Apply for Re-exam' },
+      { href: '/student/examinations#exam-panel', label: 'Login to Exam Panel' },
+    ],
   },
-  { href: '/student/results', label: 'Results', icon: ClipboardListIcon, available: true },
+  {
+    href: '/student/results',
+    label: 'Results',
+    icon: ClipboardListIcon,
+    available: true,
+    children: [{ href: '/student/results', label: 'View Result' }],
+  },
   {
     href: '/student/certificate-requests',
     label: 'Certificate Requests',
