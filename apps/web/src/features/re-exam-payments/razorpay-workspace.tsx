@@ -156,7 +156,40 @@ export function RazorpayWorkspacePanel({ paymentId }: { paymentId: string }) {
                     </Button>
                   </div>
                 )}
-                {canDecide && ['APPROVED', 'SENDING'].includes(r.status) && (
+                {canDecide && r.status === 'SENDING' && r.failureReason && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <p className="w-full text-xs text-muted-foreground">
+                      Razorpay refused this refund. Each action first asks Razorpay whether it
+                      exists.
+                    </p>
+                    <Button
+                      size="sm"
+                      disabled={act.isPending}
+                      onClick={() => {
+                        act.mutate({
+                          path: `payment-buttons/razorpay/refunds/${r.id}/resolve`,
+                          body: { action: 'RETRY' },
+                        });
+                      }}
+                    >
+                      Look up and retry
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={act.isPending}
+                      onClick={() => {
+                        act.mutate({
+                          path: `payment-buttons/razorpay/refunds/${r.id}/resolve`,
+                          body: { action: 'MARK_FAILED' },
+                        });
+                      }}
+                    >
+                      Look up and mark failed
+                    </Button>
+                  </div>
+                )}
+                {canDecide && ['APPROVED', 'SENDING'].includes(r.status) && !r.failureReason && (
                   <Button
                     size="sm"
                     className="mt-2"

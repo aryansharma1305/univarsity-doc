@@ -112,6 +112,32 @@ it('lets a requester request but not approve, and lists refund candidates', asyn
   expect(screen.getAllByRole('button', { name: /Request refund/ }).length).toBeGreaterThan(0);
 });
 
+it('offers lookup-first resolution for a refused send to refund approvers', async () => {
+  const fetchMock = mockFetch((method) =>
+    method === 'GET'
+      ? {
+          body: {
+            ...workspace,
+            refundRequests: [
+              { ...workspace.refundRequests[0], status: 'SENDING', failureReason: 'REJECTED' },
+            ],
+          },
+        }
+      : { body: { id: refundId, status: 'FAILED' } },
+  );
+  renderWithProviders(<RazorpayWorkspacePanel paymentId={paymentId} />, VERIFIER);
+  await userEvent.click(await screen.findByRole('button', { name: 'Look up and mark failed' }));
+  expect(screen.getByRole('button', { name: 'Look up and retry' })).toBeInTheDocument();
+  await waitFor(() => {
+    expect(
+      fetchMock.mock.calls.some(
+        ([, init]) =>
+          init?.method === 'POST' && init.body === JSON.stringify({ action: 'MARK_FAILED' }),
+      ),
+    ).toBe(true);
+  });
+});
+
 it('offers no refund actions without the verify permission', async () => {
   mockFetch(() => ({ body: workspace }));
   renderWithProviders(<RazorpayWorkspacePanel paymentId={paymentId} />, READER);

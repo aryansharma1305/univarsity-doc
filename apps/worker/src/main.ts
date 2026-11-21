@@ -41,6 +41,9 @@ function main(): void {
       connection: bullmqConnection(env.REDIS_URL),
       prefix: env.QUEUE_PREFIX,
     });
+    // Mode off still clears a schedule left by an earlier test-mode run on the same Redis/prefix.
+    // Kept deliberately: the worker already holds Redis connections for its other queues, this one
+    // is closed right after, and "a schedule may exist" cannot be known without asking Redis.
     const enabled = razorpayPolicy(env) !== null;
     void (enabled ? scheduleRazorpayReconcile(queue) : unscheduleRazorpayReconcile(queue))
       .then(() => {

@@ -126,3 +126,19 @@ forward only. A refund never changes the obligation or the application.
 - **Reconciliation** pages through every recent order, never abandons an order while Razorpay has a
   `created`/`authorized` payment on it, and checks `amount_refunded` against PENDING + PROCESSED
   (+ SENDING) refunds. In mode off the worker removes any leftover `razorpay-reconcile` schedule.
+
+## Round-3 fixes
+
+- A refused refund send (`SENDING` with a failure reason) is never resent or re-alerted
+  automatically. A refund approver (not the requester) uses
+  `POST /api/v1/payment-buttons/razorpay/refunds/:id/resolve` with `RETRY` or `MARK_FAILED`. The
+  provider is always asked first; if Razorpay has the refund, its status wins. `MARK_FAILED` is a
+  recorded staff decision and frees the headroom.
+- An expired unpaid order is closed only after `GET /orders/{id}/payments` shows no created,
+  authorized or captured payment. If Razorpay cannot answer, the order stays open.
+- Refund webhooks also match our refund by `notes.refund_id` (sent on create). An early webhook is
+  therefore applied to our refund and is never recorded as a dashboard refund.
+- Worker in mode off: it still opens a short-lived queue connection and calls
+  `removeJobScheduler` once at start. This is idempotent and cheap: the worker already connects to
+  Redis, and whether a schedule exists cannot be known without asking Redis.
+- Migrations renumbered after `20261122090000_student_uploads`: `20261124…` to `20261127…`.
