@@ -55,6 +55,9 @@ institutional policy.
    suspended." also applies to `COMPLETED` (graduated) registrations; see A17. Proposed fix, which
    needs a university decision on wording: add a `COMPLETED` response status (a contract change), or
    use a neutral INACTIVE message such as "This registration is not currently active."
+   **Resolved (public verification portal, 2026-11-22):** the response now carries `recordStatus`
+   (ACTIVE, COMPLETED, SUSPENDED or REVOKED) and status-aware wording for both the owner and the
+   anonymous path; only ACTIVE is ever described as active. A17 asserts each status.
 3. **Document numbers are case-sensitive; registration numbers are not.** The certificate lookup
    uses `certificateNumber: input.reference` exactly, while the reference budget key and registration
    lookup upper-case the input (A7). A lowercase entry of a printed number returns NOT_FOUND. Either

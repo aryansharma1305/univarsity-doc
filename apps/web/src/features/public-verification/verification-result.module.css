@@ -1,7 +1,7 @@
 /* Mentor-approved verification result: green banner, left identity/status panel, right details. */
 
 .wrap {
-  width: min(100%, 64rem);
+  width: 100%;
   margin: 32px auto 0;
   text-align: left;
 }
@@ -94,6 +94,8 @@
 }
 
 .portrait {
+  align-self: center;
+  width: 100%;
   display: grid;
   aspect-ratio: 1;
   place-items: center;
@@ -256,6 +258,11 @@
   color: var(--dv-navy-950);
 }
 
+.wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -359,7 +366,6 @@
 
   .portrait {
     width: min(100%, 12rem);
-    justify-self: center;
   }
 
   .banner {

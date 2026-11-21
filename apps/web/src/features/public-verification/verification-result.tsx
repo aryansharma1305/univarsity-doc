@@ -129,22 +129,32 @@ export function VerificationPrintView({ children }: { children: ReactNode }) {
   );
 }
 
+/** Left identity panel, right details; `wide` content (a marks table) spans both columns. */
 function Card({
   left,
   right,
+  wide,
   actions,
 }: {
   left: ReactNode;
   right: ReactNode;
+  wide?: ReactNode;
   actions?: ReactNode;
 }) {
+  const buttons = actions && <div className={`${styles.actions} print:hidden`}>{actions}</div>;
   return (
     <div className={styles.card}>
       {left}
       <div className="min-w-0">
         {right}
-        {actions && <div className={`${styles.actions} print:hidden`}>{actions}</div>}
+        {!wide && buttons}
       </div>
+      {wide && (
+        <div className={styles.wide}>
+          {wide}
+          {buttons}
+        </div>
+      )}
     </div>
   );
 }
@@ -481,25 +491,23 @@ function ResultResult({ response }: { response: OfficialVerificationResponse }) 
           </VerificationIdentityPanel>
         }
         right={
-          <>
-            <VerificationDetailsTable
-              heading={sheet ? 'Marksheet' : 'Result Information'}
-              rows={[
-                ['Institution', response.institution],
-                ['Student Name', d.studentName],
-                ['Course Name', d.program],
-                ['Roll Number', d.rollNumber],
-                ['Semester', d.period && periodLabel(d.period.structure, d.period.number)],
-                ['Academic Session', d.academicSession],
-                ['Examination', d.examination ?? sheet?.examination],
-                ['Result Status', outcome && <StatusBadge key="o" tone={tone} label={outcome} />],
-                ['Published On', sheet?.publishedAt.slice(0, 10)],
-              ]}
-            />
-            {results.map((r) => (
-              <ResultMarksheetTable key={r.id} result={r} />
-            ))}
-          </>
+          <VerificationDetailsTable
+            heading={sheet ? 'Marksheet' : 'Result Information'}
+            rows={[
+              ['Institution', response.institution],
+              ['Student Name', d.studentName],
+              ['Course Name', d.program],
+              ['Roll Number', d.rollNumber],
+              ['Semester', d.period && periodLabel(d.period.structure, d.period.number)],
+              ['Academic Session', d.academicSession],
+              ['Examination', d.examination ?? sheet?.examination],
+              ['Result Status', outcome && <StatusBadge key="o" tone={tone} label={outcome} />],
+              ['Published On', sheet?.publishedAt.slice(0, 10)],
+            ]}
+          />
+        }
+        wide={
+          results.length > 0 && results.map((r) => <ResultMarksheetTable key={r.id} result={r} />)
         }
         actions={
           sheet ? (

@@ -415,7 +415,7 @@ function ResultSearchForm({
   return (
     <>
       <form
-        className="grid gap-4 rounded-[20px] border border-border bg-card p-5 sm:grid-cols-3"
+        className="mx-auto grid max-w-3xl gap-4 rounded-[20px] border border-border bg-card p-5 sm:grid-cols-3"
         aria-busy={busy}
         onSubmit={(event) => {
           event.preventDefault();
@@ -513,7 +513,7 @@ function ResultSearchForm({
           </Button>
         </div>
       </form>
-      <details className="mt-4 text-sm">
+      <details className="mx-auto mt-4 max-w-3xl text-sm">
         <summary className="inline-flex min-h-11 cursor-pointer items-center font-medium text-brand">
           Student? See your own published marks after signing in
         </summary>
