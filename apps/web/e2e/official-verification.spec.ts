@@ -282,13 +282,11 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
           .locator('form')
           .filter({ has: checkerPage.getByLabel('Verification service', { exact: true }) }),
       ).toContainText(audience);
-      const card = checkerPage
-        .getByRole('article')
-        .filter({
-          has: checkerPage.getByText(
-            new RegExp('^' + service + ' · APPROVED · Synthetic Public Verification Course$'),
-          ),
-        });
+      const card = checkerPage.getByRole('article').filter({
+        has: checkerPage.getByText(
+          new RegExp('^' + service + ' · APPROVED · Synthetic Public Verification Course$'),
+        ),
+      });
       await expect(card).toContainText(audience);
       await card.getByText('Review proposed rules', { exact: true }).click();
       if (service === 'result')
