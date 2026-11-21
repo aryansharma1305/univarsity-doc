@@ -9,6 +9,8 @@ import {
   razorpayOrderViewSchema,
   razorpayWorkspaceSchema,
   requestRazorpayRefundSchema,
+  resolveRazorpayRefundSchema,
+  type ResolveRazorpayRefund,
   studentRazorpayHistorySchema,
   type RazorpayCheckoutReturn,
   type RequestRazorpayRefund,
@@ -127,6 +129,18 @@ export class StaffRazorpayController {
     @Param('refundId', UuidParamPipe) refundId: string,
   ) {
     return this.refunds.approve(refundId, auth.user.id);
+  }
+  @Post('refunds/:refundId/resolve')
+  @HttpCode(200)
+  @ApiSecurity('csrf')
+  @RequirePermissions(PERMISSIONS.reExamPaymentsRefundApprove)
+  @ApiBody({ schema: openApiRequestSchema(resolveRazorpayRefundSchema) })
+  resolveRefund(
+    @CurrentAuth() auth: AuthContext,
+    @Param('refundId', UuidParamPipe) refundId: string,
+    @Body(new ZodValidationPipe(resolveRazorpayRefundSchema)) body: ResolveRazorpayRefund,
+  ) {
+    return this.refunds.resolve(refundId, body.action, auth.user.id);
   }
   @Post('refunds/:refundId/reject')
   @HttpCode(200)

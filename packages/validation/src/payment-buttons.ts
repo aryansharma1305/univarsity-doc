@@ -248,3 +248,9 @@ export const studentRazorpayHistorySchema = z
   })
   .strict();
 export type StudentRazorpayHistory = z.infer<typeof studentRazorpayHistorySchema>;
+
+/** Refund approver's decision on a refused send, after a provider lookup. */
+export const resolveRazorpayRefundSchema = z
+  .object({ action: z.enum(['RETRY', 'MARK_FAILED']) })
+  .strict();
+export type ResolveRazorpayRefund = z.infer<typeof resolveRazorpayRefundSchema>;

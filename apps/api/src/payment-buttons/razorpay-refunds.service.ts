@@ -4,8 +4,10 @@ import {
   LIVE_REFUND_STATUSES,
   REFUND_CANDIDATE,
   refundState,
+  resolveRejectedRefund,
   submitApprovedRefund,
 } from '@docversity/payments/server';
+import { RazorpayApiError } from '@docversity/payments';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   ERROR_CODES,
@@ -183,6 +185,42 @@ export class RazorpayRefundsService {
       (entry, tx) => this.audit.writeAuditEvent(entry, tx),
       refundId,
     );
+    if (result.alert) await this.alerts.notify(result.alert);
+    return { id: refundId, status: result.status };
+  }
+
+  /** A refund approver resolves a refused send: provider lookup, then retry or mark FAILED. */
+  async resolve(refundId: string, action: 'RETRY' | 'MARK_FAILED', actorUserId: string) {
+    this.enabledPolicy();
+    const row = await this.prisma.client.razorpayRefund.findUnique({ where: { id: refundId } });
+    if (!row) throw Errors.notFound();
+    if (row.requestedByUserId === actorUserId)
+      throw new AppError(
+        HttpStatus.FORBIDDEN,
+        ERROR_CODES.forbidden,
+        'A refund must be decided by someone other than the person who requested it.',
+      );
+    let result;
+    try {
+      result = await resolveRejectedRefund(
+        this.prisma.client,
+        this.gateway.client(),
+        (entry, tx) => this.audit.writeAuditEvent(entry, tx),
+        refundId,
+        action,
+        actorUserId,
+      );
+    } catch (error) {
+      if (error instanceof RazorpayApiError)
+        throw new AppError(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          ERROR_CODES.paymentProviderUnavailable,
+          'Razorpay could not be asked about this refund; nothing was changed. Try again shortly.',
+        );
+      throw error;
+    }
+    if (result.outcome === 'NOT_REJECTED')
+      throw conflict('Only a refund whose send was refused can be resolved.');
     if (result.alert) await this.alerts.notify(result.alert);
     return { id: refundId, status: result.status };
   }

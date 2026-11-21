@@ -136,6 +136,14 @@ export class RazorpayOrdersService {
     for (;;) {
       const step = await this.reserve(paymentId, accountId, policy.merchantId);
       if (step.kind === 'CREATED') return view(step.order);
+      if (step.kind === 'EXPIRED') {
+        // Ask Razorpay before closing an old order: a payment may be in flight on it.
+        if (await this.paymentInFlight(step.order.providerOrderId)) return view(step.order);
+        await this.prisma.client.$transaction((tx) =>
+          abandonOpenRazorpayOrders(tx, { id: step.order.id, status: 'CREATED' }, 'EXPIRED'),
+        );
+        continue;
+      }
       if (step.kind === 'CLOSED') throw notPayable();
       if (step.kind === 'CALL') return view(await this.createRemote(step.order, accountId));
       // Another request holds the create lease: wait for it rather than calling Razorpay twice.
@@ -152,7 +160,7 @@ export class RazorpayOrdersService {
         where: { id: paymentId },
         include: { application: true, destination: true },
       });
-      let open = await tx.razorpayOrder.findFirst({
+      const open = await tx.razorpayOrder.findFirst({
         where: { paymentId, status: { in: ['RESERVED', 'CREATED'] } },
       });
       const now = Date.now();
@@ -163,8 +171,7 @@ export class RazorpayOrdersService {
       if (open?.status === 'CREATED') {
         if (now - open.createdAt.getTime() < this.orderTtlMs)
           return { kind: 'CREATED' as const, order: open };
-        await abandonOpenRazorpayOrders(tx, { id: open.id }, 'EXPIRED');
-        open = null;
+        return { kind: 'EXPIRED' as const, order: open };
       }
       const leaseUntil = new Date(now + CREATE_LEASE_MS);
       if (open) {
@@ -268,6 +275,17 @@ export class RazorpayOrdersService {
       );
       return updated;
     });
+  }
+
+  /** True when Razorpay has a created, authorized or captured payment on the order (or cannot say). */
+  private async paymentInFlight(providerOrderId: string | null): Promise<boolean> {
+    if (!providerOrderId) return false;
+    try {
+      const payments = await this.gateway.client().fetchOrderPayments(providerOrderId);
+      return payments.some((p) => ['created', 'authorized', 'captured'].includes(p.status));
+    } catch {
+      return true; // unknown: keep the order open rather than risk a capture on a closed order
+    }
   }
 
   private async releaseLease(orderId: string) {
