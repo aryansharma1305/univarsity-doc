@@ -21,10 +21,10 @@ describe('student results', () => {
       'href',
       '/student/examinations',
     );
-    expect(screen.getByRole('link', { name: 'My Documents' })).toHaveAttribute(
-      'href',
-      '/student/documents',
-    );
+    // Only "View Result" remains: the official marksheet section is gone.
+    expect(screen.getByRole('heading', { name: 'View Result' })).toBeInTheDocument();
+    expect(screen.queryByText(/Official marksheet/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'My Documents' })).not.toBeInTheDocument();
     expect(screen.queryByText(/CGPA|SGPA|Pass|Fail|\d+%/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

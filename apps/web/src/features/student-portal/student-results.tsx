@@ -1,11 +1,5 @@
 import Link from 'next/link';
-import {
-  BookOpenCheckIcon,
-  ArrowRightIcon,
-  FileTextIcon,
-  ShieldCheckIcon,
-  CircleAlertIcon,
-} from 'lucide-react';
+import { BookOpenCheckIcon, ArrowRightIcon, ShieldCheckIcon, CircleAlertIcon } from 'lucide-react';
 import type { StudentResultsPage } from '@docversity/validation';
 import { PageIntro } from './portal-ui';
 import { StudentActionMotion } from './student-motion';
@@ -23,7 +17,7 @@ export function StudentResults({ results }: { results: StudentResultsPage | null
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-5 sm:px-7">
           <h2 className="flex items-center gap-2.5 text-card-title text-navy-950">
             <BookOpenCheckIcon className="size-5 text-brand" aria-hidden="true" />
-            Examination results
+            View Result
           </h2>
           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheckIcon className="size-4" aria-hidden="true" />
@@ -117,23 +111,6 @@ export function StudentResults({ results }: { results: StudentResultsPage | null
             </div>
           </div>
         )}
-        <div className="flex items-start gap-3 border-t border-border px-5 py-5 text-sm sm:px-7">
-          <FileTextIcon className="mt-0.5 size-5 shrink-0 text-violet-700" aria-hidden="true" />
-          <div>
-            <h3 className="font-medium text-navy-950">Official marksheets</h3>
-            <p className="mt-1 leading-relaxed text-muted-foreground">
-              Marksheet downloads aren&apos;t available yet. For certificates already issued to you,
-              visit{' '}
-              <Link
-                href="/student/documents"
-                className="rounded font-medium text-brand underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              >
-                My Documents
-              </Link>
-              .
-            </p>
-          </div>
-        </div>
       </section>
       <p className="mt-5 max-w-2xl text-xs leading-relaxed text-muted-foreground">
         Need help with a result or its release date? Contact your university&apos;s examination

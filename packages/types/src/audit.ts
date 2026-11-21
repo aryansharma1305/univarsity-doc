@@ -136,6 +136,11 @@ export const AUDIT_ACTIONS = {
   studentProfileRequestCancelled: 'STUDENT_PROFILE_REQUEST_CANCELLED',
   studentProfileRequestApproved: 'STUDENT_PROFILE_REQUEST_APPROVED',
   studentProfileRequestRejected: 'STUDENT_PROFILE_REQUEST_REJECTED',
+  /** Student uploads: metadata holds IDs and the category only — never file contents or ID numbers. */
+  studentUploadSaved: 'STUDENT_UPLOAD_SAVED',
+  studentUploadDeleted: 'STUDENT_UPLOAD_DELETED',
+  studentUploadsViewed: 'STUDENT_UPLOADS_VIEWED',
+  studentUploadDownloaded: 'STUDENT_UPLOAD_DOWNLOADED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

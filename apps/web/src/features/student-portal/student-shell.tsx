@@ -25,13 +25,13 @@ import { StudentAvatar } from './student-avatar';
 
 const PRIMARY_MOBILE = [
   '/student',
-  '/student/course',
+  '/student/profile',
   '/student/examinations',
   '/student/documents',
 ];
 const MOBILE_LABELS: Record<string, string> = {
   '/student': 'Home',
-  '/student/course': 'Course',
+  '/student/profile': 'Profile',
   '/student/examinations': 'Exams',
   '/student/documents': 'Documents',
 };

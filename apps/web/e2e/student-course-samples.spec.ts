@@ -22,7 +22,7 @@ test('a student with several courses chooses one; only approved academic samples
 }) => {
   test.setTimeout(180_000);
   await studentSignIn(page, fixtures().sampleStudent);
-  await page.goto('/student/documents');
+  await page.goto('/student/certificate-requests/samples');
   const samples = section(page);
   // UI-05's generic training sample is unchanged and separate.
   await expect(
@@ -128,7 +128,7 @@ test('a single-registration student sees their course directly, with no selector
   page,
 }) => {
   await studentSignIn(page, fixtures().singleSampleStudent);
-  await page.goto('/student/documents');
+  await page.goto('/student/certificate-requests/samples');
   const samples = section(page);
   await expect(samples.getByLabel('Choose a course')).toHaveCount(0);
   await expect(samples.getByText('E2E Master of Applied Studies')).toBeVisible();

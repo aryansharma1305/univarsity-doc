@@ -72,21 +72,20 @@ test('a student activates with a university code, sees only their own record, si
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: fixture.registrationNumber })).toBeVisible();
   await expect(page.getByText('Not on record').first()).toBeVisible();
-  // Recent activity shows only the real activation event; Results opens the release boundary.
-  await expect(
-    page.getByRole('list', { name: 'Recent activity' }).getByText('Student account activated'),
-  ).toBeVisible();
+  // A simple dashboard: no recent activity feed and no second documents card.
+  await expect(page.getByRole('heading', { name: 'Recent activity' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Documents', exact: true })).toHaveCount(0);
   await expect(
     page
       .getByRole('navigation', { name: 'Quick actions' })
-      .getByRole('link', { name: /^My Results$/ }),
+      .getByRole('link', { name: /My Requests/ }),
   ).toBeVisible();
   await expectNoSeriousA11yViolations(page);
   await capture(page, 'student-home-desktop');
 
   for (const [label, route, heading] of [
     ['My Profile', '/student/profile', 'My Profile'],
-    ['Course Details', '/student/course', 'Course Details'],
+    ['My Requests', '/student/requests', 'My Requests'],
     ['Examinations', '/student/examinations', 'Examinations'],
     ['Results', '/student/results', 'My Results'],
     ['My Documents', '/student/documents', 'My Documents'],
@@ -109,6 +108,8 @@ test('a student activates with a university code, sees only their own record, si
     if (route === '/student/profile') {
       await expect(page.getByText('Official records are read-only')).toBeVisible();
       await expect(page.getByRole('button', { name: /Edit/ })).toHaveCount(0);
+      await expect(page.getByRole('heading', { level: 2, name: 'Course Details' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Update My Details' })).toBeVisible();
     }
     if (route === '/student/results') {
       await expect(page.getByRole('status')).toContainText(
@@ -121,9 +122,10 @@ test('a student activates with a university code, sees only their own record, si
       await expect(page.locator('main input, main form')).toHaveCount(0);
     }
     if (route === '/student/documents') {
-      // Phase 8: a real library; this student has nothing published, and students never upload.
-      await expect(page.getByText('No documents published yet')).toBeVisible();
-      await expect(page.locator('main input, main form')).toHaveCount(0);
+      // Nothing published by the university; the student's own uploads have one row per category.
+      await expect(page.getByRole('heading', { name: 'University documents' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /^Upload / })).toHaveCount(10);
+      await expect(page.locator('main form')).toHaveCount(0);
     }
     await capture(page, `student-${route?.split('/').at(-1)}-desktop`);
   }
@@ -138,7 +140,9 @@ test('a student activates with a university code, sees only their own record, si
   await expect(page).toHaveURL(/\/student\/login/);
   for (const route of [
     '/student/profile',
+    '/student/profile/update',
     '/student/course',
+    '/student/requests',
     '/student/examinations',
     '/student/results',
     '/student/documents',
@@ -183,8 +187,15 @@ test.describe('mobile', () => {
     const drawer = page.getByRole('dialog');
     await expect(drawer).toBeVisible();
     await expectNoSeriousA11yViolations(page);
-    await drawer.getByRole('link', { name: 'My Profile' }).click();
+    await drawer.getByRole('link', { name: 'My Requests' }).click();
     await expect(drawer).not.toBeVisible();
+    await expect(page).toHaveURL(/\/student\/requests$/);
+    await expectNoHorizontalOverflow(page);
+    await capture(page, 'student-requests-mobile');
+    await page
+      .getByRole('navigation', { name: 'Student quick navigation' })
+      .getByRole('link', { name: 'Profile', exact: true })
+      .click();
     await expect(page).toHaveURL(/\/student\/profile$/);
     await expectNoHorizontalOverflow(page);
     await capture(page, 'student-profile-mobile');

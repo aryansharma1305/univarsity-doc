@@ -227,6 +227,7 @@ describe('student document library', () => {
             authenticityReviewedAt: '2026-10-09T12:00:00.000Z',
           },
         ]}
+        uploads={[]}
       />,
     );
     const first = screen.getByRole('article', { name: 'Semester 1 marksheet' });
@@ -238,14 +239,19 @@ describe('student document library', () => {
     const second = screen.getByRole('article', { name: 'Degree certificate' });
     expect(within(second).getByText(/Confirmed against university records/)).toBeInTheDocument();
     expect(screen.queryByText(/cryptograph|digitally verified/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.queryByText(/upload|delete|replace/i)).not.toBeInTheDocument();
+    // University documents stay read-only; only the student's own uploads have actions.
+    for (const article of [first, second]) {
+      expect(within(article).queryByRole('button')).not.toBeInTheDocument();
+      expect(within(article).queryByText(/upload|delete|replace/i)).not.toBeInTheDocument();
+    }
   });
 
   it('shows honest empty and error states', () => {
-    const view = render(<StudentDocuments documents={[]} />);
-    expect(screen.getByText('No documents published yet')).toBeInTheDocument();
-    view.rerender(<StudentDocuments documents={null} />);
+    const view = render(<StudentDocuments documents={[]} uploads={[]} />);
+    expect(screen.getByRole('heading', { name: 'My uploads' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'University documents' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    view.rerender(<StudentDocuments documents={null} uploads={[]} />);
     expect(screen.getByRole('alert')).toHaveTextContent('could not be loaded');
   });
 });
@@ -404,6 +410,7 @@ describe('Phase 8 hardening: metadata, exact numbers and versions', () => {
             available: false,
           },
         ]}
+        uploads={[]}
       />,
     );
     const card = screen.getByRole('article', { name: 'Provisional certificate' });

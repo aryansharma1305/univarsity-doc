@@ -9,6 +9,8 @@ import {
   studentCurriculumSchema,
   type StudentDocument,
   studentDocumentListSchema,
+  studentUploadListSchema,
+  type StudentUpload,
   type StudentExaminations,
   studentExaminationsSchema,
   type StudentReExamApplication,
@@ -199,6 +201,25 @@ export const getStudentReExamPayment = cache(
         )
       : Promise.resolve(null),
 );
+
+/** The signed-in student's own uploaded files, or `null` when unavailable. */
+export const getStudentUploads = cache(async (): Promise<StudentUpload[] | null> => {
+  const jar = await cookies();
+  if (!STUDENT_COOKIES.some((name) => jar.has(name))) return null;
+  const { API_INTERNAL_URL } = loadWebEnv();
+  try {
+    const response = await fetch(new URL('/api/v1/student/uploads', API_INTERNAL_URL), {
+      headers: { cookie: jar.toString(), accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!response.ok) return null;
+    const parsed = studentUploadListSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data.data : null;
+  } catch {
+    return null;
+  }
+});
 
 /** The signed-in student's PUBLISHED documents, or `null` when unavailable. */
 export const getStudentDocuments = cache(async (): Promise<StudentDocument[] | null> => {

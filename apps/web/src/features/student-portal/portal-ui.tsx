@@ -113,11 +113,13 @@ export function SoonBadge({ onDark = false }: { onDark?: boolean }) {
   );
 }
 
-export function PageIntro({ title, description }: { title: string; description: string }) {
+export function PageIntro({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-6 max-w-3xl">
       <h1 className="text-page-title text-navy-950">{title}</h1>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
+      {description && (
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{description}</p>
+      )}
     </div>
   );
 }

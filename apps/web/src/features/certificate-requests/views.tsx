@@ -19,6 +19,7 @@ import {
 } from '@docversity/ui/components/dialog';
 import {
   type CertificateRequestDetail,
+  type CertificateType,
   certificateTypeSchema,
   certificateRequestStatusSchema,
 } from '@docversity/validation';
@@ -30,8 +31,6 @@ import { useCan } from '@/components/providers/session-context';
 import { useListParams } from '@/hooks/use-list-params';
 import { formatDateTime } from '@/lib/format';
 import { errorMessage } from '@/lib/api';
-import { StudentActionMotion } from '@/features/student-portal/student-motion';
-import { StudentCertificateEligibility } from '@/features/certificate-eligibility/student-panel';
 import { certificateRequestsApi as api } from './api';
 const titles: Record<string, string> = {
   TRANSCRIPT: 'Transcript',
@@ -65,13 +64,7 @@ function Badge({ status }: { status: string }) {
     </StatusBadge>
   );
 }
-function ApplicationForm({
-  type,
-  onDone,
-}: {
-  type: (typeof certificateTypeSchema.options)[number];
-  onDone: () => void;
-}) {
+function ApplicationForm({ type, onDone }: { type: CertificateType; onDone: () => void }) {
   const catalogue = useQuery({ queryKey: ['certificate-services'], queryFn: api.catalogue });
   const service = catalogue.data?.data.find((s) => s.certificateType === type);
   const [purpose, setPurpose] = useState(''),
@@ -213,89 +206,18 @@ function RequestsView({
       }),
     enabled: student || canRead,
   });
-  const catalogue = useQuery({
-    queryKey: ['certificate-services'],
-    queryFn: api.catalogue,
-    enabled: student,
-  });
-  const [selected, setSelected] = useState<(typeof certificateTypeSchema.options)[number] | null>(
-    null,
-  );
   if (!student && !canRead) return <ForbiddenState />;
   return (
     <div className="space-y-6 sm:space-y-8">
-      <PageHeader
-        title={student ? 'Certificate Requests' : 'Certificate requests'}
-        description={
-          student
-            ? 'Explore certificate services and follow your applications in one place.'
-            : 'Review applications and request information. Staff review does not authorize certificate issuance.'
-        }
-      />
-      {student && (
-        <p className="text-sm text-muted-foreground">
-          Want to see an example?{' '}
-          <Link
-            href="/student/documents#certificate-samples"
-            className="inline-flex min-h-11 items-center rounded font-medium text-brand underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            View Sample Certificate
-          </Link>
-        </p>
+      {!student && (
+        <PageHeader
+          title="Certificate requests"
+          description="Review applications and request information. Staff review does not authorize certificate issuance."
+        />
       )}
-      {student &&
-        (catalogue.isPending ? (
-          <TableSkeleton rows={3} />
-        ) : catalogue.isError ? (
-          <ErrorState error={catalogue.error} onRetry={() => void catalogue.refetch()} />
-        ) : (
-          <>
-            <StudentCertificateEligibility />
-            <section aria-labelledby="services-heading">
-              <h2 id="services-heading" className="mb-4 text-lg font-semibold">
-                Certificate services
-              </h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                {catalogue.data.data.map((s) => (
-                  <StudentActionMotion key={s.certificateType}>
-                    <article className="h-full rounded-xl border bg-card p-5 sm:p-6">
-                      <FileBadgeIcon className="mb-3 size-6 text-brand" aria-hidden="true" />
-                      <h3 className="text-lg font-semibold">{s.title}</h3>
-                      <p className="mt-2 text-sm text-muted-foreground">{s.description}</p>
-                      <p className="mt-4 text-sm">{s.reason}</p>
-                      <Button
-                        className="mt-4"
-                        variant={s.available ? 'default' : 'outline'}
-                        disabled={!s.available}
-                        onClick={() => {
-                          setSelected(s.certificateType);
-                        }}
-                      >
-                        {s.available ? 'Request certificate' : 'Not available yet'}
-                        <ArrowRightIcon aria-hidden="true" />
-                      </Button>
-                    </article>
-                  </StudentActionMotion>
-                ))}
-              </div>
-              <p className="mt-4 text-sm text-muted-foreground">
-                {catalogue.data.corrections.reason}
-              </p>
-            </section>
-            {selected && (
-              <ApplicationForm
-                key={selected}
-                type={selected}
-                onDone={() => {
-                  setSelected(null);
-                }}
-              />
-            )}
-          </>
-        ))}
       <section aria-labelledby="requests-heading">
         <h2 id="requests-heading" className="mb-4 text-lg font-semibold">
-          {student ? 'Your applications' : 'Request queue'}
+          {student ? 'Certificate requests' : 'Request queue'}
         </h2>
         {!student && (
           <div className="mb-4 flex flex-wrap gap-3">
@@ -353,7 +275,7 @@ function RequestsView({
                 </h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {student
-                    ? 'Your applications will appear here when approved services become available.'
+                    ? 'Certificate requests you submit will appear here.'
                     : 'Try another filter, or return when students have submitted applications.'}
                 </p>
               </div>
@@ -567,10 +489,10 @@ function RequestDetailView({
   return (
     <div className="space-y-6">
       <Link
-        href={student ? '/student/certificate-requests' : '/admin/certificate-requests'}
+        href={student ? '/student/requests' : '/admin/certificate-requests'}
         className="text-sm text-brand underline underline-offset-4"
       >
-        Back to certificate requests
+        {student ? 'Back to my requests' : 'Back to certificate requests'}
       </Link>
       <PageHeader
         title={titles[r.certificateType] ?? r.certificateType}
@@ -682,12 +604,92 @@ function RequestDetailView({
   );
 }
 
+/** The five certificate types students may apply for, in the university's order. */
+const STUDENT_CERTIFICATES = [
+  ['TRANSCRIPT', 'Transcript'],
+  ['PROVISIONAL', 'Provisional Certificate'],
+  ['CHARACTER', 'Character Certificate'],
+  ['MIGRATION', 'Migration Certificate'],
+  ['COURSE_COMPLETION', 'Course Completion Certificate'],
+] as const satisfies readonly (readonly [CertificateType, string])[];
+
+/**
+ * Certificate Request: the sample link, then one row per certificate type. "Apply" opens the
+ * existing application form only when the server says the service is available under policy;
+ * otherwise the row honestly says "Not yet available" (nothing is submitted).
+ */
+function StudentCertificateServices() {
+  const catalogue = useQuery({ queryKey: ['certificate-services'], queryFn: api.catalogue });
+  const [selected, setSelected] = useState<CertificateType | null>(null);
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Certificate Request" />
+      <Link
+        href="/student/certificate-requests/samples"
+        className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-medium text-brand hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
+        <FileBadgeIcon aria-hidden="true" className="size-4" />
+        View Certificate Sample
+      </Link>
+      {catalogue.isPending ? (
+        <TableSkeleton rows={5} />
+      ) : catalogue.isError ? (
+        <ErrorState error={catalogue.error} onRetry={() => void catalogue.refetch()} />
+      ) : (
+        <ul aria-label="Certificates" className="divide-y rounded-xl border bg-card">
+          {STUDENT_CERTIFICATES.map(([type, title]) => {
+            const available =
+              catalogue.data.data.find((s) => s.certificateType === type)?.available ?? false;
+            return (
+              <li
+                key={type}
+                className="flex flex-wrap items-center justify-between gap-3 p-4 sm:px-6"
+              >
+                <h2 className="font-semibold text-navy-950">{title}</h2>
+                {available ? (
+                  <Button
+                    aria-label={`Apply for ${title}`}
+                    onClick={() => {
+                      setSelected(type);
+                    }}
+                  >
+                    Apply
+                    <ArrowRightIcon aria-hidden="true" />
+                  </Button>
+                ) : (
+                  <Button variant="outline" disabled aria-label={`${title}: not yet available`}>
+                    Not yet available
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {selected && (
+        <ApplicationForm
+          key={selected}
+          type={selected}
+          onDone={() => {
+            setSelected(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The signed-in student's certificate applications (shown under My Requests). */
+export function StudentCertificateApplications() {
+  return <RequestsView student />;
+}
+
 function StaffRequestsView() {
   const canRead = useCan(PERMISSIONS.certificateRequestsRead);
   return <RequestsView canRead={canRead} />;
 }
 export function CertificateRequestsView({ student = false }: { student?: boolean }) {
-  return student ? <RequestsView student /> : <StaffRequestsView />;
+  return student ? <StudentCertificateServices /> : <StaffRequestsView />;
 }
 function StaffRequestDetail({ id }: { id: string }) {
   const canRead = useCan(PERMISSIONS.certificateRequestsRead),

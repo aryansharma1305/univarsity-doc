@@ -355,7 +355,7 @@ describe('student course details', () => {
       expect(screen.queryByText('Curriculum not assigned yet')).not.toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Reload course details' })).toHaveAttribute(
         'href',
-        '/student/course',
+        '/student/profile#course-details',
       );
     });
   });

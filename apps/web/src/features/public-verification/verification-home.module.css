@@ -373,7 +373,8 @@
 .crestFrame {
   position: relative;
   display: grid;
-  width: min(360px, 72%);
+  /* The official logo is slightly taller than wide; this keeps it inside the orbit text ring. */
+  width: min(300px, 60%);
   place-items: center;
   transform: translateZ(40px);
 }
