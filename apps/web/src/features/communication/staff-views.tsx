@@ -21,6 +21,7 @@ import { useListParams } from '@/hooks/use-list-params';
 import { errorMessage } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import {
+  useMarkThreadRead,
   useResolveQuery,
   useRespondQuery,
   useStaffQueries,
@@ -136,6 +137,7 @@ export function StaffMessagesView() {
 
 export function StaffThreadView({ threadId }: { threadId: string }) {
   const thread = useThread('staff', threadId);
+  useMarkThreadRead('staff', threadId, thread.data?.unread);
   const canRespond = useCan(PERMISSIONS.studentMessagesRespond);
   const status = useThreadStatus(threadId);
   if (thread.isPending) return <TableSkeleton />;
@@ -330,7 +332,27 @@ export function StaffVerificationQueryView({ queryId }: { queryId: string }) {
           </div>
         )}
       </dl>
-      {canRespond && q.status !== 'RESOLVED' && (
+      {canRespond && q.status === 'ANSWERED' && (
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <p className="text-sm text-muted-foreground">
+            The answer is final once given. Resolve the query when no further action is needed.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={resolve.isPending}
+            onClick={() => {
+              resolve.mutate(q.version, {
+                onSuccess: () => toast.success('Query resolved.'),
+                onError: (error) => toast.error(errorMessage(error)),
+              });
+            }}
+          >
+            Resolve query
+          </Button>
+        </div>
+      )}
+      {canRespond && q.status === 'OPEN' && (
         <form
           className="mt-6 flex flex-col gap-3 rounded-xl border border-border bg-card p-5"
           onSubmit={(event) => {
@@ -348,7 +370,7 @@ export function StaffVerificationQueryView({ queryId }: { queryId: string }) {
           }}
         >
           <label htmlFor={`${id}-answer`} className="font-medium text-navy-950">
-            {q.response ? 'Update the answer' : 'Answer'}
+            Answer
           </label>
           <p id={`${id}-hint`} className="text-sm text-muted-foreground">
             The requester sees this answer. Never include student records, marks or personal details
@@ -379,21 +401,6 @@ export function StaffVerificationQueryView({ queryId }: { queryId: string }) {
             <Button type="submit" disabled={respond.isPending}>
               {respond.isPending ? 'Saving…' : 'Save answer'}
             </Button>
-            {q.status === 'ANSWERED' && (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={resolve.isPending}
-                onClick={() => {
-                  resolve.mutate(q.version, {
-                    onSuccess: () => toast.success('Query resolved.'),
-                    onError: (error) => toast.error(errorMessage(error)),
-                  });
-                }}
-              >
-                Resolve without changes
-              </Button>
-            )}
           </div>
         </form>
       )}

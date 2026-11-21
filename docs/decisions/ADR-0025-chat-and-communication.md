@@ -31,6 +31,14 @@ never be disclosed through support channels.
    5/h, status checks 30/h per IP and 10/h per reference), `no-store`, pre-auth CSRF on public
    routes, audits with IDs/kinds/statuses only.
 
+5. **Review hardening.** Reading is an explicit `POST …/read` (GET never changes state). A
+   recipient keeps at most one unread notification per conversation (and staff one per new-query
+   batch), and staff recipients come from a role query, so busy threads do not pile up rows.
+   Resolving is refused while a student message is newer than the staff read marker. A query's
+   answer is final once given (OPEN → ANSWERED/RESOLVED only). Public submissions also have a
+   global hourly ceiling. Known trade-off: anyone who knows a reference can use up its 10 status
+   checks per hour; references are 40-bit random and the code itself is never brute-forceable.
+
 Migration: `20261128090000_communication` (additive; sorts after Razorpay PR #49's migrations).
 
 ## Consequences

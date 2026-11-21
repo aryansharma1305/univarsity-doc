@@ -16,7 +16,14 @@ import {
 import { errorMessage } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { PageIntro, PortalCard, PortalEmptyState } from '@/features/student-portal/portal-ui';
-import { useOwnQueries, useStartThread, useSubmitOwnQuery, useThread, useThreads } from './api';
+import {
+  useMarkThreadRead,
+  useOwnQueries,
+  useStartThread,
+  useSubmitOwnQuery,
+  useThread,
+  useThreads,
+} from './api';
 import {
   NotificationList,
   QUERY_STATUS,
@@ -146,6 +153,7 @@ export function StudentMessages() {
 
 export function StudentThread({ threadId }: { threadId: string }) {
   const thread = useThread('student', threadId);
+  useMarkThreadRead('student', threadId, thread.data?.unread);
   return (
     <>
       <PageIntro title={thread.data?.subject ?? 'Conversation'} />

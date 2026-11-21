@@ -119,8 +119,9 @@ export class VerificationQueriesService {
             type: 'VERIFICATION_QUERY_RECEIVED',
             title: 'New verification query',
             body: `A ${row.source === 'PUBLIC' ? 'public' : 'student'} verification query was submitted.`,
-            link: `/admin/verification-queries/${row.id}`,
+            link: `/admin/verification-queries`,
             event: `verification-query:${row.id}`,
+            collapse: true,
           });
           return row;
         });
@@ -172,6 +173,8 @@ export class VerificationQueriesService {
     ip: string,
   ): Promise<PublicVerificationQueryReceipt> {
     await this.throttle('verification-query-public', ip, 5, 3600);
+    // A global ceiling too: rotating addresses cannot flood the staff queue.
+    await this.throttle('verification-query-public-global', 'all', 200, 3600);
     const accessCode = randomCode(24);
     const row = await this.insert(
       {
@@ -259,7 +262,8 @@ export class VerificationQueriesService {
     await this.prisma.client.$transaction(async (tx) => {
       const now = new Date();
       const changed = await tx.verificationQuery.updateMany({
-        where: { id, version: body.version, status: { not: 'RESOLVED' } },
+        // Answers are final once given: the requester may already have read it.
+        where: { id, version: body.version, status: 'OPEN' },
         data: {
           response: body.response,
           respondedByUserId: userId,

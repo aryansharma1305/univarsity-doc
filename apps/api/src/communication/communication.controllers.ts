@@ -115,6 +115,14 @@ export class StudentMessagesController {
     return this.service.detail(id, 'student', student.studentId);
   }
 
+  @Post(':id/read')
+  @HttpCode(HttpStatus.OK)
+  @ApiSecurity('csrf')
+  @ApiOkResponse({ standardSchema: messageThreadDetailSchema })
+  read(@CurrentStudent() student: StudentContext, @Param('id', UuidParamPipe) id: string) {
+    return this.service.markRead(id, 'student', student.studentId);
+  }
+
   @Post(':id/replies')
   @ApiSecurity('csrf')
   @ApiBody({ schema: openApiRequestSchema(messageReplySchema) })
@@ -157,8 +165,16 @@ export class StaffMessagesController {
     return this.service.detail(id, 'staff');
   }
 
+  @Post(':id/read')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERMISSIONS.studentMessagesRead)
+  @ApiOkResponse({ standardSchema: messageThreadDetailSchema })
+  read(@Param('id', UuidParamPipe) id: string) {
+    return this.service.markRead(id, 'staff');
+  }
+
   @Post(':id/replies')
-  @RequirePermissions(PERMISSIONS.studentMessagesRespond)
+  @RequirePermissions(PERMISSIONS.studentMessagesRead, PERMISSIONS.studentMessagesRespond)
   @ApiBody({ schema: openApiRequestSchema(messageReplySchema) })
   @ApiOkResponse({ standardSchema: messageThreadDetailSchema })
   reply(
@@ -171,7 +187,7 @@ export class StaffMessagesController {
 
   @Post(':id/resolve')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(PERMISSIONS.studentMessagesRespond)
+  @RequirePermissions(PERMISSIONS.studentMessagesRead, PERMISSIONS.studentMessagesRespond)
   @ApiOkResponse({ standardSchema: messageThreadDetailSchema })
   resolve(@CurrentAuth() auth: AuthContext, @Param('id', UuidParamPipe) id: string) {
     return this.service.setStatus(id, 'RESOLVED', auth.user.id);
@@ -179,7 +195,7 @@ export class StaffMessagesController {
 
   @Post(':id/reopen')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(PERMISSIONS.studentMessagesRespond)
+  @RequirePermissions(PERMISSIONS.studentMessagesRead, PERMISSIONS.studentMessagesRespond)
   @ApiOkResponse({ standardSchema: messageThreadDetailSchema })
   reopen(@CurrentAuth() auth: AuthContext, @Param('id', UuidParamPipe) id: string) {
     return this.service.setStatus(id, 'OPEN', auth.user.id);
@@ -365,7 +381,7 @@ export class StaffVerificationQueriesController {
 
   @Post(':id/respond')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(PERMISSIONS.verificationQueriesRespond)
+  @RequirePermissions(PERMISSIONS.verificationQueriesRead, PERMISSIONS.verificationQueriesRespond)
   @ApiBody({ schema: openApiRequestSchema(respondVerificationQuerySchema) })
   @ApiOkResponse({ standardSchema: staffVerificationQuerySchema })
   respond(
@@ -378,7 +394,7 @@ export class StaffVerificationQueriesController {
 
   @Post(':id/resolve')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(PERMISSIONS.verificationQueriesRespond)
+  @RequirePermissions(PERMISSIONS.verificationQueriesRead, PERMISSIONS.verificationQueriesRespond)
   @ApiBody({ schema: openApiRequestSchema(resolveVerificationQuerySchema) })
   @ApiOkResponse({ standardSchema: staffVerificationQuerySchema })
   resolve(

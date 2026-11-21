@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@docversity/database';
-import { type Permission, permissionsForRoles } from '@docversity/types';
+import { type Permission, ROLE_PERMISSIONS } from '@docversity/types';
 import type {
   Notification,
   NotificationList,
@@ -23,6 +23,8 @@ export interface NotificationInput {
   link?: string;
   /** Stable per event, e.g. `message:<id>`; the recipient is appended. */
   event: string;
+  /** Skip recipients who still have an unread notification for the same link (no pile-up). */
+  collapse?: boolean;
 }
 
 const view = (row: {
@@ -55,6 +57,7 @@ export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async notifyStudent(tx: Prisma.TransactionClient, studentId: string, n: NotificationInput) {
+    if (n.collapse && (await this.pending(tx, n, { studentId })).size) return;
     await tx.notification.createMany({
       data: [{ ...this.fields(n), studentId, dedupeKey: `${n.event}:s:${studentId}` }],
       skipDuplicates: true,
@@ -68,13 +71,21 @@ export class NotificationsService {
     n: NotificationInput,
     exceptUserId?: string,
   ) {
+    const roles = Object.entries(ROLE_PERMISSIONS)
+      .filter(([, granted]) => granted.includes(permission))
+      .map(([name]) => name);
     const users = await tx.user.findMany({
-      where: { status: 'ACTIVE', ...(exceptUserId ? { id: { not: exceptUserId } } : {}) },
-      select: { id: true, roles: { select: { role: { select: { name: true } } } } },
+      where: {
+        status: 'ACTIVE',
+        roles: { some: { role: { name: { in: roles } } } },
+        ...(exceptUserId ? { id: { not: exceptUserId } } : {}),
+      },
+      select: { id: true },
     });
-    const recipients = users.filter((u) =>
-      permissionsForRoles(u.roles.map((r) => r.role.name)).has(permission),
-    );
+    const waiting = n.collapse
+      ? await this.pending(tx, n, { userId: { in: users.map((u) => u.id) } })
+      : new Set<string>();
+    const recipients = users.filter((u) => !waiting.has(u.id));
     if (!recipients.length) return;
     await tx.notification.createMany({
       data: recipients.map((u) => ({
@@ -138,6 +149,19 @@ export class NotificationsService {
       data: { readAt: new Date() },
     });
     return { unread: 0 };
+  }
+
+  /** Recipients who still have an unread notification of this type for this link. */
+  private async pending(
+    tx: Prisma.TransactionClient,
+    n: NotificationInput,
+    recipient: Prisma.NotificationWhereInput,
+  ) {
+    const rows = await tx.notification.findMany({
+      where: { ...recipient, type: n.type, link: n.link ?? null, readAt: null },
+      select: { userId: true, studentId: true },
+    });
+    return new Set(rows.map((r) => r.userId ?? r.studentId ?? ''));
   }
 
   private fields(n: NotificationInput) {

@@ -76,10 +76,21 @@ describe('student messages', () => {
     );
     expect(staffNotes.data.some((n) => n.link === `/admin/messages/${thread.id}`)).toBe(true);
     expect(JSON.stringify(staffNotes)).not.toContain(SECRET_TEXT);
+    // GET never changes state; reading is an explicit POST.
+    expect(
+      messageThreadDetailSchema.parse(
+        (await registrar.get(`messages/${thread.id}`).expect(200)).body,
+      ).unread,
+    ).toBe(true);
     const opened = messageThreadDetailSchema.parse(
-      (await registrar.get(`messages/${thread.id}`).expect(200)).body,
+      (await registrar.post(`messages/${thread.id}/read`).expect(200)).body,
     );
     expect(opened.unread).toBe(false);
+    expect(
+      messageThreadListSchema
+        .parse((await registrar.get('messages?unread=true&pageSize=100')).body)
+        .data.some((t) => t.id === thread.id),
+    ).toBe(false);
     expect(opened.messages[0]?.body).toBe(SECRET_TEXT);
 
     // Staff reply: the student is notified and sees the institution, not the staff name.
@@ -111,6 +122,16 @@ describe('student messages', () => {
       readAt: null,
     });
 
+    // A second student message before staff read it: one unread notification, and no resolve
+    // over an unseen message until staff have read it.
+    await studentPost(a.agent, `student/messages/${thread.id}/replies`, { body: 'Follow-up 1' });
+    await studentPost(a.agent, `student/messages/${thread.id}/replies`, { body: 'Follow-up 2' });
+    const pile = await testDb().notification.count({
+      where: { userId: registrar.user.id, link: `/admin/messages/${thread.id}`, readAt: null },
+    });
+    expect(pile).toBe(1);
+    expect((await registrar.post(`messages/${thread.id}/resolve`)).status).toBe(409);
+    await registrar.post(`messages/${thread.id}/read`).expect(200);
     // Resolve → staff cannot reply until reopened; a student reply reopens it.
     await registrar.post(`messages/${thread.id}/resolve`).expect(200);
     expect((await registrar.post(`messages/${thread.id}/replies`, { body: 'x' })).status).toBe(409);

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   messageThreadDetailSchema,
@@ -83,6 +84,19 @@ export function useReply(side: Side, id: string) {
       call(side, 'POST', `messages/${id}/replies`, messageThreadDetailSchema, { body: { body } }),
     onSuccess: invalidate,
   });
+}
+
+/** Marks the thread read once it has been shown (an explicit POST; GET never changes state). */
+export function useMarkThreadRead(side: Side, id: string, unread: boolean | undefined) {
+  const invalidate = useInvalidate();
+  const mark = useMutation({
+    mutationFn: () =>
+      call(side, 'POST', `messages/${id}/read`, messageThreadDetailSchema, { body: {} }),
+    onSuccess: invalidate,
+  });
+  useEffect(() => {
+    if (unread && mark.isIdle) mark.mutate();
+  }, [unread, mark]);
 }
 
 export function useThreadStatus(id: string) {

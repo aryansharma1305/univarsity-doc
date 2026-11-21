@@ -105,23 +105,23 @@ export class MessagesService {
           }
         : {}),
     };
-    // Unread is "newer than the viewer's read marker"; filtered after paging inputs are known.
-    const unreadOnly = query.unread === 'true';
-    const rows = await this.prisma.client.messageThread.findMany({
-      where,
-      include: THREAD_INCLUDE,
-      orderBy: [{ [query.sortBy]: query.sortOrder }, { id: 'desc' }],
-      take: unreadOnly ? 500 : query.pageSize,
-      skip: unreadOnly ? 0 : (query.page - 1) * query.pageSize,
-    });
-    const views = rows.map((row) => summary(row, viewer));
-    const filtered = unreadOnly ? views.filter((v) => v.unread) : views;
-    const total = unreadOnly
-      ? filtered.length
-      : await this.prisma.client.messageThread.count({ where });
-    const data = unreadOnly
-      ? filtered.slice((query.page - 1) * query.pageSize, query.page * query.pageSize)
-      : filtered;
+    // Unread = newer than the viewer's read marker, compared in SQL (column reference).
+    if (query.unread === 'true') {
+      const fields = this.prisma.client.messageThread.fields;
+      const marker = viewer === 'student' ? 'studentReadAt' : 'staffReadAt';
+      where.AND = [{ OR: [{ [marker]: null }, { lastMessageAt: { gt: fields[marker] } }] }];
+    }
+    const [total, rows] = await Promise.all([
+      this.prisma.client.messageThread.count({ where }),
+      this.prisma.client.messageThread.findMany({
+        where,
+        include: THREAD_INCLUDE,
+        orderBy: [{ [query.sortBy]: query.sortOrder }, { id: 'desc' }],
+        take: query.pageSize,
+        skip: (query.page - 1) * query.pageSize,
+      }),
+    ]);
+    const data = rows.map((row) => summary(row, viewer));
     return {
       data,
       meta: {
@@ -146,17 +146,8 @@ export class MessagesService {
       },
     });
     if (!row) throw Errors.notFound();
-    const now = new Date();
-    await this.prisma.client.messageThread.update({
-      where: { id },
-      data: viewer === 'student' ? { studentReadAt: now } : { staffReadAt: now },
-    });
-    const read = {
-      ...row,
-      ...(viewer === 'student' ? { studentReadAt: now } : { staffReadAt: now }),
-    };
     return {
-      ...summary(read, viewer),
+      ...summary(row, viewer),
       messages: row.messages.map((m) => ({
         id: m.id,
         author: m.author,
@@ -170,6 +161,16 @@ export class MessagesService {
         createdAt: m.createdAt.toISOString(),
       })),
     };
+  }
+
+  /** Marks a thread read for the viewer (explicit POST; GET never changes state). */
+  async markRead(id: string, viewer: Viewer, studentId?: string) {
+    const changed = await this.prisma.client.messageThread.updateMany({
+      where: { id, ...(studentId ? { studentId } : {}) },
+      data: viewer === 'student' ? { studentReadAt: new Date() } : { staffReadAt: new Date() },
+    });
+    if (changed.count !== 1) throw Errors.notFound();
+    return this.detail(id, viewer, studentId);
   }
 
   async create(studentId: string, accountId: string, body: CreateMessageThread) {
@@ -270,6 +271,7 @@ export class MessagesService {
           body: 'A student replied in a conversation.',
           link: `/admin/messages/${id}`,
           event,
+          collapse: true,
         });
       else
         await this.notifications.notifyStudent(tx, row.studentId, {
@@ -278,6 +280,7 @@ export class MessagesService {
           body: 'The administration replied to your message.',
           link: `/student/messages/${id}`,
           event,
+          collapse: true,
         });
       return row;
     });
@@ -286,8 +289,14 @@ export class MessagesService {
 
   async setStatus(id: string, status: 'OPEN' | 'RESOLVED', userId: string) {
     await this.prisma.client.$transaction(async (tx) => {
+      const fields = tx.messageThread.fields;
       const changed = await tx.messageThread.updateMany({
-        where: { id, status: status === 'RESOLVED' ? 'OPEN' : 'RESOLVED' },
+        where: {
+          id,
+          status: status === 'RESOLVED' ? 'OPEN' : 'RESOLVED',
+          // Never resolve over a student message staff have not seen (reply/resolve race).
+          ...(status === 'RESOLVED' ? { lastMessageAt: { lte: fields.staffReadAt } } : {}),
+        },
         data:
           status === 'RESOLVED'
             ? { status, resolvedAt: new Date(), resolvedByUserId: userId }
@@ -299,7 +308,7 @@ export class MessagesService {
         throw new AppError(
           HttpStatus.CONFLICT,
           'CONFLICT',
-          'This conversation already has that status.',
+          'This conversation changed (status or a new message). Refresh before trying again.',
         );
       }
       await this.audit.writeAuditEvent(
