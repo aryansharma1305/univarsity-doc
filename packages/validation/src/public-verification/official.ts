@@ -66,6 +66,28 @@ export const publicDisclosureFieldSchema = z.enum([
   ...new Set(Object.values(PUBLIC_DISCLOSURE_FIELDS).flat()),
 ] as [string, ...string[]]);
 export type PublicDisclosureField = z.infer<typeof publicDisclosureFieldSchema>;
+export const PUBLIC_DISCLOSURE_FIELD_LABELS: Record<string, string> = {
+  STUDENT_NAME: 'Student name',
+  REGISTRATION_NUMBER: 'Registration number',
+  REGISTRATION_DATE: 'Registration date',
+  PROGRAM: 'Course name',
+  COURSE_LEVEL: 'Course level',
+  COURSE_DURATION: 'Course duration',
+  SCHOOL: 'School / department name',
+  ACADEMIC_SESSION: 'Academic session',
+  ADMISSION_DATE: 'Admission date',
+  COMPLETION_DATE: 'Course completion date',
+  ISSUE_DATE: 'Issue date',
+  CERTIFICATE_TYPE: 'Certificate type',
+  RESULT_OUTCOME: 'Result outcome (e.g. PASS)',
+};
+/** What the credential-gated option opens, per service (never by number alone). */
+export const PUBLIC_CREDENTIAL_ACCESS_LABELS: Record<string, string | null> = {
+  registration: null,
+  'admission-letter': 'The issued admission letter PDF, to holders of its QR code',
+  certificate: 'The issued certificate PDF, to holders of its QR code',
+  result: 'The full marksheet (subjects and marks), to holders of its QR code',
+};
 export const publicDisclosureSchema = z
   .object({
     /** The university authorises lookups without a student session for this service and course. */
