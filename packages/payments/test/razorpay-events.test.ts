@@ -105,6 +105,26 @@ describe('Razorpay signed event classification', () => {
       },
     });
     expect(JSON.stringify(classify(refund('refund.failed', 'failed')))).not.toContain('notes');
+    const withOurId = event('refund.processed', {
+      payload: {
+        refund: {
+          entity: {
+            id: 'rfnd_Synthetic',
+            entity: 'refund',
+            amount: 500,
+            currency: 'INR',
+            payment_id: 'pay_Synthetic',
+            status: 'processed',
+            receipt: null,
+            notes: { refund_id: '0193A8F0-1111-7222-8333-444455556666', other: 'dropped' },
+          },
+        },
+      },
+    });
+    expect(classify(withOurId)).toMatchObject({
+      refund: { refundId: '0193a8f0-1111-7222-8333-444455556666', receipt: null },
+    });
+    expect(JSON.stringify(classify(withOurId))).not.toContain('dropped');
     expect(classify(refund('refund.processed', 'failed'))).toMatchObject({
       outcome: 'IGNORED',
       reason: 'UNPARSEABLE',

@@ -318,7 +318,15 @@ export async function submitApprovedRefund(
     await tx.$queryRaw`SELECT id FROM razorpay_refunds WHERE id = ${refundId}::uuid FOR UPDATE`;
     const row = await tx.razorpayRefund.findUniqueOrThrow({ where: { id: refundId } });
     const leased = row.sendLeaseUntil !== null && row.sendLeaseUntil > now();
-    if (row.source !== 'STAFF' || !['APPROVED', 'SENDING'].includes(row.status) || leased)
+    // A refused send (failureReason on SENDING) is never resent automatically: a refund approver
+    // resolves it (resolveRejectedRefund), so it does not retry and alert every 15 minutes.
+    const rejected = row.status === 'SENDING' && row.failureReason !== null;
+    if (
+      row.source !== 'STAFF' ||
+      !['APPROVED', 'SENDING'].includes(row.status) ||
+      leased ||
+      rejected
+    )
       return { row, claimed: false, retry: false };
     await tx.razorpayRefund.update({
       where: { id: refundId },
@@ -404,6 +412,65 @@ export async function submitApprovedRefund(
   const status = STATUS_FROM_PROVIDER[remote.status];
   await recordRefundStatus(prisma, audit, refundId, status, remote.id, null, 'API');
   return { status, alert: null };
+}
+
+/**
+ * Staff resolution of a refused send (refund approvers only, enforced by the caller). Always looks
+ * the refund up at Razorpay first: if Razorpay has it, its status wins. Otherwise RETRY clears the
+ * refusal and sends again with the same idempotency key, and MARK_FAILED records FAILED as a
+ * person's decision (the provider has no such refund), which frees the headroom.
+ */
+export async function resolveRejectedRefund(
+  prisma: PrismaClient,
+  client: RazorpayClient,
+  audit: AuditWriter,
+  refundId: string,
+  action: 'RETRY' | 'MARK_FAILED',
+  actorUserId: string,
+): Promise<{
+  status: string;
+  alert: PaymentAlert | null;
+  outcome: 'PROVIDER' | 'RETRIED' | 'FAILED' | 'NOT_REJECTED';
+}> {
+  const refund = await prisma.razorpayRefund.findUniqueOrThrow({ where: { id: refundId } });
+  if (refund.status !== 'SENDING' || refund.failureReason === null)
+    return { status: refund.status, alert: null, outcome: 'NOT_REJECTED' };
+  // Throws RazorpayApiError if Razorpay cannot be asked: nothing is decided blind.
+  const found = await findProviderRefund(client, refund);
+  if (found) {
+    const status = STATUS_FROM_PROVIDER[found.status];
+    await recordRefundStatus(prisma, audit, refundId, status, found.id, null, 'PROVIDER_LOOKUP');
+    return { status, alert: null, outcome: 'PROVIDER' };
+  }
+  if (action === 'MARK_FAILED') {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM razorpay_refunds WHERE id = ${refundId}::uuid FOR UPDATE`;
+      const row = await tx.razorpayRefund.findUniqueOrThrow({ where: { id: refundId } });
+      if (row.status !== 'SENDING') return;
+      await tx.razorpayRefund.update({
+        where: { id: refundId },
+        data: { status: 'FAILED', sendLeaseUntil: null },
+      });
+      await tx.razorpayRefundEvent.create({ data: { refundId, kind: 'FAILED', actorUserId } });
+      await audit(
+        {
+          actorUserId,
+          action: AUDIT_ACTIONS.razorpayRefundUpdated,
+          entityType: 'RazorpayRefund',
+          entityId: refundId,
+          metadata: { status: 'FAILED', source: 'STAFF_DECISION', providerRefundFound: false },
+        },
+        tx,
+      );
+    });
+    return { status: 'FAILED', alert: null, outcome: 'FAILED' };
+  }
+  await prisma.razorpayRefund.updateMany({
+    where: { id: refundId, status: 'SENDING' },
+    data: { failureReason: null, sendLeaseUntil: null },
+  });
+  const result = await submitApprovedRefund(prisma, client, audit, refundId);
+  return { ...result, outcome: 'RETRIED' };
 }
 
 /** The provider's refund for this request: by receipt or our refund id in notes. null = none. */
@@ -494,15 +561,37 @@ export async function applyRefundEvent(
   audit: AuditWriter,
   evidence: RazorpayRefundEvidence,
 ): Promise<'APPLIED' | 'UNCHANGED' | 'RECORDED_DASHBOARD' | 'UNKNOWN_REFUND'> {
+  // Our own refund even before its provider id was stored: by provider id, receipt or notes.refund_id.
   const refund = await tx.razorpayRefund.findFirst({
     where: {
+      source: 'STAFF',
       OR: [
         { providerRefundId: evidence.providerRefundId },
         ...(evidence.receipt ? [{ receipt: evidence.receipt }] : []),
+        ...(evidence.refundId ? [{ id: evidence.refundId }] : []),
       ],
     },
   });
+  const dashboard = refund
+    ? null
+    : await tx.razorpayRefund.findUnique({
+        where: { providerRefundId: evidence.providerRefundId },
+      });
   const status = STATUS_FROM_PROVIDER[evidence.status];
+  if (dashboard) {
+    // A later event for a refund already recorded from the dashboard: forward-only update.
+    if (!advances(dashboard.status, status)) return 'UNCHANGED';
+    await tx.razorpayRefund.update({ where: { id: dashboard.id }, data: { status } });
+    await tx.razorpayRefundEvent.create({
+      data: {
+        refundId: dashboard.id,
+        kind: status,
+        eventId: evidence.eventId,
+        bodySha256: evidence.bodySha256,
+      },
+    });
+    return 'APPLIED';
+  }
   if (!refund) {
     const order = await orderOfProviderPayment(tx, evidence.providerPaymentId);
     if (!order) return 'UNKNOWN_REFUND';
@@ -771,7 +860,14 @@ export async function reconcileRazorpay(deps: ReconcileDeps): Promise<Reconcilia
   // or still PENDING at Razorpay.
   let refundsAdvanced = 0;
   const refunds = await prisma.razorpayRefund.findMany({
-    where: { source: 'STAFF', status: { in: ['APPROVED', 'SENDING', 'PENDING'] } },
+    where: {
+      source: 'STAFF',
+      OR: [
+        { status: { in: ['APPROVED', 'PENDING'] } },
+        // Refused sends wait for a refund approver (resolveRejectedRefund), never auto-resent.
+        { status: 'SENDING', failureReason: null },
+      ],
+    },
     orderBy: { id: 'asc' },
     take: 500,
   });

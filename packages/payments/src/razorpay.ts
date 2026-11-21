@@ -57,6 +57,7 @@ const refundEntitySchema = z.object({
   payment_id: z.string().regex(paymentIdPattern),
   status: z.enum(['pending', 'processed', 'failed']),
   receipt: z.string().max(40).nullish(),
+  notes: z.unknown().optional(),
 });
 export interface RazorpayRefundEvidence {
   eventId: string;
@@ -68,6 +69,8 @@ export interface RazorpayRefundEvidence {
   currency: string;
   status: 'pending' | 'processed' | 'failed';
   receipt: string | null;
+  /** Our refund id from notes.refund_id (signed body); only a UUID is kept, nothing else. */
+  refundId: string | null;
 }
 
 export type RazorpayIgnoreReason = 'UNHANDLED_EVENT' | 'UNPARSEABLE' | 'ACCOUNT_MISMATCH';
@@ -175,6 +178,7 @@ export function classifyRazorpayEvent(
         currency: r.currency,
         status: r.status,
         receipt: r.receipt ?? null,
+        refundId: refundIdFromNotes(r.notes),
       },
     };
   }
@@ -260,4 +264,15 @@ export function razorpayOrderReceipt(obligationId: string, attempt: number): str
   )
     throw new Error('Invalid order receipt input.');
   return `rx_${obligationId.replaceAll('-', '').toLowerCase()}_${String(attempt)}`;
+}
+
+function refundIdFromNotes(notes: unknown): string | null {
+  const value =
+    typeof notes === 'object' && notes !== null
+      ? (notes as Record<string, unknown>).refund_id
+      : null;
+  return typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+    ? value.toLowerCase()
+    : null;
 }
