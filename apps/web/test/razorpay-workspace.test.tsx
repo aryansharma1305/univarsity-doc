@@ -12,6 +12,10 @@ const refundId = '01900000-0000-7000-8000-0000000000f1';
 const READER: AuthUser = { ...VIEWER, permissions: [...VIEWER.permissions, 'reExamPayments.read'] };
 const VERIFIER: AuthUser = {
   ...READER,
+  permissions: [...READER.permissions, 'reExamPayments.verify', 'reExamPayments.refundApprove'],
+};
+const REQUESTER: AuthUser = {
+  ...READER,
   permissions: [...READER.permissions, 'reExamPayments.verify'],
 };
 const workspace = {
@@ -43,6 +47,8 @@ const workspace = {
       currency: 'INR',
       reason: 'DUPLICATE_PAYMENT',
       status: 'REQUESTED',
+      source: 'STAFF',
+      providerPaymentId: 'pay_SyntheticWs1',
       providerRefundId: null,
       failureReason: null,
       requestedBy: { id: '01900000-0000-7000-8000-0000000000d1', name: 'Synthetic Maker' },
@@ -50,6 +56,16 @@ const workspace = {
       createdAt: '2026-11-20T11:00:00.000Z',
       decidedAt: null,
       events: [{ kind: 'REQUESTED', createdAt: '2026-11-20T11:00:00.000Z' }],
+    },
+  ],
+  refundCandidates: [
+    {
+      orderId: '01900000-0000-7000-8000-0000000000e2',
+      providerPaymentId: 'pay_LateCapture1',
+      reason: 'ORDER_NOT_OPEN',
+      amountMinor: 100_000,
+      currency: 'INR',
+      refundableMinor: 100_000,
     },
   ],
   audit: [
@@ -85,6 +101,15 @@ it('shows orders, derived states, refunds and the audit trail, and lets a verifi
       ),
     ).toBe(true);
   });
+});
+
+it('lets a requester request but not approve, and lists refund candidates', async () => {
+  mockFetch(() => ({ body: workspace }));
+  renderWithProviders(<RazorpayWorkspacePanel paymentId={paymentId} />, REQUESTER);
+  await screen.findByRole('heading', { name: 'Razorpay (TEST mode)' });
+  expect(screen.queryByRole('button', { name: 'Approve and send refund' })).toBeNull();
+  expect(screen.getByText(/Captures to return/)).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: /Request refund/ }).length).toBeGreaterThan(0);
 });
 
 it('offers no refund actions without the verify permission', async () => {

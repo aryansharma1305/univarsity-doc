@@ -27,6 +27,7 @@ const key = (paymentId: string) => ['re-exam-payments', 'razorpay', paymentId] a
 export function RazorpayWorkspacePanel({ paymentId }: { paymentId: string }) {
   const headingId = useId();
   const canAct = useCan(PERMISSIONS.reExamPaymentsVerify);
+  const canDecide = useCan(PERMISSIONS.reExamPaymentsRefundApprove);
   const client = useQueryClient();
   const query = useQuery({
     queryKey: key(paymentId),
@@ -77,6 +78,41 @@ export function RazorpayWorkspacePanel({ paymentId }: { paymentId: string }) {
           }}
         />
       ))}
+      {data.refundCandidates.length > 0 && (
+        <div
+          role="note"
+          className="rounded-md border border-warning/40 bg-warning-soft p-3 text-sm"
+        >
+          <h3 className="font-semibold">Captures to return (refund candidates)</h3>
+          <ul className="mt-2 space-y-2">
+            {data.refundCandidates.map((c) => (
+              <li key={c.providerPaymentId} className="break-words">
+                <span className="font-mono text-xs">{c.providerPaymentId}</span> ·{' '}
+                {formatMoney(c.amountMinor, c.currency)} · {c.reason} · refundable{' '}
+                {formatMoney(c.refundableMinor, c.currency)}
+                {canAct && data.refunds !== 'off' && c.refundableMinor > 0 && (
+                  <Button
+                    size="sm"
+                    className="ml-2"
+                    disabled={act.isPending}
+                    onClick={() => {
+                      act.mutate({
+                        path: `payment-buttons/razorpay/re-exam-payments/${paymentId}/refunds`,
+                        body: {
+                          providerPaymentId: c.providerPaymentId,
+                          reason: 'REFUND_CANDIDATE',
+                        },
+                      });
+                    }}
+                  >
+                    Request refund
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {data.refundRequests.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold">Refunds</h3>
@@ -86,14 +122,18 @@ export function RazorpayWorkspacePanel({ paymentId }: { paymentId: string }) {
                 <p>
                   {formatMoney(r.amountMinor, r.currency)} · {r.reason} ·{' '}
                   <strong>{r.status}</strong>
+                  {r.source === 'DASHBOARD' ? ' · made in the Razorpay dashboard' : ''}
                   {r.failureReason ? ` (${r.failureReason})` : ''}
                 </p>
                 <p className="text-muted-foreground">
-                  Requested by {r.requestedBy?.name ?? '—'} on {formatDateTime(r.createdAt)}
+                  {r.source === 'DASHBOARD'
+                    ? 'Recorded'
+                    : `Requested by ${r.requestedBy?.name ?? '—'}`}{' '}
+                  on {formatDateTime(r.createdAt)}
                   {r.approvedBy ? ` · decided by ${r.approvedBy.name}` : ''}
                   {r.providerRefundId ? ` · ${r.providerRefundId}` : ''}
                 </p>
-                {canAct && r.status === 'REQUESTED' && (
+                {canDecide && r.status === 'REQUESTED' && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Button
                       size="sm"
@@ -116,7 +156,7 @@ export function RazorpayWorkspacePanel({ paymentId }: { paymentId: string }) {
                     </Button>
                   </div>
                 )}
-                {canAct && r.status === 'APPROVED' && (
+                {canDecide && ['APPROVED', 'SENDING'].includes(r.status) && (
                   <Button
                     size="sm"
                     className="mt-2"
@@ -132,7 +172,8 @@ export function RazorpayWorkspacePanel({ paymentId }: { paymentId: string }) {
             ))}
           </ul>
           <p className="mt-2 text-xs text-muted-foreground">
-            A refund needs a second person: the requester cannot approve or reject it.
+            A refund needs a second person with refund-approval rights: the requester cannot approve
+            or reject it.
           </p>
         </div>
       )}
