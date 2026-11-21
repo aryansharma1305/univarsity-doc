@@ -82,13 +82,13 @@ export function WorkspaceNavigator() {
           <Tabs value={selected} onValueChange={setChoice}>
             <TabsList
               aria-label="Workspace categories"
-              className="h-auto w-full flex-wrap justify-start gap-1 rounded-none bg-transparent p-0"
+              className="w-full flex-wrap justify-start gap-1 rounded-none bg-transparent p-0 group-data-[orientation=horizontal]/tabs:h-auto"
             >
               {groups.map((group) => (
                 <TabsTrigger
                   key={group}
                   value={group}
-                  className="relative min-h-10 flex-none rounded-md px-3 text-white/70 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:shadow-none"
+                  className="relative h-auto min-h-10 flex-none rounded-md px-3 text-white/70 data-[state=active]:bg-transparent data-[state=active]:text-white data-[state=active]:shadow-none"
                 >
                   {selected === group && (
                     <motion.span

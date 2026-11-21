@@ -18,6 +18,14 @@ test('admin dashboard and responsive navigation acceptance', async ({ page }) =>
   ] as const) {
     await page.setViewportSize({ width, height });
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    const tabs = page.getByRole('tablist', { name: 'Workspace categories' });
+    await expect(tabs.getByRole('tab', { name: 'Settings & Administration' })).toBeVisible();
+    const listBox = await tabs.boundingBox();
+    const lastTab = await tabs
+      .getByRole('tab', { name: 'Settings & Administration' })
+      .boundingBox();
+    if (!listBox || !lastTab) throw new Error('Workspace tabs should be visible');
+    expect(lastTab.y + lastTab.height).toBeLessThanOrEqual(listBox.y + listBox.height);
     await expectNoHorizontalOverflow(page);
     await expectNoSeriousA11yViolations(page);
     await page.mouse.move(0, 0);
