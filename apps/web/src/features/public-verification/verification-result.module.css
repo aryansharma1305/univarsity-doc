@@ -41,6 +41,8 @@
 }
 
 .success {
+  /* Badge fill with white text: at least 4.5:1 contrast (WCAG AA). */
+  --tone-badge: #15803d;
   --tone-strong: var(--dv-success);
   --tone-soft: var(--dv-success-soft);
   --tone-text: var(--dv-success-text);
@@ -48,6 +50,8 @@
 }
 
 .info {
+  /* Badge fill with white text: at least 4.5:1 contrast (WCAG AA). */
+  --tone-badge: var(--dv-blue-600);
   --tone-strong: var(--dv-blue-600);
   --tone-soft: var(--dv-info-soft);
   --tone-text: var(--dv-blue-700);
@@ -55,6 +59,8 @@
 }
 
 .warning {
+  /* Badge fill with white text: at least 4.5:1 contrast (WCAG AA). */
+  --tone-badge: #b45309;
   --tone-strong: var(--dv-warning);
   --tone-soft: var(--dv-warning-soft);
   --tone-text: var(--dv-warning-text);
@@ -62,6 +68,8 @@
 }
 
 .danger {
+  /* Badge fill with white text: at least 4.5:1 contrast (WCAG AA). */
+  --tone-badge: #b91c1c;
   --tone-strong: var(--dv-danger);
   --tone-soft: var(--dv-danger-soft);
   --tone-text: var(--dv-danger-text);
@@ -69,6 +77,8 @@
 }
 
 .neutral {
+  /* Badge fill with white text: at least 4.5:1 contrast (WCAG AA). */
+  --tone-badge: var(--dv-navy-900);
   --tone-strong: var(--dv-navy-900);
   --tone-soft: var(--dv-surface-subtle);
   --tone-text: var(--dv-navy-950);
@@ -173,7 +183,7 @@
   justify-content: center;
   padding: 4px 16px;
   border-radius: 999px;
-  background: var(--tone-strong);
+  background: var(--tone-badge);
   color: white;
   font-size: 0.8125rem;
   font-weight: 700;

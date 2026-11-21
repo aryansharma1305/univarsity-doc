@@ -315,8 +315,8 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
       checkerPage.getByRole('heading', { name: 'Verification and issuance audit', exact: true }),
     ).toBeVisible();
     await expect(checkerPage.getByRole('article').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('REVOKED');
+    await page.getByRole('button', { name: 'Verify Admission Letter', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Admission Letter Revoked');
     // Activation uses the existing per-registration identity flow and random password.
     const activation = await post(maker, 'student-accounts/activation-codes', {
       registrationIds: [registrationId],
@@ -403,16 +403,16 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await post(checker, `official-documents/${cert.id}/issue`);
     await page.goto('/verify/certificate');
     await page.getByLabel('Certificate number', { exact: true }).fill(certNumber);
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('ISSUED');
+    await page.getByRole('button', { name: 'Verify Certificate', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Certificate Valid');
     await capture(page, 'verification-certificate-issued-mobile');
     await page.goto('/verify/registration');
     await page.getByLabel('Registration number', { exact: true }).fill(number);
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify Registration', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('ACTIVE');
     await page.getByLabel('Registration number', { exact: true }).fill(number.slice(1));
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('INVALID');
+    await page.getByRole('button', { name: 'Verify Registration', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('No verified record found');
     const curriculum = await post(maker, `programs/${course.id}/curricula`, {
       versionCode: `PV-${Date.now()}`,
       name: 'Synthetic Verification Syllabus',

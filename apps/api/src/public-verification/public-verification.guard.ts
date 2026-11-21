@@ -19,10 +19,16 @@ export class PublicVerificationGuard implements CanActivate {
     // Shared across services; runs before validation so invalid bodies cannot bypass the budget.
     let limit;
     try {
+      // The course list discloses no record: its own budget, so loading Check Result does not use
+      // up the visitor's lookups.
+      const options = req.path.endsWith('/result-options');
       limit = await this.limiter.hit(
-        'public-verification-v1',
+        options ? 'public-verification-options-v1' : 'public-verification-v1',
         [
-          { key: this.hasher.hash('public-verification:client', req.ip ?? 'unknown'), limit: 20 },
+          {
+            key: this.hasher.hash('public-verification:client', req.ip ?? 'unknown'),
+            limit: options ? 60 : 20,
+          },
           { key: 'global', limit: 600 },
         ],
         60,

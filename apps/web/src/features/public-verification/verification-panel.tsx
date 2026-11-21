@@ -532,6 +532,7 @@ function ResultSearchForm({
             className="min-h-11 flex-1"
             placeholder="Your registration number"
             value={own}
+            required
             maxLength={128}
             autoComplete="off"
             onChange={(event) => {

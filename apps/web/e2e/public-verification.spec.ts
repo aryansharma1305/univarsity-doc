@@ -139,7 +139,7 @@ test('homepage search opens each service, runs exactly one server-decided check 
     // the public rate limit may also answer 429. Each is shown, never a silent page.
     expect([200, 429]).toContain((await lookup).status());
     await expect(page.locator('[role="status"], [role="alert"]').first()).toContainText(
-      /Verification not available|No verified record found|Too many checks/i,
+      /Verification not available|No verified record found|Sign in required|Too many checks/i,
     );
     await expect(page.getByRole('textbox')).toHaveValue(reference);
     await expect.poll(() => posts).toEqual([`/api/v1/public/verify/${service}`]);
