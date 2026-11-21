@@ -27,7 +27,7 @@ async function createCourse(
   page: Page,
   input: { code: string; name: string; structure: 'Semester-wise' | 'Year-wise'; periods: string },
 ) {
-  await openSection(page, 'Manage Courses');
+  await openSection(page, 'Manage Courses', 'Course Management');
   await page.getByRole('button', { name: 'Create course' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Create course' });
   await dialog.getByLabel('Course name').fill(input.name);
