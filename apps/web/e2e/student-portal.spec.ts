@@ -109,7 +109,9 @@ test('a student activates with a university code, sees only their own record, si
       await expect(page.getByText('Official records are read-only')).toBeVisible();
       await expect(page.getByRole('button', { name: /Edit/ })).toHaveCount(0);
       await expect(page.getByRole('heading', { level: 2, name: 'Course Details' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Update My Details' })).toBeVisible();
+      await expect(
+        page.getByRole('main').getByRole('link', { name: 'Update My Details' }),
+      ).toBeVisible();
     }
     if (route === '/student/results') {
       await expect(page.getByRole('status')).toContainText(
