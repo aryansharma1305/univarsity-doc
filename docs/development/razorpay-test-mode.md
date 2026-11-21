@@ -105,3 +105,24 @@ forward only. A refund never changes the obligation or the application.
 **Worker.** In test mode the worker consumes the `payments` queue and upserts one job scheduler
 (`razorpay-reconcile`, every 15 minutes). Mode off schedules and consumes nothing.
 `pnpm --filter @docversity/api razorpay:reconcile` runs the same reconciliation by hand.
+
+## Refund safety and alerts (re-review fixes)
+
+- **Send lease.** Approving moves a refund `APPROVED → SENDING` under a 25 s lease; only the lease
+  holder calls Razorpay. A lost or refused answer is resolved by looking the refund up at Razorpay
+  (`GET /payments/{id}/refunds`, matched by our receipt or `notes.refund_id`). `FAILED` is set only
+  from a provider status or a `refund.failed` webhook; until then `SENDING` keeps the headroom
+  reserved, and reconciliation looks up again and resends with the same `X-Refund-Idempotency` key.
+- **Refund candidates.** A capture flagged `ORDER_NOT_OPEN`, `OBLIGATION_NOT_OPEN`, `AMOUNT_MISMATCH`,
+  `PROVIDER_STATE_MISMATCH`, `ORDER_ALREADY_PAID` or `PAYMENT_ALREADY_USED` can be refunded through the
+  same maker-checker flow (`providerPaymentId` in the request); headroom is per provider payment.
+- **Dashboard refunds.** A signed refund webhook for one of our payments that Docversity did not issue
+  is recorded as a `DASHBOARD` refund (no requester, provider status only) and counts in headroom.
+- **Approver permission.** `reExamPayments.refundApprove` (SUPER_ADMIN only by default); requesting
+  needs `reExamPayments.verify`; requester ≠ approver.
+- **Alerts.** `PAYMENTS_ALERT_WEBHOOK_URL` (https, optional; api and worker): every alert is a JSON POST
+  with ids and codes only (works with an ntfy topic, a chat relay or a mail gateway); unset means
+  structured warning log lines. Choosing and owning the channel is an **ops decision**.
+- **Reconciliation** pages through every recent order, never abandons an order while Razorpay has a
+  `created`/`authorized` payment on it, and checks `amount_refunded` against PENDING + PROCESSED
+  (+ SENDING) refunds. In mode off the worker removes any leftover `razorpay-reconcile` schedule.
