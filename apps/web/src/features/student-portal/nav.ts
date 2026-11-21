@@ -5,6 +5,8 @@ import {
   FileTextIcon,
   HistoryIcon,
   LayoutDashboardIcon,
+  LifeBuoyIcon,
+  MessagesSquareIcon,
   type LucideIcon,
   SettingsIcon,
   UserRoundIcon,
@@ -15,6 +17,8 @@ export type StudentNavHref =
   | '/student'
   | '/student/profile'
   | '/student/requests'
+  | '/student/messages'
+  | '/student/verification-queries'
   | '/student/examinations'
   | '/student/results'
   | '/student/certificate-requests'
@@ -53,6 +57,7 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
     ],
   },
   { href: '/student/requests', label: 'My Requests', icon: HistoryIcon, available: true },
+  { href: '/student/messages', label: 'Messages', icon: MessagesSquareIcon, available: true },
   {
     href: '/student/examinations',
     label: 'Examinations',
@@ -78,7 +83,13 @@ export const STUDENT_NAV: readonly StudentNavItem[] = [
     available: true,
   },
   { href: '/student/documents', label: 'My Documents', icon: FileTextIcon, available: true },
-  { href: '/student/notifications', label: 'Notifications', icon: BellIcon, available: false },
+  {
+    href: '/student/verification-queries',
+    label: 'Verification Queries',
+    icon: LifeBuoyIcon,
+    available: true,
+  },
+  { href: '/student/notifications', label: 'Notifications', icon: BellIcon, available: true },
   { href: '/student/settings', label: 'Account Settings', icon: SettingsIcon, available: true },
 ];
 

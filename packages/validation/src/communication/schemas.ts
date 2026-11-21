@@ -72,10 +72,14 @@ export type MessageThreadDetail = z.infer<typeof messageThreadDetailSchema>;
 export const messageThreadListSchema = paginatedSchema(messageThreadSummarySchema);
 export type MessageThreadList = z.infer<typeof messageThreadListSchema>;
 
-export const messageThreadQuerySchema = listQuerySchema(['lastMessageAt', 'createdAt'], 'lastMessageAt', {
-  status: optionalFilter(messageThreadStatusSchema),
-  unread: optionalFilter(z.enum(['true'])),
-});
+export const messageThreadQuerySchema = listQuerySchema(
+  ['lastMessageAt', 'createdAt'],
+  'lastMessageAt',
+  {
+    status: optionalFilter(messageThreadStatusSchema),
+    unread: optionalFilter(z.enum(['true'])),
+  },
+);
 export type MessageThreadQuery = z.infer<typeof messageThreadQuerySchema>;
 
 // ---------------------------------------------------------------------------------------------
