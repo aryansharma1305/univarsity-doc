@@ -32,7 +32,7 @@ it('fails closed on response failure or forged live activation', async () => {
   await waitFor(() => {
     expect(document.querySelectorAll('script')).toHaveLength(0);
   });
-  expect(screen.getByText('Payment status: Unavailable')).toBeInTheDocument();
+  expect(screen.getByText('Online payment not yet available')).toBeInTheDocument();
 });
 it('cleans provider-owned DOM across StrictMode, remount and button changes', () => {
   const checkout = { mode: 'TEST' as const, buttonId: 'pl_SyntheticTest' };

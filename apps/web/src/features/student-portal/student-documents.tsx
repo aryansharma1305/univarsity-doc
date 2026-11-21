@@ -12,11 +12,11 @@ import {
   AUTHENTICITY_LABELS,
   HISTORICAL_DOCUMENT_TYPE_LABELS,
   type StudentDocument,
+  type StudentUpload,
 } from '@docversity/validation';
-import type { StudentRegistrationEligibilityV1 } from '@docversity/validation';
-import { StudentCertificateSamples } from './certificate-samples';
 import { formatDate } from '@/lib/format';
-import { PageIntro, PortalCard, PortalEmptyState } from './portal-ui';
+import { PageIntro, PortalCard } from './portal-ui';
+import { StudentUploads } from './student-uploads';
 
 function fileLabel(document: StudentDocument): string {
   const kind = document.contentType === 'application/pdf' ? 'PDF' : 'Image';
@@ -47,7 +47,7 @@ function DocumentCard({ document }: { document: StudentDocument }) {
           <FileTextIcon aria-hidden="true" className="size-5" />
         </span>
         <div className="min-w-0">
-          <h2 className="text-base font-semibold break-words text-navy-950">{document.title}</h2>
+          <h3 className="text-base font-semibold break-words text-navy-950">{document.title}</h3>
           <p className="text-meta">
             {HISTORICAL_DOCUMENT_TYPE_LABELS[document.documentType]} ·{' '}
             <span className="tabular">Ref {document.reference}</span>
@@ -126,40 +126,43 @@ function DocumentCard({ document }: { document: StudentDocument }) {
 export function StudentDocuments({
   issued,
   documents,
-  courseSamples = null,
+  uploads,
 }: {
   issued?: z.infer<typeof studentIssuedDocumentsSchema> | null;
   documents: StudentDocument[] | null;
-  courseSamples?: StudentRegistrationEligibilityV1[] | null;
+  /** The student's own uploads; null when they could not be loaded. */
+  uploads: StudentUpload[] | null;
 }) {
   return (
     <>
-      <PageIntro
-        title="My Documents"
-        description="Certificates and records the university has published to you. You can view and download them; only the university can add or change documents."
-      />
+      <PageIntro title="My Documents" />
+      <section aria-labelledby="uploads-heading" className="mb-8">
+        <h2 id="uploads-heading" className="mb-4 text-lg font-semibold text-navy-950">
+          My uploads
+        </h2>
+        <StudentUploads initial={uploads} />
+      </section>
       <IssuedDocuments documents={issued ?? null} />
-      <StudentCertificateSamples courseSamples={courseSamples} />
       {documents === null ? (
-        <PortalCard title="Documents" icon={FileTextIcon}>
+        <PortalCard title="University documents" icon={FileTextIcon}>
           <p role="alert" className="text-sm text-danger-text">
             Your documents could not be loaded right now. Refresh the page to try again.
           </p>
         </PortalCard>
-      ) : documents.length === 0 && !issued?.length ? (
-        <PortalCard title="Documents" icon={FileTextIcon}>
-          <PortalEmptyState
-            icon={FileTextIcon}
-            title="No documents published yet"
-            description="When the university publishes a certificate or record to your account, it will appear here. Contact the registrar’s office if you expect a document."
-          />
-        </PortalCard>
       ) : documents.length > 0 ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {documents.map((document) => (
-            <DocumentCard key={document.id} document={document} />
-          ))}
-        </div>
+        <section aria-labelledby="university-documents-heading">
+          <h2
+            id="university-documents-heading"
+            className="mb-4 text-lg font-semibold text-navy-950"
+          >
+            University documents
+          </h2>
+          <div className="grid gap-4 xl:grid-cols-2">
+            {documents.map((document) => (
+              <DocumentCard key={document.id} document={document} />
+            ))}
+          </div>
+        </section>
       ) : null}
     </>
   );

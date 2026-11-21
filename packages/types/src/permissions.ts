@@ -107,6 +107,11 @@ export const PERMISSIONS = {
   studentProfileRequestsRead: 'studentProfileRequests.read',
   /** Approve or reject student profile change requests (Phase 7). */
   studentProfileRequestsReview: 'studentProfileRequests.review',
+  /**
+   * View and download files students uploaded themselves (academic and identity documents).
+   * Personal data: REGISTRAR and SUPER_ADMIN only; every list view and download is audited.
+   */
+  studentUploadsRead: 'studentUploads.read',
   auditRead: 'audit.read',
   usersManage: 'users.manage',
   settingsManage: 'settings.manage',
@@ -166,6 +171,7 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.studentAccountsManage,
     P.studentProfileRequestsRead,
     P.studentProfileRequestsReview,
+    P.studentUploadsRead,
     P.subjectsWrite,
     P.curriculaWrite,
     P.curriculaActivate,

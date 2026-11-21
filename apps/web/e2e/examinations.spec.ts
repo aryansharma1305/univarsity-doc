@@ -91,7 +91,11 @@ test('examination application links and year-wise examination records reach the 
   // Before anything is configured, the student sees an honest state.
   const portal = await studentPage(browser, alpha);
   await portal.goto('/student/examinations');
-  await expect(portal.getByText('Examination application not configured yet')).toBeVisible();
+  await expect(
+    portal.getByRole('list', { name: 'Examination options' }).getByRole('listitem'),
+  ).toHaveCount(3);
+  await expect(portal.getByText('Not yet available')).toBeVisible();
+  await expect(portal.getByRole('link', { name: /Login to Exam Panel/ })).toHaveCount(0);
 
   // EXAM_ADMIN configures the external examination application (https only).
   const staff = await staffPage(browser, examAdmin);
@@ -144,15 +148,17 @@ test('examination application links and year-wise examination records reach the 
   await capture(staff, 'examination-detail-desktop');
   await staff.context().close();
 
-  // The student sees the application card and their year-wise record — exams happen elsewhere.
+  // Three options only; the exam panel is the configured external application (new tab).
   await portal.reload();
-  await expect(portal.getByText(/not in this portal/)).toBeVisible();
-  await expect(portal.getByRole('link', { name: /Open the official website/ })).toHaveAttribute(
-    'href',
-    'https://exams.example.test/portal',
-  );
-  await expect(portal.getByRole('link', { name: /for Android/ })).toBeVisible();
-  await expect(portal.getByRole('link', { name: /iPhone/ })).toHaveCount(0);
+  const panel = portal.getByRole('link', { name: /Login to Exam Panel/ });
+  await expect(panel).toHaveAttribute('href', 'https://exams.example.test/portal');
+  await expect(panel).toHaveAttribute('target', '_blank');
+  await expect(portal.getByRole('link', { name: /for Android|iPhone/ })).toHaveCount(0);
+  await expectNoSeriousA11yViolations(portal);
+  await capture(portal, 'student-examinations-options-desktop');
+  // Apply for Exam lists the year-wise examination records of the student's own course.
+  await portal.getByRole('link', { name: 'Apply for Exam', exact: true }).click();
+  await expect(portal).toHaveURL(/\/student\/examinations\/apply$/);
   await expect(portal.getByRole('list', { name: 'Course periods' })).toContainText('Year 1');
   await expect(portal.getByText('E2E Year 2 Examination')).toBeVisible();
   await expectNoSeriousA11yViolations(portal);
@@ -205,7 +211,7 @@ test('re-exam application: confirmed fee schedule, verified identity, attempt an
   // The student applies: identity is read-only, attempt and fee come from the server.
   const portal = await studentPage(browser, alpha);
   await portal.goto('/student/examinations');
-  await portal.getByRole('link', { name: 'Apply for a re-examination' }).click();
+  await portal.getByRole('link', { name: 'Apply for Re-exam', exact: true }).click();
   await expect(
     portal.getByRole('heading', { level: 1, name: 'Apply for a re-examination' }),
   ).toBeVisible();
@@ -288,6 +294,7 @@ test.describe('mobile', () => {
     await expectNoSeriousA11yViolations(portal);
     await capture(portal, 'student-examinations-mobile');
     for (const [name, url] of [
+      ['student-exam-apply-mobile', '/student/examinations/apply'],
       ['student-re-exam-apply-mobile', '/student/examinations/re-exam'],
       ['student-re-exam-applications-mobile', '/student/examinations/re-exam/applications'],
     ] as const) {

@@ -130,16 +130,21 @@ test('student: sign in, dashboard, course, documents and the training sample; no
   await studentSignIn(page);
   await expectNoOverflow(page);
   await shot(page, 'student-dashboard', info.project.name);
-  await page.goto('/student/course');
-  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  // Course details live in the Student Profile; samples moved to the Certificate Request samples page.
+  await page.goto('/student/profile');
+  await expect(page.getByRole('heading', { level: 2, name: 'Course Details' })).toBeVisible();
   await shot(page, 'student-course', info.project.name);
   await page.goto('/student/documents');
+  await expect(page.getByRole('heading', { name: 'My uploads' })).toBeVisible();
+  await expectNoOverflow(page);
+  await shot(page, 'student-documents', info.project.name);
+  await page.goto('/student/certificate-requests/samples');
   await expect(
     page.getByRole('heading', { name: 'Training Certificate', exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('region', { name: 'Samples for your courses' })).toBeVisible();
   await expectNoOverflow(page);
-  await shot(page, 'student-documents', info.project.name);
+  await shot(page, 'student-certificate-samples', info.project.name);
   const sample = await page.request.get(
     '/api/v1/student/certificate-samples/sample-training-v1/file?disposition=attachment',
   );

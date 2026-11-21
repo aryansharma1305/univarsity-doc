@@ -434,7 +434,10 @@ test('staff explicitly assign a curriculum and the student sees only their own c
   await own.getByLabel('Password').fill(account.password);
   await own.getByRole('button', { name: 'Sign in' }).click();
   await expect(own).toHaveURL(/\/student$/);
+  // Course details now live in the Student Profile; the old address redirects there.
   await own.goto('/student/course');
+  await expect(own).toHaveURL(/\/student\/profile(#course-details)?$/);
+  await expect(own.getByRole('heading', { name: 'Course Details' })).toBeVisible();
   await expect(own.getByRole('heading', { name: number })).toBeVisible();
   await expect(own.getByText('2026 syllabus', { exact: false })).toBeVisible();
   await expect(own.getByText('E2E Ultrasound Physics')).toBeVisible();
@@ -519,7 +522,7 @@ test('move and reorder year subjects, supersede a version and retain the archive
   await own.getByLabel('Password').fill(account.password);
   await own.getByRole('button', { name: 'Sign in' }).click();
   await expect(own).toHaveURL(/\/student$/);
-  await own.goto('/student/course');
+  await own.goto('/student/profile');
   await expect(own.getByText('2026 syllabus', { exact: false })).toBeVisible();
   await expect(own.getByText('E2E Ultrasound Physics')).toBeVisible();
   await expect(own.getByText('2027 syllabus', { exact: false })).toHaveCount(0);

@@ -56,6 +56,7 @@ export function mockFetch(
       url.pathname.replace('/api/v1/', ''),
       typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined,
     );
+    if (result.status === 204) return Promise.resolve(new Response(null, { status: 204 }));
     return Promise.resolve(Response.json(result.body, { status: result.status ?? 200 }));
   });
   vi.stubGlobal('fetch', fetchMock);

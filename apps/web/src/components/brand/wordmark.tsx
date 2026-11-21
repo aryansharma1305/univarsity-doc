@@ -1,24 +1,18 @@
+import Image from 'next/image';
 import { cn } from '@docversity/ui';
+import logo from '@/features/public-verification/university-logo.webp';
 
-/** Docversity mark: a simple shield monogram (no university crest — none has been supplied). */
+/** Docversity mark: the official university logo (decorative beside the visible name). */
 export function DocversityMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" aria-hidden="true" className={cn('size-8 shrink-0', className)}>
-      <path
-        d="M16 2 4 6.5v8.7c0 7.4 5.1 12.7 12 14.8 6.9-2.1 12-7.4 12-14.8V6.5L16 2Z"
-        fill="#071F4A"
-      />
-      <path
-        d="M16 4.6 6.4 8.2v7c0 6.1 4.1 10.6 9.6 12.5 5.5-1.9 9.6-6.4 9.6-12.5v-7L16 4.6Z"
-        fill="none"
-        stroke="#D4AF7A"
-        strokeWidth="1.2"
-      />
-      <path
-        d="M11.5 10.5h4.2c3.4 0 5.8 2.2 5.8 5.5s-2.4 5.5-5.8 5.5h-4.2v-11Zm2.6 2.3v6.4h1.5c1.9 0 3.2-1.3 3.2-3.2s-1.3-3.2-3.2-3.2h-1.5Z"
-        fill="#FFFFFF"
-      />
-    </svg>
+    <Image
+      src={logo}
+      alt=""
+      aria-hidden="true"
+      width={64}
+      height={68}
+      className={cn('size-8 shrink-0 object-contain', className)}
+    />
   );
 }
 

@@ -1,9 +1,9 @@
 import {
   BellIcon,
-  BookOpenIcon,
   ClipboardCheckIcon,
   ClipboardListIcon,
   FileTextIcon,
+  HistoryIcon,
   LayoutDashboardIcon,
   type LucideIcon,
   SettingsIcon,
@@ -13,7 +13,7 @@ import {
 export type StudentNavHref =
   | '/student'
   | '/student/profile'
-  | '/student/course'
+  | '/student/requests'
   | '/student/examinations'
   | '/student/results'
   | '/student/certificate-requests'
@@ -24,6 +24,8 @@ export type StudentNavHref =
 /** Student portal pages that are not sidebar entries (reached from their parent page). */
 export type StudentSubpageHref =
   | '/student/profile/requests'
+  | '/student/profile/update'
+  | '/student/examinations/apply'
   | '/student/examinations/re-exam'
   | '/student/examinations/re-exam/applications';
 
@@ -38,7 +40,7 @@ export interface StudentNavItem {
 export const STUDENT_NAV: readonly StudentNavItem[] = [
   { href: '/student', label: 'Dashboard', icon: LayoutDashboardIcon, available: true },
   { href: '/student/profile', label: 'My Profile', icon: UserRoundIcon, available: true },
-  { href: '/student/course', label: 'Course Details', icon: BookOpenIcon, available: true },
+  { href: '/student/requests', label: 'My Requests', icon: HistoryIcon, available: true },
   {
     href: '/student/examinations',
     label: 'Examinations',

@@ -41,7 +41,11 @@ test('student workspace visual acceptance and accessible navigation', async ({ p
   for (const [route, name] of [
     ['/student/profile', 'profile'],
     ['/student/profile/requests', 'profile-requests'],
-    ['/student/course', 'course'],
+    ['/student/profile/update', 'profile-update'],
+    ['/student/requests', 'requests'],
+    ['/student/examinations/apply', 'exam-apply'],
+    ['/student/certificate-requests', 'certificate-request'],
+    ['/student/certificate-requests/samples', 'certificate-samples'],
     ['/student/examinations', 'examinations'],
     ['/student/documents', 'documents'],
     ['/student/examinations/re-exam/applications', 'applications'],
@@ -81,22 +85,16 @@ test('mobile student tasks remain accessible with motion disabled and show only 
   await expect(page.getByRole('heading', { level: 1 })).toContainText(student.studentName);
   await expect(page.locator('main')).not.toContainText(other.studentName);
   await expect(page.locator('main')).not.toContainText(other.registrationNumber);
-  // Earlier historical-document cases publish to this same owned account.
-  // Accept either genuine data state so this case also runs independently.
-  const publishedDocuments = page.getByRole('list', { name: 'Published documents' });
-  if (await publishedDocuments.count()) {
-    await expect(publishedDocuments.getByRole('link')).not.toHaveCount(0);
-  } else {
-    await expect(page.getByText('No documents published yet')).toBeVisible();
-  }
-  await expect(page.getByText('Only published results appear in My Results')).toBeVisible();
+  // The simplified dashboard has no documents card or activity feed, so no other data can leak in.
+  await expect(page.getByRole('heading', { name: 'Documents', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Recent activity' })).toHaveCount(0);
   await expect(page.locator('main')).not.toContainText(/CGPA|SGPA|Attendance/);
   const navigation = page.getByRole('navigation', { name: 'Student quick navigation' });
   await navigation.getByRole('link', { name: 'Home', exact: true }).focus();
   await page.keyboard.press('Tab');
-  await expect(navigation.getByRole('link', { name: 'Course', exact: true })).toBeFocused();
+  await expect(navigation.getByRole('link', { name: 'Profile', exact: true })).toBeFocused();
   for (const [label, path] of [
-    ['Course', 'course'],
+    ['Profile', 'profile'],
     ['Exams', 'examinations'],
     ['Documents', 'documents'],
     ['Home', ''],

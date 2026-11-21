@@ -28,7 +28,7 @@ test('fee panels remain non-transactional, hard-copy-only and accessible at all 
     await expect(
       page.getByRole('heading', { name: 'Pay for Hard Copy Certificate' }),
     ).toBeVisible();
-    await expect(page.getByText('Payment status: Unavailable')).toBeVisible();
+    await expect(page.getByText('Online payment not yet available')).toBeVisible();
     await expect(page.getByText(/The certificate fee applies only to hard copies/)).toBeVisible();
     await expect(page.locator('script[src*="checkout.razorpay.com"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Pay.*Certificate/ })).toHaveCount(0);
@@ -37,9 +37,9 @@ test('fee panels remain non-transactional, hard-copy-only and accessible at all 
     await capture(page, `razorpay-certificate-${width}`);
   }
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.getByRole('link', { name: 'Back to certificate requests' }).focus();
-  await expect(page.getByRole('link', { name: 'Back to certificate requests' })).toBeFocused();
+  await page.getByRole('link', { name: 'Back to my requests' }).focus();
+  await expect(page.getByRole('link', { name: 'Back to my requests' })).toBeFocused();
   await page.reload();
-  await expect(page.getByText('Payment status: Unavailable')).toBeVisible();
+  await expect(page.getByText('Online payment not yet available')).toBeVisible();
   expect(providerRequests).toEqual([]);
 });

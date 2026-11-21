@@ -36,6 +36,8 @@ test('student results: published-only empty boundary across both curricula, resp
         /CGPA|SGPA|Internal marks|External marks/,
       );
       await expect(page.getByRole('button', { name: /Download Marksheet/ })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'View Result' })).toBeVisible();
+      await expect(page.locator('main')).not.toContainText(/Official marksheet/i);
       await expectNoHorizontalOverflow(page);
       await expectNoSeriousA11yViolations(page);
       await capture(page, `phase11a-results-${kind}-${size}`);

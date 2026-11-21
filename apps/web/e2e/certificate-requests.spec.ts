@@ -22,11 +22,19 @@ test('student catalogue and owned history fit all viewports with disabled polici
   ] as const) {
     await page.setViewportSize({ width, height });
     await expect(
-      page.getByRole('heading', { name: 'Certificate Requests', exact: true }),
+      page.getByRole('heading', { level: 1, name: 'Certificate Request', exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Not available yet' })).toHaveCount(5);
-    await expect(page.getByRole('button', { name: 'Not available yet' }).first()).toBeDisabled();
-    await expect(page.getByText('CR-E2E-SYNTHETIC-APPLICATION')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'View Certificate Sample' })).toBeVisible();
+    const list = page.getByRole('list', { name: 'Certificates' });
+    await expect(list.getByRole('heading')).toHaveText([
+      'Transcript',
+      'Provisional Certificate',
+      'Character Certificate',
+      'Migration Certificate',
+      'Course Completion Certificate',
+    ]);
+    await expect(page.getByRole('button', { name: 'Not yet available' })).toHaveCount(5);
+    await expect(page.getByRole('button', { name: 'Not yet available' }).first()).toBeDisabled();
     await expectNoHorizontalOverflow(page);
     await expectNoSeriousA11yViolations(page);
     await capture(page, `phase12b-student-${label}`);
@@ -38,7 +46,7 @@ test('student catalogue and owned history fit all viewports with disabled polici
   const navigation = page.getByRole('button', { name: 'Open student navigation' });
   await navigation.click();
   await expect(
-    page.getByRole('dialog').getByRole('link', { name: 'Certificate Requests', exact: true }),
+    page.getByRole('dialog').getByRole('link', { name: 'My Requests', exact: true }),
   ).toBeVisible();
   await expectNoSeriousA11yViolations(page);
   await page.screenshot({ path: 'test-results/screenshots/phase12b-student-drawer.png' });
@@ -51,13 +59,17 @@ test('student catalogue and owned history fit all viewports with disabled polici
   await expect(page.getByText('Private staff note')).toHaveCount(0);
   await expectNoSeriousA11yViolations(page);
   await capture(page, 'phase12b-student-detail-reduced-motion');
-  await page.getByRole('link', { name: 'Back to certificate requests' }).focus();
-  await expect(page.getByRole('link', { name: 'Back to certificate requests' })).toBeFocused();
+  await page.getByRole('link', { name: 'Back to my requests' }).focus();
+  await expect(page.getByRole('link', { name: 'Back to my requests' })).toBeFocused();
+  // The student's own applications are listed under My Requests.
+  await page.goto('/student/requests');
+  await expect(page.getByText('CR-E2E-SYNTHETIC-APPLICATION')).toBeVisible();
+  await expectNoSeriousA11yViolations(page);
   const other = fixtures().profileStudents[1];
   if (!other) throw new Error('Missing second student');
   await page.context().clearCookies();
   await studentSignIn(page, other);
-  await page.goto('/student/certificate-requests');
+  await page.goto('/student/requests');
   await expect(page.getByText('No applications yet')).toBeVisible();
   await expect(page.getByText('CR-E2E-SYNTHETIC-APPLICATION')).toHaveCount(0);
 });

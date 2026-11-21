@@ -40,7 +40,11 @@ test('a student submits a missing DOB and photo; a registrar approves; the profi
   await studentSignIn(page, student);
 
   await page.goto('/student/profile');
-  await expect(page.getByRole('heading', { name: 'Update my details' })).toBeVisible();
+  // The profile is read-only; the existing form opens only from "Update My Details".
+  await expect(page.getByRole('button', { name: 'Review changes' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Update My Details' }).click();
+  await expect(page).toHaveURL(/\/student\/profile\/update$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Update My Details' })).toBeVisible();
   await expectNoSeriousA11yViolations(page);
   await capture(page, 'student-profile-form-desktop');
 
@@ -72,12 +76,11 @@ test('a student submits a missing DOB and photo; a registrar approves; the profi
   await expect(page).toHaveURL(/\/student\/profile\/requests\?submitted=1$/);
   await expect(page.getByRole('status')).toContainText('Request submitted for approval');
 
-  // One pending request at a time: the profile shows the pending request instead of a new form.
-  await page.goto('/student/profile');
+  // One pending request at a time: Update My Details shows the pending request instead of a form.
+  await page.goto('/student/profile/update');
   await expect(page.getByText('Pending review').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Review changes' })).toHaveCount(0);
-  await page.getByRole('link', { name: 'Request history' }).click();
-  await expect(page).toHaveURL(/\/student\/profile\/requests$/);
+  await page.goto('/student/profile/requests');
   await expect(
     page.getByRole('heading', { level: 1, name: 'Profile update requests' }),
   ).toBeVisible();
@@ -122,11 +125,10 @@ test('a student submits a missing DOB and photo; a registrar approves; the profi
     }),
   ).toBeVisible();
   await expect(page.getByText('Official photo on record.')).toBeVisible();
-  await page.goto('/student');
-  await expect(
-    page.getByRole('list', { name: 'Recent activity' }).getByText('Profile update approved'),
-  ).toBeVisible();
-  await capture(page, 'student-home-after-approval-desktop');
+  // The decision is listed under My Requests (the dashboard no longer has an activity feed).
+  await page.goto('/student/requests');
+  await expect(page.getByText('Your official profile has been updated.')).toBeVisible();
+  await capture(page, 'student-requests-after-approval-desktop');
   await page.goto('/student/profile/requests');
   await expect(page.getByText('Your official profile has been updated.')).toBeVisible();
   expect(errors).toEqual([]);
@@ -140,7 +142,7 @@ test('a registrar rejects with a reason; the student sees it and can cancel a ne
   const student = fixtures().profileStudents[1];
   if (!student) throw new Error('missing fixture');
   await studentSignIn(page, student);
-  await page.goto('/student/profile');
+  await page.goto('/student/profile/update');
   await page.getByLabel('Full name').fill('Review Student Corrected');
   await page.getByLabel("Mother's name").fill('Synthetic Mother');
   await page.getByLabel('Note for the registrar (optional)').fill('As on my admission letter.');
@@ -174,6 +176,7 @@ test('a registrar rejects with a reason; the student sees it and can cancel a ne
   await expect(page.getByRole('heading', { name: student.studentName })).toBeVisible();
 
   // A new request can be cancelled by the student.
+  await page.goto('/student/profile/update');
   await page.getByLabel('Gender').selectOption('Other');
   await page.getByRole('button', { name: 'Review changes' }).click();
   await page.getByRole('button', { name: 'Submit for approval' }).click();
@@ -199,7 +202,7 @@ test.describe('mobile', () => {
     const student = fixtures().profileStudents[1];
     if (!student) throw new Error('missing fixture');
     await studentSignIn(page, student);
-    await page.goto('/student/profile');
+    await page.goto('/student/profile/update');
     await expect(page.getByRole('button', { name: 'Review changes' })).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await capture(page, 'student-profile-form-mobile');

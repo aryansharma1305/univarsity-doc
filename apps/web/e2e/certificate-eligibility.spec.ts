@@ -13,7 +13,8 @@ test('student sees registration-specific certificate eligibility without any new
 }) => {
   test.setTimeout(120_000);
   await studentSignIn(page, fixtures().eligibilityStudent);
-  await page.goto('/student/certificate-requests');
+  // Eligibility labels sit with the certificate samples (the request page shows only the five rows).
+  await page.goto('/student/certificate-requests/samples');
   const section = page.getByRole('region', { name: 'Certificates for your courses' });
   await expect(section.getByRole('article')).toHaveCount(4);
   const short = section.getByRole('article', {
@@ -33,8 +34,6 @@ test('student sees registration-specific certificate eligibility without any new
   const year = section.getByRole('article', { name: 'E2E One-Year Diploma' });
   await expect(year.getByText('University policy pending', { exact: true })).toHaveCount(5);
   await expect(section.getByRole('button')).toHaveCount(0);
-  // Phase 12B applications stay unavailable, including Course Completion.
-  await expect(page.getByRole('button', { name: 'Not available yet' })).toHaveCount(5);
   for (const [width, height, label] of [
     [1440, 1000, 'desktop'],
     [768, 1024, 'tablet'],
@@ -45,6 +44,10 @@ test('student sees registration-specific certificate eligibility without any new
     await expectNoSeriousA11yViolations(page);
     await capture(page, `phase12c-student-eligibility-${label}`);
   }
+  // Phase 12B applications stay unavailable, including Course Completion.
+  await page.goto('/student/certificate-requests');
+  await expect(page.getByRole('button', { name: 'Not yet available' })).toHaveCount(5);
+  await page.goto('/student/certificate-requests/samples');
   await page.setViewportSize({ width: 390, height: 844 });
   await short.scrollIntoViewIfNeeded();
   await page.screenshot({
@@ -55,7 +58,7 @@ test('student sees registration-specific certificate eligibility without any new
   const other = fixtures().profileStudents[1];
   if (!other) throw new Error('Missing second student');
   await studentSignIn(page, other);
-  await page.goto('/student/certificate-requests');
+  await page.goto('/student/certificate-requests/samples');
   await expect(page.getByText('E2E-REG-0301')).toHaveCount(0);
 });
 

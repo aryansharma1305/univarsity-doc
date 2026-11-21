@@ -48,6 +48,14 @@ export const objectKeys = {
     return `students/${studentId}/photos/${randomUUID()}.jpg`;
   },
   /**
+   * A file a student uploaded about themself (academic or identity document). A fresh key per
+   * upload, so a replacement never overwrites the object it replaces.
+   */
+  studentUpload(studentId: string, extension: 'pdf' | 'jpg' | 'png'): string {
+    assertUuid(studentId);
+    return `students/${studentId}/uploads/${randomUUID()}.${extension}`;
+  },
+  /**
    * The QR image of a re-exam payment destination (re-encoded, without metadata). A new key per
    * upload; approved destinations are frozen, so a referenced QR is never overwritten.
    */
