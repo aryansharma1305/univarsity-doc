@@ -100,9 +100,7 @@ test('workspace shortcuts open the selected policy and document type', async ({ 
     'aria-selected',
     'true',
   );
-  await expect(page.getByLabel('Official document type', { exact: true })).toHaveValue(
-    'TRANSCRIPT',
-  );
+  await expect(page.getByText('Showing transcript records.', { exact: false })).toBeVisible();
 });
 
 test('dashboard loading and empty states remain honest', async ({ page }) => {

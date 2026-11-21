@@ -20,7 +20,7 @@ async function staffPage(browser: Browser, viewport = { width: 1440, height: 100
 }
 
 async function openRequest(page: Page, studentName: string) {
-  await openSection(page, 'Profile Requests');
+  await openSection(page, 'Profile Update Requests');
   await page.getByLabel('Search requests').fill(studentName);
   // The search applies (debounced) to the URL; wait so it cannot replace the next navigation.
   await expect(page).toHaveURL(/search=/);
@@ -94,7 +94,7 @@ test('a student submits a missing DOB and photo; a registrar approves; the profi
 
   // The registrar compares and approves.
   const staff = await staffPage(browser);
-  await openSection(staff, 'Profile Requests');
+  await openSection(staff, 'Profile Update Requests');
   await expect(
     staff.getByRole('row').filter({ hasText: student.registrationNumber }),
   ).toContainText('Pending review');

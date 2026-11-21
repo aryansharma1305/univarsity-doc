@@ -277,6 +277,14 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   },
 
   {
+    group: 'Chat & Communication',
+    href: '/admin/official-records?tab=audit',
+    label: 'Verification Audit',
+    icon: ShieldCheckIcon,
+    permissions: [p.certificatesRead, p.auditRead],
+  },
+
+  {
     group: 'Settings & Administration',
     href: '/admin/settings/profile',
     label: 'Admin Profile',

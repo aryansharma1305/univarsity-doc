@@ -83,7 +83,7 @@ function NavLinks({
           const links = items.filter((item) => item.group === group);
           if (!links.length && group !== 'Chat & Communication') return null;
           return (
-            <section key={group} aria-label={group}>
+            <section key={group}>
               <h2
                 className={cn(
                   'mb-2 px-3 text-xs font-medium text-white/65',
