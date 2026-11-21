@@ -52,7 +52,8 @@ function StudentNavigation({
     : STUDENT_NAV;
   return (
     <LayoutGroup id={group}>
-      <nav
+      <motion.nav
+        layoutScroll
         aria-label={mobile ? 'Student quick navigation' : 'Student'}
         className={cn(
           mobile
@@ -120,7 +121,7 @@ function StudentNavigation({
             </div>
           );
         })}
-      </nav>
+      </motion.nav>
     </LayoutGroup>
   );
 }
