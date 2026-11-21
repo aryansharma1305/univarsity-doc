@@ -16,6 +16,13 @@ describe('role → permission mapping', () => {
     );
   });
 
+  it('grants Razorpay refund approval to SUPER_ADMIN only by default', () => {
+    for (const role of Object.values(ROLE_NAMES))
+      expect(permissionsForRoles([role]).has(PERMISSIONS.reExamPaymentsRefundApprove)).toBe(
+        role === ROLE_NAMES.superAdmin,
+      );
+  });
+
   it('keeps VIEWER read-only', () => {
     const viewer = permissionsForRoles([ROLE_NAMES.viewer]);
     expect([...viewer].every((p) => p.endsWith('.read'))).toBe(true);

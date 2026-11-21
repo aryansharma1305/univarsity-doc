@@ -24,36 +24,37 @@ test fixtures) ensure all six code-defined roles exist as records.
 
 ## Role mapping (initial proposal — confirm with the client)
 
-| Permission                | SUPER_ADMIN | REGISTRAR | EXAM_ADMIN | CERTIFICATE_ADMIN | APPROVER | VIEWER |
-| ------------------------- | :---------: | :-------: | :--------: | :---------------: | :------: | :----: |
-| students.read             |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| students.write            |      ✓      |     ✓     |            |                   |          |        |
-| results.read              |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| results.write             |      ✓      |           |     ✓      |                   |          |        |
-| results.publish           |      ✓      |           |            |                   |    ✓     |        |
-| certificates.read         |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| certificates.generate     |      ✓      |     ✓     |            |         ✓         |          |        |
-| certificates.approve      |      ✓      |           |            |                   |    ✓     |        |
-| certificates.issue        |      ✓      |           |            |                   |    ✓     |        |
-| certificates.revoke       |      ✓      |           |            |                   |    ✓     |        |
-| templates.read            |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| templates.write           |      ✓      |           |            |         ✓         |          |        |
-| imports.read              |      ✓      |     ✓     |            |                   |          |        |
-| imports.students.run      |      ✓      |     ✓     |            |                   |          |        |
-| imports.results.run       |      ✓      |           |     ✓      |                   |          |        |
-| studentAccounts.read      |      ✓      |     ✓     |            |                   |          |        |
-| studentAccounts.manage    |      ✓      |     ✓     |            |                   |          |        |
-| audit.read                |      ✓      |     ✓     |            |                   |          |        |
-| examinations.read         |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
-| examinations.manage       |      ✓      |           |     ✓      |                   |          |        |
-| reExamApplications.read   |      ✓      |     ✓     |     ✓      |                   |    ✓     |        |
-| reExamApplications.decide |      ✓      |           |     ✓      |                   |          |        |
-| reExamFees.manage         |      ✓      |           |            |                   |          |        |
-| reExamPayments.configure  |      ✓      |           |            |                   |          |        |
-| reExamPayments.read       |      ✓      |           |            |                   |    ✓     |        |
-| reExamPayments.verify     |      ✓      |           |            |                   |    ✓     |        |
-| users.manage              |      ✓      |           |            |                   |          |        |
-| settings.manage           |      ✓      |           |            |                   |          |        |
+| Permission                   | SUPER_ADMIN | REGISTRAR | EXAM_ADMIN | CERTIFICATE_ADMIN | APPROVER | VIEWER |
+| ---------------------------- | :---------: | :-------: | :--------: | :---------------: | :------: | :----: |
+| students.read                |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| students.write               |      ✓      |     ✓     |            |                   |          |        |
+| results.read                 |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| results.write                |      ✓      |           |     ✓      |                   |          |        |
+| results.publish              |      ✓      |           |            |                   |    ✓     |        |
+| certificates.read            |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| certificates.generate        |      ✓      |     ✓     |            |         ✓         |          |        |
+| certificates.approve         |      ✓      |           |            |                   |    ✓     |        |
+| certificates.issue           |      ✓      |           |            |                   |    ✓     |        |
+| certificates.revoke          |      ✓      |           |            |                   |    ✓     |        |
+| templates.read               |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| templates.write              |      ✓      |           |            |         ✓         |          |        |
+| imports.read                 |      ✓      |     ✓     |            |                   |          |        |
+| imports.students.run         |      ✓      |     ✓     |            |                   |          |        |
+| imports.results.run          |      ✓      |           |     ✓      |                   |          |        |
+| studentAccounts.read         |      ✓      |     ✓     |            |                   |          |        |
+| studentAccounts.manage       |      ✓      |     ✓     |            |                   |          |        |
+| audit.read                   |      ✓      |     ✓     |            |                   |          |        |
+| examinations.read            |      ✓      |     ✓     |     ✓      |         ✓         |    ✓     |   ✓    |
+| examinations.manage          |      ✓      |           |     ✓      |                   |          |        |
+| reExamApplications.read      |      ✓      |     ✓     |     ✓      |                   |    ✓     |        |
+| reExamApplications.decide    |      ✓      |           |     ✓      |                   |          |        |
+| reExamFees.manage            |      ✓      |           |            |                   |          |        |
+| reExamPayments.configure     |      ✓      |           |            |                   |          |        |
+| reExamPayments.read          |      ✓      |           |            |                   |    ✓     |        |
+| reExamPayments.verify        |      ✓      |           |            |                   |    ✓     |        |
+| reExamPayments.refundApprove |      ✓      |           |            |                   |          |        |
+| users.manage                 |      ✓      |           |            |                   |          |        |
+| settings.manage              |      ✓      |           |            |                   |          |        |
 
 Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
 
@@ -81,6 +82,9 @@ Design rules, enforced by tests (`packages/types/test/permissions.test.ts`):
 - **Re-exam applications (Phase 9B):** applications contain personal data, so VIEWER and
   CERTIFICATE_ADMIN do not read them; REGISTRAR, EXAM_ADMIN and APPROVER read and export; only EXAM_ADMIN
   decides. Fee rules are financial policy: SUPER_ADMIN only until the university names a finance role.
+- **Razorpay TEST refunds:** requesting needs `reExamPayments.verify`; approving or rejecting needs
+  `reExamPayments.refundApprove` (SUPER_ADMIN only until the university names approvers, plan D6),
+  and the approver must differ from the requester (service check and DB CHECK).
 - **Re-exam payments (Phase 9C):** configuring payment destinations (`reExamPayments.configure`),
   reviewing payments (`reExamPayments.read` / `.verify`) and deciding applications
   (`reExamApplications.decide`) are three separate permissions. Destinations are SUPER_ADMIN only and
