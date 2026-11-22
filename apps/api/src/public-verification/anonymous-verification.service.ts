@@ -123,15 +123,22 @@ export class AnonymousVerificationService {
 
   /** Whether any course allows anonymous lookup for this service (otherwise the owner path applies). */
   async anyAnonymous(service: PublicVerificationService) {
-    const rows = await this.prisma.client.verificationPolicy.findMany({
-      where: {
-        service,
-        status: 'APPROVED',
-        definition: { path: ['publicDisclosure', 'anonymousLookup'], equals: true },
-      },
-      take: 100,
-    });
-    return rows.some((row) => this.policies.approvedDefinition(row)?.publicDisclosure);
+    const rows = await this.prisma.client.$queryRaw<DatabaseModels.VerificationPolicyModel[]>`
+      SELECT id, service, program_id AS "programId", definition, status,
+        proposed_by_id AS "proposedById", approved_by_id AS "approvedById",
+        approved_at AS "approvedAt", created_at AS "createdAt"
+      FROM (
+        SELECT DISTINCT ON (program_id) *
+        FROM verification_policies
+        WHERE service = ${service} AND status = 'APPROVED'
+        ORDER BY program_id, created_at DESC, id DESC
+      ) AS current_policy
+      WHERE definition #> '{publicDisclosure,anonymousLookup}' = 'true'::jsonb
+      LIMIT 100
+    `;
+    return rows.some(
+      (row) => this.policies.approvedDefinition(row)?.publicDisclosure?.anonymousLookup,
+    );
   }
 
   private program(programId: string): Promise<Program | null> {

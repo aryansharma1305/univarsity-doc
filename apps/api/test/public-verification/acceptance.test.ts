@@ -986,8 +986,11 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
       { as: alice.agent },
     );
     const url = own.body?.results?.[0]?.verificationUrl ?? '';
-    expect(url).toMatch(/\/verify\/result#token=[A-Za-z0-9_-]{43}$/);
-    marksheetToken = url.split('#token=')[1] ?? '';
+    const link = new URL(url);
+    expect(link.pathname).toBe('/results');
+    expect(link.search).toBe('');
+    expect(link.hash).toMatch(/^#token=[A-Za-z0-9_-]{43}$/);
+    marksheetToken = new URLSearchParams(link.hash.slice(1)).get('token') ?? '';
     const stored = await testDb().resultPublication.findUniqueOrThrow({ where: { resultId } });
     expect(stored.verificationToken).toBe(marksheetToken);
 
@@ -1216,5 +1219,27 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     expect(
       (await anon('document', { service: 'admission-letter', token: docs.admission.token })).status,
     ).toBe(404);
+  });
+
+  it('prompts for student sign-in when current registration policy has no anonymous disclosure', async () => {
+    const policy = (
+      await people.proposer
+        .post('verification-policies', {
+          service: 'registration',
+          programId: s.programId,
+          definition: DEFINITION,
+        })
+        .expect(201)
+    ).body as { id: string };
+    await people.policyApprover.post(`verification-policies/${policy.id}/approve`).expect(200);
+    expect(
+      (await verify('registration', { reference: alice.registrationNumber })).body?.status,
+    ).toBe('AUTHENTICATION_REQUIRED');
+    const own = await verify(
+      'registration',
+      { reference: alice.registrationNumber },
+      { as: alice.agent },
+    );
+    expect(own.body?.status).toBe('ACTIVE');
   });
 });

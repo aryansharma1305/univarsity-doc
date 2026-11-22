@@ -56,7 +56,6 @@ import {
   type AuthContext,
   CsrfPreAuth,
   CurrentAuth,
-  Public,
   RequirePermissions,
 } from '../auth/auth.decorators.js';
 import { openApiRequestSchema } from '../common/openapi.js';
@@ -315,7 +314,7 @@ export class StudentVerificationQueriesController {
 
 /** Public verification support: submit a query, then check it with reference + access code. */
 @ApiTags('public-verification')
-@Public()
+@StudentRoute('optional')
 @CsrfPreAuth()
 @Controller('public/verification-queries')
 export class PublicVerificationQueriesController {

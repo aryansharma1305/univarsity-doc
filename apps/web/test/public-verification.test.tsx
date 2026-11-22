@@ -480,6 +480,20 @@ it('Check Result asks for course, roll number and semester and shows a status wi
   ).toBeInTheDocument();
 });
 
+it('Check Result announces malformed roll numbers without sending them', async () => {
+  resultApi({ 'public/verify/result-options': OPTIONS });
+  render(<VerificationPanel service="result" />);
+  await screen.findByRole('option', { name: 'Synthetic Diploma' });
+  fireEvent.change(screen.getByLabelText('Course Name'), { target: { value: PROGRAM } });
+  fireEvent.change(screen.getByLabelText('Roll Number'), { target: { value: 'INVALID ROLL' } });
+  fireEvent.change(screen.getByLabelText('Semester'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Check Result' }));
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('Enter a valid roll number');
+  expect(alert).not.toHaveTextContent('INVALID ROLL');
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
 it('Check Result explains when no course offers online checks', async () => {
   resultApi({ 'public/verify/result-options': { programs: [] } });
   render(<VerificationPanel service="result" />);

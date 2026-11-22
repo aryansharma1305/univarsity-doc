@@ -296,7 +296,7 @@ export class OfficialResultsService {
                 ? {
                     // Fragment, not query: the credential never reaches server or proxy logs.
                     verificationUrl: new URL(
-                      `/verify/result#token=${r.officialPublication.verificationToken}`,
+                      `/results#token=${r.officialPublication.verificationToken}`,
                       this.config.WEB_URL,
                     ).toString(),
                   }
