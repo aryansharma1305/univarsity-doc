@@ -199,11 +199,10 @@ const REGISTRATION_TONES: Record<string, Tone> = {
   SUSPENDED: 'neutral',
   REVOKED: 'danger',
 };
-/** "Expired" is shown for completeness of the legend; Docversity records no expiry state. */
+/** Only statuses Docversity records; there is no expiry state, so none is shown or derived. */
 const LEGEND: readonly [string, Tone][] = [
   ['Active', 'success'],
   ['Completed', 'info'],
-  ['Expired', 'warning'],
   ['Suspended', 'neutral'],
   ['Revoked', 'danger'],
 ];

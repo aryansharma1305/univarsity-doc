@@ -114,6 +114,15 @@ it('shows a found registration in the mentor layout with only API-returned field
   expect(screen.queryByText(/DOB|Nationality|National ID/)).not.toBeInTheDocument();
   expect(screen.getByRole('img', { name: 'University crest' })).toBeInTheDocument();
   expect(screen.getByText('Status Options')).toBeInTheDocument();
+  // The legend lists only recorded statuses (no derived "Expired") and is not interactive.
+  const legend = screen.getByText('Status Options').nextElementSibling;
+  if (!(legend instanceof HTMLElement)) throw new Error('legend list missing');
+  expect(
+    within(legend)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent),
+  ).toEqual(['Active', 'Completed', 'Suspended', 'Revoked']);
+  expect(within(legend).queryByRole('button')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Print Registration Card/ }));
   expect(print).toHaveBeenCalledOnce();
 });

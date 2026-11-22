@@ -57,6 +57,33 @@ Also needed before go-live:
 - Decide whether a student photograph may ever be shown publicly (not implemented).
 - Confirm independent policy approvers (the Admin2 question) and MFA for SUPER_ADMIN accounts.
 
+## Production activation and withdrawal (no code change, no data edits)
+
+The homepage services already call the anonymous verification API. Until a course's **latest
+approved** policy for a service carries `publicDisclosure`, Verify Registration answers "Sign in
+required" (`official-verification.service.ts`, `anyAnonymous('registration')`) and the other services
+show only validity, never details. Activation is a university action in the Admin Panel, never a
+database or JSON edit:
+
+1. Record the written university decision for the service and course (the table above): which
+   fields, and whether QR holders may open the PDF or full marksheet.
+2. Proposer (`verificationPolicies.manage`): Admin → Official records → Policies → choose the
+   service and course; re-enter the institution name and authorization reference (a new policy fully
+   replaces the current one); tick "The university authorizes checks without a student sign-in for this course", the approved fields only, and the
+   credential option if approved; submit. A proposal (DRAFT) discloses nothing.
+3. Approver: a **different**, university-confirmed person approves the DRAFT. The API refuses
+   self-approval and refuses approval while `OFFICIAL_VERIFICATION_ENABLED` is off. The proposal and
+   approval are audited (`VERIFICATION_POLICY_CHANGED` with PROPOSE / APPROVE, IDs only).
+4. Check with a synthetic or consenting record that only the approved fields appear.
+
+To **withdraw public access**, propose and approve a superseding policy for the same service and
+course **without** the anonymous option. Do not use "Withdraw" on the current policy for this: the
+next-latest approved policy then applies again, and it may itself carry an older disclosure.
+Issued documents keep their validity, which follows the policy they were issued under.
+
+Never add photo, date of birth, nationality, identity numbers, contact details or uploads to the
+allowlists; they need a separate legal and privacy decision and a reviewed code change.
+
 ## Tests
 
 - API: `apps/api/test/public-verification/acceptance.test.ts` steps B1–B4 (allowlists, no oracle,
