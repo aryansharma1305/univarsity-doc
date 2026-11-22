@@ -166,6 +166,7 @@ export class ReportsService {
     'verification-activity': {
       columns: [
         { key: 'service', label: 'Service' },
+        { key: 'kind', label: 'Check' },
         { key: 'outcome', label: 'Outcome' },
         { key: 'lookups', label: 'Lookups' },
       ],
@@ -174,17 +175,20 @@ export class ReportsService {
       rows: async (query) => {
         const created = range(query);
         const groups = await this.prisma.client.$queryRaw<
-          { service: string | null; outcome: string | null; lookups: bigint }[]
+          { service: string | null; kind: string; outcome: string | null; lookups: bigint }[]
         >`
-          SELECT metadata->>'service' AS service, metadata->>'outcome' AS outcome, count(*) AS lookups
+          SELECT metadata->>'service' AS service,
+            CASE WHEN metadata->>'kind' = 'DOCUMENT' THEN 'DOCUMENT_ACCESS' ELSE 'LOOKUP' END AS kind,
+            metadata->>'outcome' AS outcome, count(*) AS lookups
           FROM audit_logs
           WHERE action IN (${AUDIT_ACTIONS.publicVerificationChecked}, ${AUDIT_ACTIONS.publicVerificationUnavailable})
             AND created_at >= ${created?.gte ?? new Date(0)}
             AND created_at < ${created?.lt ?? new Date('9999-01-01T00:00:00Z')}
-          GROUP BY 1, 2
+          GROUP BY 1, 2, 3
         `;
         return groups.map((g) => ({
           service: g.service,
+          kind: g.kind,
           outcome: g.outcome,
           lookups: Number(g.lookups),
         }));

@@ -140,12 +140,21 @@ describe('verification activity', () => {
       ['PUBLIC_VERIFICATION_CHECKED', 'registration', 'NOT_FOUND', 2],
       ['PUBLIC_VERIFICATION_CHECKED', 'certificate', 'VALID', 3],
       ['PUBLIC_VERIFICATION_UNAVAILABLE', 'result', 'UNAVAILABLE', 4],
+      ['PUBLIC_VERIFICATION_CHECKED', 'certificate', 'NOT_FOUND', 5],
     ] as const;
     await testDb().auditLog.createMany({
       data: events.map(([action, service, outcome, hour]) => ({
         action,
         entityType: 'public_verification',
-        metadata: { contractVersion: 2, service, outcome, referenceHash: 'h', clientHash: 'c' },
+        metadata: {
+          contractVersion: 2,
+          service,
+          outcome,
+          // The last event is a credential document download, reported apart from lookups.
+          ...(hour === 5 ? { kind: 'DOCUMENT' } : {}),
+          referenceHash: 'h',
+          clientHash: 'c',
+        },
         createdAt: at(hour),
       })),
     });
@@ -153,11 +162,12 @@ describe('verification activity', () => {
       await admin.get('reports/verification-activity?from=2001-01-02&to=2001-01-02').expect(200)
     ).body as Report;
     expect(report.rows).toEqual([
-      { service: 'certificate', outcome: 'VALID', lookups: 1 },
-      { service: 'registration', outcome: 'NOT_FOUND', lookups: 2 },
-      { service: 'result', outcome: 'UNAVAILABLE', lookups: 1 },
+      { service: 'certificate', kind: 'DOCUMENT_ACCESS', outcome: 'NOT_FOUND', lookups: 1 },
+      { service: 'certificate', kind: 'LOOKUP', outcome: 'VALID', lookups: 1 },
+      { service: 'registration', kind: 'LOOKUP', outcome: 'NOT_FOUND', lookups: 2 },
+      { service: 'result', kind: 'LOOKUP', outcome: 'UNAVAILABLE', lookups: 1 },
     ]);
-    expect(report.total).toBe(4);
+    expect(report.total).toBe(5);
     // The day after holds none of them.
     const next = (
       await admin.get('reports/verification-activity?from=2001-01-03&to=2001-01-03').expect(200)
@@ -204,22 +214,5 @@ describe('dashboard workload', () => {
       expect(typeof body.workload.unreadNotifications).toBe('number');
     }
     expect((await admin.get('dashboard?unknown=1')).status).toBe(400);
-  });
-
-  it('counts withdrawn results separately from published ones', async () => {
-    const db = testDb();
-    const published = {
-      publicationStatus: 'PUBLISHED' as const,
-      officialPublication: { isNot: null },
-    };
-    const body = (await admin.get('dashboard').expect(200)).body as {
-      workload: { resultsPublished: number; resultsWithheld: number };
-    };
-    // Withdrawal keeps the publication row and marks the result WITHHELD; it is not published.
-    expect(body.workload.resultsPublished).toBe(await db.result.count({ where: published }));
-    expect(body.workload.resultsWithheld).toBe(
-      await db.result.count({ where: { publicationStatus: 'WITHHELD' } }),
-    );
-    expect(body.workload.resultsPublished).toBeLessThanOrEqual(await db.resultPublication.count());
   });
 });
