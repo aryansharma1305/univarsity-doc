@@ -124,6 +124,7 @@ test('dashboard loading and empty states remain honest', async ({ page }) => {
           resultsDraft: 0,
           resultsUnderReview: 0,
           resultsPublished: 0,
+          resultsWithheld: 0,
           documentsAwaitingApproval: 0,
           documentsIssued: 0,
           admissionLettersIssued: 0,

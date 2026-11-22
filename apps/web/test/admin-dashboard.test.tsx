@@ -41,6 +41,7 @@ const NO_WORKLOAD = {
   resultsDraft: null,
   resultsUnderReview: null,
   resultsPublished: null,
+  resultsWithheld: null,
   documentsAwaitingApproval: null,
   documentsIssued: null,
   admissionLettersIssued: null,

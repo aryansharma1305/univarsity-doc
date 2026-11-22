@@ -37,6 +37,7 @@ export const dashboardSchema = z
       resultsDraft: scoped,
       resultsUnderReview: scoped,
       resultsPublished: scoped,
+      resultsWithheld: scoped,
       documentsAwaitingApproval: scoped,
       documentsIssued: scoped,
       admissionLettersIssued: scoped,

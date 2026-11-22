@@ -1,3 +1,4 @@
+import { AUDIT_ACTIONS } from '@docversity/types';
 import { Injectable } from '@nestjs/common';
 import type { Report, ReportName, ReportQuery } from '@docversity/validation';
 import { PrismaService } from '../database/prisma.service.js';
@@ -164,19 +165,30 @@ export class ReportsService {
     },
     'verification-activity': {
       columns: [
-        { key: 'type', label: 'Verification type' },
+        { key: 'service', label: 'Service' },
         { key: 'outcome', label: 'Outcome' },
         { key: 'lookups', label: 'Lookups' },
       ],
       countKey: 'lookups',
-      rows: async (query) =>
-        (
-          await this.prisma.client.verificationLog.groupBy({
-            by: ['type', 'outcome'],
-            where: { createdAt: range(query) },
-            _count: { _all: true },
-          })
-        ).map((g) => ({ type: g.type, outcome: g.outcome, lookups: g._count._all })),
+      // Public checks are audited (hashes and outcomes only) as PUBLIC_VERIFICATION_* events.
+      rows: async (query) => {
+        const created = range(query);
+        const groups = await this.prisma.client.$queryRaw<
+          { service: string | null; outcome: string | null; lookups: bigint }[]
+        >`
+          SELECT metadata->>'service' AS service, metadata->>'outcome' AS outcome, count(*) AS lookups
+          FROM audit_logs
+          WHERE action IN (${AUDIT_ACTIONS.publicVerificationChecked}, ${AUDIT_ACTIONS.publicVerificationUnavailable})
+            AND created_at >= ${created?.gte ?? new Date(0)}
+            AND created_at < ${created?.lt ?? new Date('9999-01-01T00:00:00Z')}
+          GROUP BY 1, 2
+        `;
+        return groups.map((g) => ({
+          service: g.service,
+          outcome: g.outcome,
+          lookups: Number(g.lookups),
+        }));
+      },
     },
     'student-messages': {
       columns: [

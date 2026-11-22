@@ -36,6 +36,7 @@ export class DashboardService {
       resultsDraft,
       resultsUnderReview,
       resultsPublished,
+      resultsWithheld,
       documentsAwaitingApproval,
       documentsIssued,
       admissionLettersIssued,
@@ -80,7 +81,15 @@ export class DashboardService {
       when(PERMISSIONS.resultsRead, () =>
         db.result.count({ where: { publicationStatus: 'UNDER_REVIEW' } }),
       ),
-      when(PERMISSIONS.resultsRead, () => db.resultPublication.count()),
+      // Withdrawal keeps the publication row and marks the result WITHHELD.
+      when(PERMISSIONS.resultsRead, () =>
+        db.result.count({
+          where: { publicationStatus: 'PUBLISHED', officialPublication: { isNot: null } },
+        }),
+      ),
+      when(PERMISSIONS.resultsRead, () =>
+        db.result.count({ where: { publicationStatus: 'WITHHELD' } }),
+      ),
       when(PERMISSIONS.certificatesRead, () =>
         db.certificate.count({ where: { status: 'PENDING_APPROVAL' } }),
       ),
@@ -119,6 +128,7 @@ export class DashboardService {
         resultsDraft,
         resultsUnderReview,
         resultsPublished,
+        resultsWithheld,
         documentsAwaitingApproval,
         documentsIssued,
         admissionLettersIssued,

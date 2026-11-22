@@ -85,6 +85,7 @@ export function Enrolment({
 const RECORDS = [
   ['resultsDraft', 'Draft results'],
   ['resultsPublished', 'Published results'],
+  ['resultsWithheld', 'Withdrawn results'],
   ['documentsIssued', 'Documents issued'],
   ['admissionLettersIssued', 'Admission letters issued'],
 ] as const;
