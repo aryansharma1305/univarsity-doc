@@ -14,6 +14,7 @@ vi.mock('qrcode', () => ({
 }));
 import { ApiError } from '@/lib/api';
 import { VerificationPanel } from '@/features/public-verification/verification-panel';
+import styles from '@/features/public-verification/verification-result.module.css';
 import { storeHeroSearch, takeHeroSearch } from '@/features/public-verification/search-handoff';
 
 const services = [
@@ -185,6 +186,8 @@ it.each([
     const banner = heading.parentElement?.parentElement;
     if (!(banner instanceof HTMLElement)) throw new Error('banner missing');
     expect(banner).toHaveTextContent(message);
+    // Green (success) only for ACTIVE.
+    expect(banner.classList.contains(String(styles.success))).toBe(recordStatus === 'ACTIVE');
     if (recordStatus === 'SUSPENDED' || recordStatus === 'REVOKED') {
       // Never presented as currently valid: no "active"/"valid" heading, banner or status text.
       expect(
@@ -204,6 +207,23 @@ it.each([
     expect([...current].map((item) => item.textContent.toUpperCase())).toEqual([recordStatus]);
   },
 );
+
+it('falls back to a neutral "Registration Found" banner when no status is recorded', async () => {
+  request.mockResolvedValue({
+    contractVersion: 2,
+    service: 'registration',
+    status: 'INACTIVE',
+    message: 'This registration exists but is not active.',
+  });
+  render(<VerificationPanel service="registration" />);
+  fireEvent.change(screen.getByLabelText('Registration number'), { target: { value: '00000001' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Verify Registration' }));
+  const heading = await screen.findByRole('heading', { level: 2, name: 'Registration Found' });
+  const banner = heading.parentElement?.parentElement;
+  if (!(banner instanceof HTMLElement)) throw new Error('banner missing');
+  expect(banner.classList.contains(String(styles.success))).toBe(false);
+  expect(banner.classList.contains(String(styles.neutral))).toBe(true);
+});
 
 it('shows a QR-checked certificate with a scannable code and the credential-gated View action', async () => {
   const token = 'a'.repeat(43);

@@ -59,10 +59,13 @@ Also needed before go-live:
 
 ## Production activation and withdrawal (no code change, no data edits)
 
-The homepage services already call the anonymous verification API. Until a course's **latest
-approved** policy for a service carries `publicDisclosure`, Verify Registration answers "Sign in
-required" (`official-verification.service.ts`, `anyAnonymous('registration')`) and the other services
-show only validity, never details. Activation is a university action in the Admin Panel, never a
+The homepage services already call the anonymous verification API. While **no** course's latest
+approved registration policy carries `publicDisclosure`, Verify Registration answers "Sign in
+required" for every number (`anyAnonymous('registration')` in `official-verification.service.ts` is a
+switch across all courses). Once any course enables it, an anonymous check for a course **without**
+disclosure answers "No verified record found" instead (no enumeration oracle), and with
+`OFFICIAL_VERIFICATION_ENABLED` off every check answers "Verification not available". Document
+services show only validity, never details, until their own policy discloses fields. Activation is a university action in the Admin Panel, never a
 database or JSON edit:
 
 1. Record the written university decision for the service and course (the table above): which
@@ -71,13 +74,15 @@ database or JSON edit:
    service and course; re-enter the institution name and authorization reference (a new policy fully
    replaces the current one); tick "The university authorizes checks without a student sign-in for this course", the approved fields only, and the
    credential option if approved; submit. A proposal (DRAFT) discloses nothing.
-3. Approver: a **different**, university-confirmed person approves the DRAFT. The API refuses
+3. Approver: a **different**, university-confirmed person who also holds
+   `verificationPolicies.manage` approves the DRAFT. The API refuses
    self-approval and refuses approval while `OFFICIAL_VERIFICATION_ENABLED` is off. The proposal and
    approval are audited (`VERIFICATION_POLICY_CHANGED` with PROPOSE / APPROVE, IDs only).
 4. Check with a synthetic or consenting record that only the approved fields appear.
 
-To **withdraw public access**, propose and approve a superseding policy for the same service and
-course **without** the anonymous option. Do not use "Withdraw" on the current policy for this: the
+To **withdraw public access**, propose a **new** policy now for the same service and course
+**without** the anonymous option, and approve it. The newest approved policy is chosen by creation
+time, so approving an older, stale draft would not supersede anything. Do not use "Withdraw" on the current policy for this: the
 next-latest approved policy then applies again, and it may itself carry an older disclosure.
 Issued documents keep their validity, which follows the policy they were issued under.
 
