@@ -10,7 +10,6 @@ import {
   STUDENT_CERTIFICATE_ELIGIBILITY_CONTRACT_VERSION,
   certificateEligibilityApprovalAuthoritySchema,
   certificateEligibilityConfigSchema,
-  certificateTypeSchema,
   configMatchesCourse,
   describeCertificateDurationPolicy,
   durationEvaluationView,
