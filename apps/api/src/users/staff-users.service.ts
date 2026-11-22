@@ -13,6 +13,7 @@ import { MfaService } from '../auth/mfa.service.js';
 import { PasswordService } from '../auth/password.service.js';
 import { SessionStore } from '../auth/session.store.js';
 import { AppError, Errors } from '../common/app-error.js';
+import { rethrowAsFieldConflict } from '../common/conflicts.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { UsersService } from './users.service.js';
 
@@ -69,36 +70,43 @@ export class StaffUsersService {
   async create(actorUserId: string, input: StaffCreateRequest): Promise<StaffUser> {
     this.checkPassword(input.temporaryPassword, input.email, input.displayName);
     const passwordHash = await this.passwords.hashPassword(input.temporaryPassword);
-    const id = await this.prisma.client.$transaction(async (tx) => {
-      if (await tx.user.findUnique({ where: { email: input.email }, select: { id: true } }))
-        throw new AppError(
-          HttpStatus.CONFLICT,
-          ERROR_CODES.conflict,
-          'A staff account with this email already exists.',
-          { details: [{ path: 'email', message: 'This email is already in use.' }] },
+    const id = await this.prisma.client
+      .$transaction(async (tx) => {
+        if (await tx.user.findUnique({ where: { email: input.email }, select: { id: true } }))
+          throw new AppError(
+            HttpStatus.CONFLICT,
+            ERROR_CODES.conflict,
+            'A staff account with this email already exists.',
+            { details: [{ path: 'email', message: 'This email is already in use.' }] },
+          );
+        const roleIds = await this.roleIds(tx, input.roles);
+        const user = await tx.user.create({
+          data: {
+            email: input.email,
+            displayName: input.displayName,
+            passwordHash,
+            passwordChangeRequired: true,
+            roles: { create: roleIds.map((roleId) => ({ roleId })) },
+          },
+        });
+        await this.audit.writeAuditEvent(
+          {
+            actorUserId,
+            action: AUDIT_ACTIONS.adminCreated,
+            entityType: 'User',
+            entityId: user.id,
+            metadata: { via: 'api', roles: [...input.roles].sort(), passwordChangeRequired: true },
+          },
+          tx,
         );
-      const roleIds = await this.roleIds(tx, input.roles);
-      const user = await tx.user.create({
-        data: {
-          email: input.email,
-          displayName: input.displayName,
-          passwordHash,
-          passwordChangeRequired: true,
-          roles: { create: roleIds.map((roleId) => ({ roleId })) },
-        },
-      });
-      await this.audit.writeAuditEvent(
-        {
-          actorUserId,
-          action: AUDIT_ACTIONS.adminCreated,
-          entityType: 'User',
-          entityId: user.id,
-          metadata: { via: 'api', roles: [...input.roles].sort(), passwordChangeRequired: true },
-        },
-        tx,
+        return user.id;
+      })
+      .catch((error: unknown) =>
+        // A concurrent create with the same email loses at the unique index: same 409 as above.
+        rethrowAsFieldConflict(error, {
+          users_email_key: { path: 'email', message: 'This email is already in use.' },
+        }),
       );
-      return user.id;
-    });
     return this.one(id);
   }
 

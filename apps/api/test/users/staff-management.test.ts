@@ -133,6 +133,22 @@ describe('staff account management', () => {
     ).toBe(400);
   });
 
+  it('two concurrent creates with one email give one account and one 409', async () => {
+    const address = email();
+    const body = {
+      email: address,
+      displayName: 'Race Staff',
+      roles: ['VIEWER'],
+      temporaryPassword: TEMP,
+    };
+    const results = await Promise.all([
+      admin.post('staff-users', body),
+      admin.post('staff-users', body),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await testDb().user.count({ where: { email: address } })).toBe(1);
+  });
+
   it('changes roles of others (applied at once, audited) but never your own', async () => {
     const target = await createTestUser({ roles: ['VIEWER'] });
     const member = browser(app);
