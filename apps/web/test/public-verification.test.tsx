@@ -14,6 +14,7 @@ vi.mock('qrcode', () => ({
 }));
 import { ApiError } from '@/lib/api';
 import { VerificationPanel } from '@/features/public-verification/verification-panel';
+import styles from '@/features/public-verification/verification-result.module.css';
 import { storeHeroSearch, takeHeroSearch } from '@/features/public-verification/search-handoff';
 
 const services = [
@@ -103,7 +104,7 @@ it('shows a found registration in the mentor layout with only API-returned field
   fireEvent.change(screen.getByLabelText('Registration number'), { target: { value: '00000001' } });
   fireEvent.click(screen.getByRole('button', { name: 'Verify Registration' }));
   await waitFor(() =>
-    expect(screen.getByRole('heading', { name: 'Registration Found' })).toBeInTheDocument(),
+    expect(screen.getByRole('heading', { name: 'Registration Active' })).toBeInTheDocument(),
   );
   const table = screen.getByRole('region', { name: 'Student Information' });
   expect(within(table).getByRole('rowheader', { name: 'Student Name' })).toBeInTheDocument();
@@ -114,6 +115,15 @@ it('shows a found registration in the mentor layout with only API-returned field
   expect(screen.queryByText(/DOB|Nationality|National ID/)).not.toBeInTheDocument();
   expect(screen.getByRole('img', { name: 'University crest' })).toBeInTheDocument();
   expect(screen.getByText('Status Options')).toBeInTheDocument();
+  // The legend lists only recorded statuses (no derived "Expired") and is not interactive.
+  const legend = screen.getByText('Status Options').nextElementSibling;
+  if (!(legend instanceof HTMLElement)) throw new Error('legend list missing');
+  expect(
+    within(legend)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent),
+  ).toEqual(['Active', 'Completed', 'Suspended', 'Revoked']);
+  expect(within(legend).queryByRole('button')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Print Registration Card/ }));
   expect(print).toHaveBeenCalledOnce();
 });
@@ -134,6 +144,85 @@ it.each([
   fireEvent.click(screen.getByRole('button', { name: 'Verify Registration' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(message));
   expect(screen.getByRole('status')).not.toHaveTextContent('valid and active');
+});
+
+it.each([
+  ['ACTIVE', 'ACTIVE', 'Registration Active', 'This student registration is valid and active.'],
+  [
+    'COMPLETED',
+    'INACTIVE',
+    'Registration Completed',
+    'This registration is valid. The student has completed the course.',
+  ],
+  [
+    'SUSPENDED',
+    'INACTIVE',
+    'Registration Suspended',
+    'This registration exists but is currently suspended.',
+  ],
+  [
+    'REVOKED',
+    'INACTIVE',
+    'Registration Revoked',
+    'This registration has been revoked by the university.',
+  ],
+])(
+  'titles a %s registration by its recorded status',
+  async (recordStatus, status, title, message) => {
+    request.mockResolvedValue({
+      contractVersion: 2,
+      service: 'registration',
+      status,
+      recordStatus,
+      message,
+      details: { studentName: 'Synthetic Student', registrationNumber: '00000001' },
+    });
+    render(<VerificationPanel service="registration" />);
+    fireEvent.change(screen.getByLabelText('Registration number'), {
+      target: { value: '00000001' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify Registration' }));
+    const heading = await screen.findByRole('heading', { level: 2, name: title });
+    const banner = heading.parentElement?.parentElement;
+    if (!(banner instanceof HTMLElement)) throw new Error('banner missing');
+    expect(banner).toHaveTextContent(message);
+    // Green (success) only for ACTIVE.
+    expect(banner.classList.contains(String(styles.success))).toBe(recordStatus === 'ACTIVE');
+    if (recordStatus === 'SUSPENDED' || recordStatus === 'REVOKED') {
+      // Never presented as currently valid: no "active"/"valid" heading, banner or status text.
+      expect(
+        screen.queryByRole('heading', { name: /Registration (Active|Found)/ }),
+      ).not.toBeInTheDocument();
+      expect(banner).not.toHaveTextContent(/valid|active/i);
+      const table = screen.getByRole('region', { name: 'Student Information' });
+      expect(within(table).getByText(recordStatus)).toBeInTheDocument();
+      expect(within(table).queryByText('ACTIVE')).not.toBeInTheDocument();
+    }
+    // The legend marks the recorded status only and offers nothing to click.
+    const legend = screen.getByText('Status Options').nextElementSibling;
+    if (!(legend instanceof HTMLElement)) throw new Error('legend list missing');
+    expect(within(legend).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(legend).queryByRole('link')).not.toBeInTheDocument();
+    const current = legend.querySelectorAll('[aria-current="true"]');
+    expect([...current].map((item) => item.textContent.toUpperCase())).toEqual([recordStatus]);
+  },
+);
+
+it('falls back to a neutral "Registration Found" banner when no status is recorded', async () => {
+  request.mockResolvedValue({
+    contractVersion: 2,
+    service: 'registration',
+    status: 'INACTIVE',
+    message: 'This registration exists but is not active.',
+  });
+  render(<VerificationPanel service="registration" />);
+  fireEvent.change(screen.getByLabelText('Registration number'), { target: { value: '00000001' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Verify Registration' }));
+  const heading = await screen.findByRole('heading', { level: 2, name: 'Registration Found' });
+  const banner = heading.parentElement?.parentElement;
+  if (!(banner instanceof HTMLElement)) throw new Error('banner missing');
+  expect(banner.classList.contains(String(styles.success))).toBe(false);
+  expect(banner.classList.contains(String(styles.neutral))).toBe(true);
 });
 
 it('shows a QR-checked certificate with a scannable code and the credential-gated View action', async () => {

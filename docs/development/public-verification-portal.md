@@ -8,7 +8,7 @@ server under [ADR-0024](../decisions/ADR-0024-anonymous-public-verification.md).
 
 | Service                               | Desktop (1440)                                                | Mobile (390)                                                 |
 | ------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
-| Registration Found                    | ![](public-verification-portal/registration-desktop.webp)     | ![](public-verification-portal/registration-mobile.webp)     |
+| Registration Active                   | ![](public-verification-portal/registration-desktop.webp)     | ![](public-verification-portal/registration-mobile.webp)     |
 | Certificate Valid (via QR)            | ![](public-verification-portal/certificate-desktop.webp)      | ![](public-verification-portal/certificate-mobile.webp)      |
 | Admission Letter Verified (by number) | ![](public-verification-portal/admission-letter-desktop.webp) | ![](public-verification-portal/admission-letter-mobile.webp) |
 | Marksheet Verified (via QR)           | ![](public-verification-portal/result-desktop.webp)           | ![](public-verification-portal/result-mobile.webp)           |
@@ -56,6 +56,38 @@ Also needed before go-live:
 - Confirm the institution name printed in banners (`institutionName` in each policy).
 - Decide whether a student photograph may ever be shown publicly (not implemented).
 - Confirm independent policy approvers (the Admin2 question) and MFA for SUPER_ADMIN accounts.
+
+## Production activation and withdrawal (no code change, no data edits)
+
+The homepage services already call the anonymous verification API. While **no** course's latest
+approved registration policy carries `publicDisclosure`, Verify Registration answers "Sign in
+required" for every number (`anyAnonymous('registration')` in `official-verification.service.ts` is a
+switch across all courses). Once any course enables it, an anonymous check for a course **without**
+disclosure answers "No verified record found" instead (no enumeration oracle), and with
+`OFFICIAL_VERIFICATION_ENABLED` off every check answers "Verification not available". Document
+services show only validity, never details, until their own policy discloses fields. Activation is a university action in the Admin Panel, never a
+database or JSON edit:
+
+1. Record the written university decision for the service and course (the table above): which
+   fields, and whether QR holders may open the PDF or full marksheet.
+2. Proposer (`verificationPolicies.manage`): Admin → Official records → Policies → choose the
+   service and course; re-enter the institution name and authorization reference (a new policy fully
+   replaces the current one); tick "The university authorizes checks without a student sign-in for this course", the approved fields only, and the
+   credential option if approved; submit. A proposal (DRAFT) discloses nothing.
+3. Approver: a **different**, university-confirmed person who also holds
+   `verificationPolicies.manage` approves the DRAFT. The API refuses
+   self-approval and refuses approval while `OFFICIAL_VERIFICATION_ENABLED` is off. The proposal and
+   approval are audited (`VERIFICATION_POLICY_CHANGED` with PROPOSE / APPROVE, IDs only).
+4. Check with a synthetic or consenting record that only the approved fields appear.
+
+To **withdraw public access**, propose a **new** policy now for the same service and course
+**without** the anonymous option, and approve it. The newest approved policy is chosen by creation
+time, so approving an older, stale draft would not supersede anything. Do not use "Withdraw" on the current policy for this: the
+next-latest approved policy then applies again, and it may itself carry an older disclosure.
+Issued documents keep their validity, which follows the policy they were issued under.
+
+Never add photo, date of birth, nationality, identity numbers, contact details or uploads to the
+allowlists; they need a separate legal and privacy decision and a reviewed code change.
 
 ## Tests
 
