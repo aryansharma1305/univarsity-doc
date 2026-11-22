@@ -2,7 +2,10 @@ import type { Route } from 'next';
 import type { Permission } from '@docversity/types';
 import { PERMISSIONS } from '@docversity/types';
 import {
+  BellIcon,
   BuildingIcon,
+  MessagesSquareIcon,
+  LifeBuoyIcon,
   CalendarRangeIcon,
   ClipboardCheckIcon,
   ClipboardPenLineIcon,
@@ -278,6 +281,26 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
 
   {
     group: 'Chat & Communication',
+    href: '/admin/messages',
+    label: 'Student Messages',
+    icon: MessagesSquareIcon,
+    permissions: [p.studentMessagesRead],
+  },
+  {
+    group: 'Chat & Communication',
+    href: '/admin/verification-queries',
+    label: 'Verification Queries',
+    icon: LifeBuoyIcon,
+    permissions: [p.verificationQueriesRead],
+  },
+  {
+    group: 'Chat & Communication',
+    href: '/admin/notifications',
+    label: 'Notifications',
+    icon: BellIcon,
+  },
+  {
+    group: 'Chat & Communication',
     href: '/admin/official-records?tab=audit',
     label: 'Verification Audit',
     icon: ShieldCheckIcon,
@@ -312,9 +335,6 @@ export function visibleAdminNav(permissions: readonly string[]) {
   );
 }
 
-export const COMMUNICATION_UNAVAILABLE =
-  'Student messages, verification queries, and notifications are unavailable.';
-
 export const SEGMENT_LABELS: Record<string, string> = {
   'certificate-requests': 'Certificate Requests',
   'certificate-requests/*': 'Application',
@@ -338,6 +358,11 @@ export const SEGMENT_LABELS: Record<string, string> = {
   'import/*': 'Preview',
   'student-accounts': 'Student Accounts',
   'profile-requests': 'Profile Requests',
+  messages: 'Student Messages',
+  'messages/*': 'Conversation',
+  'verification-queries': 'Verification Queries',
+  'verification-queries/*': 'Query',
+  notifications: 'Notifications',
   'historical-documents': 'Historical Certificates',
   'historical-documents/new': 'Upload',
   examinations: 'Examinations',

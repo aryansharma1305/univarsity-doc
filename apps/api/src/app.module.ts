@@ -21,6 +21,7 @@ import { ExaminationsModule } from './examinations/examinations.module.js';
 import { ReExamsModule } from './re-exams/re-exams.module.js';
 import { HistoricalDocumentsModule } from './historical-documents/historical-documents.module.js';
 import { StudentUploadsModule } from './student-uploads/student-uploads.module.js';
+import { CommunicationModule } from './communication/communication.module.js';
 import { ImportsModule } from './imports/imports.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { DraftResultsModule } from './results/draft-results.module.js';
@@ -66,6 +67,7 @@ export class AppModule {
         CertificateEligibilityModule,
         HistoricalDocumentsModule,
         StudentUploadsModule,
+        CommunicationModule,
         ExaminationsModule,
         ReExamsModule,
         PaymentButtonsModule,

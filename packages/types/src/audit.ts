@@ -141,6 +141,14 @@ export const AUDIT_ACTIONS = {
   studentUploadDeleted: 'STUDENT_UPLOAD_DELETED',
   studentUploadsViewed: 'STUDENT_UPLOADS_VIEWED',
   studentUploadDownloaded: 'STUDENT_UPLOAD_DOWNLOADED',
+  /** Communication: metadata holds IDs, the author kind and statuses only — never message text. */
+  messageThreadCreated: 'MESSAGE_THREAD_CREATED',
+  messageSent: 'MESSAGE_SENT',
+  messageThreadResolved: 'MESSAGE_THREAD_RESOLVED',
+  messageThreadReopened: 'MESSAGE_THREAD_REOPENED',
+  verificationQuerySubmitted: 'VERIFICATION_QUERY_SUBMITTED',
+  verificationQueryAnswered: 'VERIFICATION_QUERY_ANSWERED',
+  verificationQueryResolved: 'VERIFICATION_QUERY_RESOLVED',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
