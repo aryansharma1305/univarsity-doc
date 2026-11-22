@@ -8,38 +8,296 @@ import { Input } from '@docversity/ui/components/input';
 import {
   officialVerificationResponseSchema,
   officialVerificationRequestSchema,
+  publicCredentialSchema,
+  publicResultOptionsSchema,
+  publicResultSearchSchema,
   type OfficialVerificationResponse,
+  type PublicResultOptions,
   type PublicVerificationService,
 } from '@docversity/validation';
 import { ApiError, studentRequest } from '@/lib/api';
 import { takeHeroSearch } from './search-handoff';
 import { SERVICES } from './services';
+import { VerificationResult } from './verification-result';
 import styles from './verification-panel.module.css';
 
 const CHECK_CODE = 'Please check the entered code and try again.';
 
-/** The API's approved policy and ownership checks decide whether a lookup is available. */
+function failure(caught: unknown): string {
+  const status = caught instanceof ApiError ? caught.status : 0;
+  if (status === 429) return 'Too many checks. Wait a minute, then try again.';
+  if (status === 400) return CHECK_CODE;
+  if (status >= 400 && status < 500) return 'Verification could not be completed.';
+  return 'Verification could not be completed. Please try again shortly.';
+}
+
+/** Page frame shared by the four services: title, search form and the result below it. */
+export function VerificationPageLayout({
+  title,
+  titleId,
+  children,
+}: {
+  title: string;
+  titleId: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={styles.section} aria-labelledby={titleId}>
+      <h1 id={titleId} className={styles.title}>
+        {title}
+      </h1>
+      {children}
+    </section>
+  );
+}
+
+/** Opens an issued PDF for the holder of its QR credential (token in the body, never the URL). */
+async function openDocument(service: 'certificate' | 'admission-letter', token: string) {
+  const tab = window.open('', '_blank');
+  const response = await fetch('/api/v1/public/verify/document', {
+    method: 'POST',
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/pdf' },
+    body: JSON.stringify({ contractVersion: 2, service, token }),
+  });
+  if (!response.ok) {
+    tab?.close();
+    throw new ApiError(
+      response.status,
+      'DOCUMENT_UNAVAILABLE',
+      'The document could not be opened.',
+    );
+  }
+  const url = URL.createObjectURL(await response.blob());
+  if (tab) tab.location.href = url;
+  else window.location.assign(url);
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 60_000);
+}
+
+/** The API's approved policy checks decide what (if anything) a visitor sees. No sign-in needed. */
 export function VerificationPanel({ service }: { service: PublicVerificationService }) {
   const id = useId();
-  const { title, label, placeholder } = SERVICES[service];
-  const [reference, setReference] = useState('');
+  const { title } = SERVICES[service];
   const [token, setToken] = useState('');
-  const [period, setPeriod] = useState('');
-  const [exam, setExam] = useState('');
   const [response, setResponse] = useState<OfficialVerificationResponse | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [viewing, setViewing] = useState(false);
   const requestVersion = useRef(0);
-  const privateLookup = service === 'registration' || service === 'result';
+
+  useEffect(() => {
+    const consumeToken = () => {
+      const hash = new URLSearchParams(window.location.hash.slice(1));
+      if (!hash.has('token')) return;
+      const value = hash.get('token') ?? '';
+      requestVersion.current += 1;
+      // QR credentials must leave browser history before any request can be submitted.
+      window.history.replaceState(null, '', window.location.pathname);
+      queueMicrotask(() => {
+        const valid =
+          service !== 'registration' &&
+          publicCredentialSchema.safeParse({ contractVersion: 2, token: value }).success;
+        setToken(valid ? value : '');
+        setResponse(null);
+        setBusy(false);
+        setError(
+          valid ? '' : 'This QR code cannot be checked here. Enter the printed number instead.',
+        );
+      });
+    };
+    consumeToken();
+    window.addEventListener('hashchange', consumeToken);
+    return () => {
+      window.removeEventListener('hashchange', consumeToken);
+      requestVersion.current += 1;
+    };
+  }, [service]);
+
+  /** Runs one request; stale answers (the user typed again) are dropped. */
+  async function run(request: () => Promise<OfficialVerificationResponse>) {
+    if (busy) return;
+    const version = ++requestVersion.current;
+    setBusy(true);
+    setError('');
+    setResponse(null);
+    try {
+      const result = await request();
+      if (version === requestVersion.current) setResponse(result);
+    } catch (caught) {
+      if (version === requestVersion.current) setError(failure(caught));
+    } finally {
+      if (version === requestVersion.current) setBusy(false);
+    }
+  }
+
+  const reset = () => {
+    requestVersion.current += 1;
+    setToken('');
+    setResponse(null);
+    setError('');
+  };
+
+  const status = (
+    <div id={`${id}-result`} role="status" aria-live="polite" aria-atomic="true">
+      {error ? (
+        <div role="alert" className={`${styles.result} ${styles.error}`}>
+          {error}
+        </div>
+      ) : busy ? (
+        <div className={styles.result}>
+          <h2 className={styles.resultTitle}>Checking…</h2>
+          <p>Please wait while verification completes.</p>
+        </div>
+      ) : response ? (
+        <>
+          <VerificationResult
+            service={service}
+            response={response}
+            token={token}
+            viewing={viewing}
+            onView={() => {
+              if (service !== 'certificate' && service !== 'admission-letter') return;
+              setViewing(true);
+              openDocument(service, token)
+                .catch((caught: unknown) => {
+                  setError(failure(caught));
+                })
+                .finally(() => {
+                  setViewing(false);
+                });
+            }}
+          />
+          {response.status === 'AUTHENTICATION_REQUIRED' && (
+            <Link
+              href="/student/login"
+              className="mt-3 inline-flex min-h-11 items-center font-medium text-brand underline underline-offset-4"
+            >
+              Student Sign in
+            </Link>
+          )}
+        </>
+      ) : (
+        <div className={styles.result}>
+          <h2 className={styles.resultTitle}>
+            {token ? 'Secure QR code ready' : 'No record checked yet'}
+          </h2>
+          <p>Only university-approved records can be verified. No sign-in is needed.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <VerificationPageLayout title={title} titleId={`${id}-title`}>
+      {service === 'result' ? (
+        <ResultSearchForm
+          id={id}
+          busy={busy}
+          token={token}
+          onChange={reset}
+          onSearch={(body) =>
+            run(() =>
+              studentRequest(
+                'POST',
+                'public/verify/result-search',
+                officialVerificationResponseSchema,
+                {
+                  body,
+                },
+              ),
+            )
+          }
+          onMarksheet={() =>
+            run(() =>
+              studentRequest(
+                'POST',
+                'public/verify/result-marksheet',
+                officialVerificationResponseSchema,
+                {
+                  body: { contractVersion: 2, token },
+                },
+              ),
+            )
+          }
+          onOwn={(reference) =>
+            run(() =>
+              studentRequest('POST', 'public/verify/result', officialVerificationResponseSchema, {
+                body: { contractVersion: 2, reference },
+              }),
+            )
+          }
+        />
+      ) : (
+        <VerificationSearchForm
+          id={id}
+          service={service}
+          busy={busy}
+          token={token}
+          onChange={reset}
+          onInvalid={() => {
+            reset();
+            setError(CHECK_CODE);
+          }}
+          onSubmit={(input) =>
+            run(() =>
+              studentRequest(
+                'POST',
+                `public/verify/${service}`,
+                officialVerificationResponseSchema,
+                {
+                  body: input,
+                },
+              ),
+            )
+          }
+        />
+      )}
+      {status}
+    </VerificationPageLayout>
+  );
+}
+
+/** Number (or held QR credential) lookup for registration, admission letter and certificate. */
+export function VerificationSearchForm({
+  id,
+  service,
+  busy,
+  token,
+  onChange,
+  onInvalid,
+  onSubmit,
+}: {
+  id: string;
+  service: Exclude<PublicVerificationService, 'result'>;
+  busy: boolean;
+  token: string;
+  onChange: () => void;
+  onInvalid: () => void;
+  onSubmit: (input: { contractVersion: 2; reference?: string; token?: string }) => Promise<void>;
+}) {
+  const { label, placeholder, action } = SERVICES[service];
+  const [reference, setReference] = useState('');
+  const [invalid, setInvalid] = useState(false);
+
+  const submit = (typed?: string) => {
+    const input = officialVerificationRequestSchema.safeParse({
+      contractVersion: 2,
+      ...(typed !== undefined ? { reference: typed } : token ? { token } : { reference }),
+    });
+    setInvalid(!input.success);
+    if (!input.success) onInvalid();
+    else void onSubmit(input.data);
+  };
 
   const searchFromHome = useEffectEvent((value: string) => {
-    setToken('');
     setReference(value);
     // Too short or long to be valid: prefill only, so the user sees what they typed.
     const trimmed = value.trim();
-    if (trimmed.length >= 3 && trimmed.length <= 128) void lookup(undefined, value);
+    if (trimmed.length >= 3 && trimmed.length <= 128) submit(value);
   });
-
   useEffect(() => {
     let live = true;
     // Taken inside the microtask: a development remount or a fast navigation away cancels this
@@ -54,302 +312,239 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
     };
   }, [service]);
 
-  useEffect(() => {
-    const consumeToken = () => {
-      const hash = new URLSearchParams(window.location.hash.slice(1));
-      if (!hash.has('token')) return;
-      const value = hash.get('token') ?? '';
-      requestVersion.current += 1;
-      // QR credentials must leave browser history before any request can be submitted.
-      window.history.replaceState(null, '', window.location.pathname);
-      queueMicrotask(() => {
-        const valid =
-          !privateLookup &&
-          officialVerificationRequestSchema.safeParse({ contractVersion: 2, token: value }).success;
-        setToken(valid ? value : '');
-        setReference('');
-        setResponse(null);
-        setBusy(false);
-        setError(
-          valid ? '' : 'This QR code cannot be checked here. Enter the printed number instead.',
-        );
-      });
-    };
-    consumeToken();
-    window.addEventListener('hashchange', consumeToken);
-    return () => {
-      window.removeEventListener('hashchange', consumeToken);
-      requestVersion.current += 1;
-    };
-  }, [privateLookup]);
-
-  async function submit(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy || !event.currentTarget.reportValidity()) return;
-    setPeriod('');
-    await lookup();
-  }
-
-  async function lookup(periodNumber?: number, typed?: string) {
-    if (busy) return;
-    const input = officialVerificationRequestSchema.safeParse({
-      contractVersion: 2,
-      ...(typed !== undefined ? { reference: typed } : token ? { token } : { reference }),
-      ...(service === 'result' && periodNumber ? { periodNumber } : {}),
-    });
-    if (!input.success) {
-      setResponse(null);
-      setError(CHECK_CODE);
-      return;
-    }
-    const version = ++requestVersion.current;
-    setBusy(true);
-    setError('');
-    setResponse(null);
-    setExam('');
-    try {
-      const result = await studentRequest(
-        'POST',
-        `public/verify/${service}`,
-        officialVerificationResponseSchema,
-        {
-          body: input.data,
-        },
-      );
-      if (version === requestVersion.current) setResponse(result);
-    } catch (caught) {
-      if (version !== requestVersion.current) return;
-      const status = caught instanceof ApiError ? caught.status : 0;
-      if (status === 429) setError('Too many checks. Wait a minute, then try again.');
-      else if (status === 400) setError(CHECK_CODE);
-      else if (status >= 400 && status < 500) setError('Verification could not be completed.');
-      else setError('Verification could not be completed. Please try again shortly.');
-    } finally {
-      if (version === requestVersion.current) setBusy(false);
-    }
-  }
-
-  const results = (response?.results ?? []).filter(
-    (result) =>
-      (!exam || result.examinationId === exam) &&
-      (!period || result.periodNumber === Number(period)),
+  return (
+    <form
+      className={styles.box}
+      aria-busy={busy}
+      onSubmit={(event: SyntheticEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!busy && event.currentTarget.reportValidity()) submit();
+      }}
+    >
+      <label htmlFor={id} className="sr-only">
+        {label}
+      </label>
+      <Input
+        id={id}
+        className={styles.input}
+        placeholder={token ? 'Secure QR code loaded' : placeholder}
+        value={token ? '' : reference}
+        onChange={(event) => {
+          setReference(event.target.value);
+          setInvalid(false);
+          onChange();
+        }}
+        required={!token}
+        disabled={busy}
+        minLength={3}
+        maxLength={128}
+        autoComplete="off"
+        spellCheck={false}
+        aria-invalid={invalid || undefined}
+        aria-describedby={`${id}-result`}
+      />
+      <Button type="submit" className={styles.verify} disabled={busy}>
+        {busy ? (
+          <>
+            <LoaderCircleIcon aria-hidden="true" className="motion-safe:animate-spin" />
+            Checking…
+          </>
+        ) : (
+          <>
+            {action}
+            <ArrowRightIcon aria-hidden="true" />
+          </>
+        )}
+      </Button>
+    </form>
   );
-  const noMatch = response?.status === 'NOT_FOUND' || response?.status === 'INVALID';
+}
+
+/** Check Result: course + roll number + semester/year (status only); QR opens the marksheet. */
+function ResultSearchForm({
+  id,
+  busy,
+  token,
+  onChange,
+  onSearch,
+  onMarksheet,
+  onOwn,
+}: {
+  id: string;
+  busy: boolean;
+  token: string;
+  onChange: () => void;
+  onSearch: (body: unknown) => Promise<void>;
+  onMarksheet: () => Promise<void>;
+  onOwn: (reference: string) => Promise<void>;
+}) {
+  const [options, setOptions] = useState<PublicResultOptions['programs'] | null>(null);
+  const [optionsError, setOptionsError] = useState(false);
+  const [programId, setProgramId] = useState('');
+  const [period, setPeriod] = useState('');
+  const [roll, setRoll] = useState('');
+  const [own, setOwn] = useState('');
+  useEffect(() => {
+    let live = true;
+    studentRequest('POST', 'public/verify/result-options', publicResultOptionsSchema, {
+      body: { contractVersion: 2 },
+    })
+      .then((value) => {
+        if (live) setOptions(value.programs);
+      })
+      .catch(() => {
+        if (live) setOptionsError(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+  const program = options?.find((p) => p.id === programId);
+  const field = 'min-h-11 w-full rounded-md border border-input bg-background px-3 text-base';
+
+  if (token)
+    return (
+      <div className={styles.result}>
+        <h2 className={styles.resultTitle}>Secure marksheet QR code ready</h2>
+        <Button type="button" className="mt-3" disabled={busy} onClick={() => void onMarksheet()}>
+          View marksheet
+        </Button>
+      </div>
+    );
 
   return (
-    <section className={styles.section} aria-labelledby={`${id}-title`}>
-      <h1 id={`${id}-title`} className={styles.title}>
-        {title}
-      </h1>
+    <>
       <form
-        className={styles.box}
+        className="mx-auto grid max-w-3xl gap-4 rounded-[20px] border border-border bg-card p-5 sm:grid-cols-3"
         aria-busy={busy}
         onSubmit={(event) => {
-          void submit(event);
+          event.preventDefault();
+          const body = publicResultSearchSchema.safeParse({
+            contractVersion: 2,
+            programId,
+            rollNumber: roll,
+            periodNumber: Number(period),
+          });
+          if (body.success) void onSearch(body.data);
         }}
       >
-        <label htmlFor={id} className="sr-only">
-          {label}
-        </label>
-        <Input
-          id={id}
-          className={styles.input}
-          placeholder={placeholder}
-          value={token || reference}
-          onChange={(event) => {
-            requestVersion.current += 1;
-            setReference(event.target.value);
-            setToken('');
-            setResponse(null);
-            setError('');
-          }}
-          required
-          disabled={busy}
-          minLength={3}
-          maxLength={128}
-          autoComplete="off"
-          spellCheck={false}
-          aria-describedby={`${id}-result`}
-        />
-        <Button type="submit" className={styles.verify} disabled={busy}>
-          {busy ? (
-            <>
-              <LoaderCircleIcon aria-hidden="true" className="motion-safe:animate-spin" />
-              Checking…
-            </>
-          ) : (
-            <>
-              Verify
-              <ArrowRightIcon aria-hidden="true" />
-            </>
-          )}
-        </Button>
-      </form>
-      {error ? (
-        <div id={`${id}-result`} role="alert" className={`${styles.result} ${styles.error}`}>
-          {error}
-        </div>
-      ) : (
-        <div
-          id={`${id}-result`}
-          className={styles.result}
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <h2 className={styles.resultTitle}>
-            {busy
-              ? 'Checking…'
-              : response
-                ? response.status.replaceAll('_', ' ')
-                : token
-                  ? 'Secure QR code ready'
-                  : 'No record checked yet'}
-          </h2>
-          <p>
-            {busy
-              ? 'Please wait while verification completes.'
-              : response
-                ? noMatch
-                  ? 'No matching record found. Please check the entered code and try again.'
-                  : response.message
-                : 'Only university-approved records can be verified.'}
-          </p>
-          {response?.status === 'AUTHENTICATION_REQUIRED' && (
-            <Link
-              href="/student/login"
-              className="mt-3 inline-flex min-h-11 items-center font-medium text-brand underline underline-offset-4"
-            >
-              Student Sign in
-            </Link>
-          )}
-          {(response?.institution ?? response?.maskedReference) && (
-            <dl className={styles.resultFields}>
-              {[
-                ['Institution', response.institution],
-                ['Document type', response.documentType?.replaceAll('_', ' ')],
-                ['Reference', response.maskedReference],
-                ['Program', response.program],
-                ['Issue date', response.issueDate],
-              ]
-                .filter(([, value]) => value)
-                .map(([field, value]) => (
-                  <div key={field}>
-                    <dt>{field}</dt>
-                    <dd>{value}</dd>
-                  </div>
-                ))}
-            </dl>
-          )}
-        </div>
-      )}
-      {service === 'result' &&
-        (response?.status === 'VALID' || response?.status === 'UNPUBLISHED') && (
-          <div className="mt-8 space-y-6" data-print-area>
-            <div className="print:hidden">
-              <label htmlFor="verification-period" className="mb-2 block text-sm font-medium">
-                Semester / academic year
-              </label>
-              <select
-                id="verification-period"
-                value={period}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setPeriod(value);
-                  void lookup(value ? Number(value) : undefined);
-                }}
-                className="mb-5 min-h-11 w-full rounded-md border border-input bg-background px-3"
-              >
-                <option value="">All published periods</option>
-                {Array.from({ length: 24 }, (_, index) => (
-                  <option key={index} value={index + 1}>
-                    Period {index + 1}
-                  </option>
-                ))}
-              </select>
-              <label htmlFor="examination-selection" className="mb-2 block text-sm font-medium">
-                Examination
-              </label>
-              <select
-                id="examination-selection"
-                value={exam}
-                onChange={(e) => {
-                  setExam(e.target.value);
-                }}
-                className="min-h-11 w-full rounded-md border border-input bg-background px-3"
-              >
-                <option value="">All published examinations</option>
-                {Array.from(
-                  new Map(
-                    (response.results ?? []).map((r) => [r.examinationId, r.examination]),
-                  ).entries(),
-                ).map(([id, name]) => (
-                  <option key={id} value={id}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {results.length === 0 && <p>No published results match these filters.</p>}
-            {results.map((r) => (
-              <article key={r.id} className="rounded-xl border border-border p-5">
-                <h2 className="text-xl font-semibold">{r.examination}</h2>
-                <p className="mt-2 text-sm">
-                  Period {r.periodNumber} · Attempt {r.attemptNumber} ·{' '}
-                  {r.outcome ?? 'Status not supplied'} · GPA {r.sgpa ?? 'Not supplied'}
-                </p>
-                <div
-                  role="region"
-                  aria-label={`${r.examination} subject marks, period ${String(r.periodNumber)}, attempt ${String(r.attemptNumber)}`}
-                  // Keyboard users must be able to scroll wide tables (WCAG 2.1.1).
-                  // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-                  tabIndex={0}
-                  className="mt-5 overflow-x-auto focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-                >
-                  <table className="w-full text-left text-sm">
-                    <caption className="sr-only">Published subject marks and grades</caption>
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="py-3 pr-4">Subject</th>
-                        <th className="py-3 pr-4">Marks</th>
-                        <th className="py-3 pr-4">Grade</th>
-                        <th className="py-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {r.subjects.map((s) => (
-                        <tr key={s.programSubjectId} className="border-b border-border">
-                          <th scope="row" className="py-3 pr-4 font-medium">
-                            {s.code} — {s.name}
-                          </th>
-                          <td className="py-3 pr-4 tabular-nums">
-                            {s.totalMarks ?? 'Not supplied'} / {s.maxMarks ?? 'Not supplied'}
-                          </td>
-                          <td className="py-3 pr-4">{s.grade ?? 'Not supplied'}</td>
-                          <td className="py-3">{s.status}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-4 text-xs text-muted-foreground">
-                  Published {r.publishedAt.slice(0, 10)}. This view is private to your account.
-                </p>
-              </article>
+        <div className="sm:col-span-3">
+          <label htmlFor={`${id}-course`} className="mb-2 block text-sm font-medium">
+            Course Name
+          </label>
+          <select
+            id={`${id}-course`}
+            className={field}
+            value={programId}
+            required
+            disabled={busy || !options?.length}
+            onChange={(event) => {
+              setProgramId(event.target.value);
+              setPeriod('');
+              onChange();
+            }}
+          >
+            <option value="">
+              {options === null
+                ? optionsError
+                  ? 'Courses could not be loaded'
+                  : 'Loading courses…'
+                : options.length
+                  ? 'Select course'
+                  : 'No course offers online result checks yet'}
+            </option>
+            {options?.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
             ))}
-            <Button
-              type="button"
-              disabled={results.length === 0}
-              variant="outline"
-              className="print:hidden"
-              onClick={() => {
-                window.print();
-              }}
-            >
-              Print published results
-            </Button>
-          </div>
-        )}
-    </section>
+          </select>
+        </div>
+        <div>
+          <label htmlFor={`${id}-roll`} className="mb-2 block text-sm font-medium">
+            Roll Number
+          </label>
+          <Input
+            id={`${id}-roll`}
+            className="min-h-11"
+            value={roll}
+            required
+            maxLength={64}
+            pattern="[A-Za-z0-9][A-Za-z0-9._/\-]*"
+            autoComplete="off"
+            spellCheck={false}
+            disabled={busy}
+            onChange={(event) => {
+              setRoll(event.target.value);
+              onChange();
+            }}
+          />
+        </div>
+        <div>
+          <label htmlFor={`${id}-period`} className="mb-2 block text-sm font-medium">
+            {program?.structure === 'YEAR' ? 'Year' : 'Semester'}
+          </label>
+          <select
+            id={`${id}-period`}
+            className={field}
+            value={period}
+            required
+            disabled={busy || !program}
+            onChange={(event) => {
+              setPeriod(event.target.value);
+              onChange();
+            }}
+          >
+            <option value="">{program ? 'Select' : 'Select a course first'}</option>
+            {program?.periods.map((n) => (
+              <option key={n} value={n}>
+                {program.structure === 'YEAR' ? `Year ${String(n)}` : `Semester ${String(n)}`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-end">
+          <Button
+            type="submit"
+            className={`${styles.verify} w-full`}
+            disabled={busy || !options?.length}
+          >
+            {busy ? 'Checking…' : 'Check Result'}
+          </Button>
+        </div>
+      </form>
+      <details className="mx-auto mt-4 max-w-3xl text-sm">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center font-medium text-brand">
+          Student? See your own published marks after signing in
+        </summary>
+        <form
+          className="mt-3 flex flex-wrap gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (own.trim()) void onOwn(own.trim());
+          }}
+        >
+          <label htmlFor={`${id}-own`} className="sr-only">
+            Your registration number
+          </label>
+          <Input
+            id={`${id}-own`}
+            className="min-h-11 flex-1"
+            placeholder="Your registration number"
+            value={own}
+            required
+            maxLength={128}
+            autoComplete="off"
+            onChange={(event) => {
+              setOwn(event.target.value);
+              onChange();
+            }}
+          />
+          <Button type="submit" variant="outline" className="min-h-11" disabled={busy}>
+            Show my results
+          </Button>
+        </form>
+      </details>
+    </>
   );
 }

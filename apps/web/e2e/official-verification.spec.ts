@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   capture,
   expectNoHorizontalOverflow,
@@ -14,28 +14,41 @@ interface WorkflowResponse {
   verificationUrl: string;
 }
 const services = [
-  ['admission-letter', '/verify/admission-letter', 'Admission letter number'],
-  ['certificate', '/verify/certificate', 'Certificate number'],
-  ['registration', '/verify/registration', 'Registration number'],
-  ['result', '/results', 'Registration number'],
+  [
+    'admission-letter',
+    '/verify/admission-letter',
+    'Admission letter number',
+    'Verify Admission Letter',
+  ],
+  ['certificate', '/verify/certificate', 'Certificate number', 'Verify Certificate'],
+  ['registration', '/verify/registration', 'Registration number', 'Verify Registration'],
+  ['result', '/results', 'Your registration number', 'Show my results'],
 ] as const;
-for (const [service, path, label] of services) {
+/** Check Result's own-results form sits behind a disclosure; open it before filling. */
+async function openOwnResults(page: Page) {
+  const summary = page.getByText('Student? See your own published marks after signing in');
+  if ((await summary.locator('xpath=..').getAttribute('open')) === null) await summary.click();
+}
+for (const [service, path, label, action] of services) {
   test(`${service}: real database boundary and accessible mobile form`, async ({ page }) => {
     await page.goto(path);
+    if (service === 'result') {
+      // No course has an anonymous result policy here: the three-field form says so honestly.
+      await expect(
+        page.getByRole('option', { name: 'No course offers online result checks yet' }),
+      ).toBeAttached();
+      await expect(page.getByRole('button', { name: 'Check Result', exact: true })).toBeDisabled();
+      await openOwnResults(page);
+    }
     await page.getByLabel(label, { exact: true }).fill(`0000-E2E-${service}`);
     const response = page.waitForResponse(
       (r) => r.url().endsWith(`/public/verify/${service}`) && r.request().method() === 'POST',
     );
-    await page
-      .getByRole('button', {
-        name: 'Verify',
-        exact: true,
-      })
-      .click();
+    await page.getByRole('button', { name: action, exact: true }).click();
     const received = await response;
     expect(received.status()).toBe(200);
     expect(((await received.json()) as { status: string }).status).toBe('UNAVAILABLE');
-    await expect(page.getByRole('status')).toContainText('No verified record is available');
+    await expect(page.getByRole('status')).toContainText('No record was checked.');
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await expectNoHorizontalOverflow(page);
@@ -51,12 +64,13 @@ test('secure QR fragment is removed and submitted without putting credentials in
   const urls: string[] = [];
   page.on('request', (r) => urls.push(r.url()));
   await page.goto(`/verify/certificate#token=${token}`);
-  await expect(page.getByLabel('Certificate number', { exact: true })).toHaveValue(token);
+  await expect(page.getByRole('status')).toContainText('Secure QR code ready');
+  await expect(page.getByLabel('Certificate number', { exact: true })).toHaveValue('');
   await expect(page).toHaveURL(/\/verify\/certificate$/);
   const response = page.waitForResponse(
     (r) => r.url().endsWith('/public/verify/certificate') && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await page.getByRole('button', { name: 'Verify Certificate', exact: true }).click();
   const r = await response;
   expect(r.request().postDataJSON()).toEqual({ contractVersion: 2, token });
   expect(urls.some((url) => url.includes(token))).toBe(false);
@@ -67,16 +81,14 @@ test('existing activated student session works for registration and results with
   const student = fixtures().profileStudents[0];
   if (!student) throw new Error('Missing synthetic student');
   await studentSignIn(page, student);
-  for (const [, path] of services.filter(([id]) => id === 'registration' || id === 'result')) {
+  for (const [id, path, label, action] of services.filter(
+    ([id]) => id === 'registration' || id === 'result',
+  )) {
     await page.goto(path);
-    await page.getByLabel('Registration number', { exact: true }).fill(student.registrationNumber);
-    await page
-      .getByRole('button', {
-        name: 'Verify',
-        exact: true,
-      })
-      .click();
-    await expect(page.getByRole('status')).toContainText('UNAVAILABLE');
+    if (id === 'result') await openOwnResults(page);
+    await page.getByLabel(label, { exact: true }).fill(student.registrationNumber);
+    await page.getByRole('button', { name: action, exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Verification not available');
   }
 });
 
@@ -240,8 +252,8 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await capture(makerPage, 'official-staff-document-mobile');
     await page.goto('/verify/admission-letter');
     await page.getByLabel('Admission letter number', { exact: true }).fill(documentNumber);
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('NOT FOUND');
+    await page.getByRole('button', { name: 'Verify Admission Letter', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('No verified record found');
     await checkerPage.getByRole('tab', { name: 'Documents', exact: true }).click();
     const checkerDocument = checkerPage.getByRole('article').filter({ hasText: documentNumber });
     await checkerDocument.getByRole('button', { name: 'Approve document', exact: true }).click();
@@ -256,7 +268,8 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     const issued = (await issuedResponse.json()) as WorkflowResponse;
     const qr = new URL(issued.verificationUrl);
     await page.goto(qr.pathname + qr.hash);
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify Admission Letter', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Admission Letter Verified');
     await expect(page.getByRole('status')).toContainText('VALID');
     await expect(page.getByRole('status')).toContainText('Synthetic Test University');
     await expect(page.locator('main')).not.toContainText('Synthetic Verification Learner');
@@ -270,9 +283,29 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await checkerDocument.getByRole('button', { name: 'Confirm revocation', exact: true }).click();
     await expect(checkerDocument).toContainText('REVOKED');
     await checkerPage.getByRole('tab', { name: 'Policies', exact: true }).click();
-    const policyCard = checkerPage.getByRole('article').filter({ hasText: 'admission-letter' });
-    await policyCard.getByText('Review proposed rules', { exact: true }).click();
-    await expect(policyCard).toContainText('Public program');
+    for (const [service, audience] of [
+      ['admission-letter', 'Anyone with the document number or secure QR code'],
+      ['certificate', 'Anyone with the document number or secure QR code'],
+      ['registration', 'Only the signed-in student can check their own registration'],
+      ['result', 'Only the signed-in student can view their own published results'],
+    ] as const) {
+      await checkerPage.getByLabel('Verification service', { exact: true }).selectOption(service);
+      await expect(
+        checkerPage
+          .locator('form')
+          .filter({ has: checkerPage.getByLabel('Verification service', { exact: true }) }),
+      ).toContainText(audience);
+      const card = checkerPage.getByRole('article').filter({
+        has: checkerPage.getByText(
+          new RegExp('^' + service + ' · APPROVED · Synthetic Public Verification Course$'),
+        ),
+      });
+      await expect(card).toContainText(audience);
+      await card.getByText('Review proposed rules', { exact: true }).click();
+      if (service === 'result')
+        await expect(card).toContainText('Independently reviewed and published results');
+      else await expect(card).toContainText('Program name');
+    }
     await checkerPage.setViewportSize({ width: 390, height: 844 });
     await expectNoHorizontalOverflow(checkerPage);
     await expectNoSeriousA11yViolations(checkerPage);
@@ -282,8 +315,8 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
       checkerPage.getByRole('heading', { name: 'Verification and issuance audit', exact: true }),
     ).toBeVisible();
     await expect(checkerPage.getByRole('article').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('REVOKED');
+    await page.getByRole('button', { name: 'Verify Admission Letter', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Admission Letter Revoked');
     // Activation uses the existing per-registration identity flow and random password.
     const activation = await post(maker, 'student-accounts/activation-codes', {
       registrationIds: [registrationId],
@@ -370,16 +403,16 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await post(checker, `official-documents/${cert.id}/issue`);
     await page.goto('/verify/certificate');
     await page.getByLabel('Certificate number', { exact: true }).fill(certNumber);
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('ISSUED');
+    await page.getByRole('button', { name: 'Verify Certificate', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Certificate Valid');
     await capture(page, 'verification-certificate-issued-mobile');
     await page.goto('/verify/registration');
     await page.getByLabel('Registration number', { exact: true }).fill(number);
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify Registration', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('ACTIVE');
     await page.getByLabel('Registration number', { exact: true }).fill(number.slice(1));
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('INVALID');
+    await page.getByRole('button', { name: 'Verify Registration', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('No verified record found');
     const curriculum = await post(maker, `programs/${course.id}/curricula`, {
       versionCode: `PV-${Date.now()}`,
       name: 'Synthetic Verification Syllabus',
@@ -439,15 +472,10 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
       },
     });
     await page.goto('/results');
-    await page.getByLabel('Registration number', { exact: true }).fill(number);
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('UNPUBLISHED');
-    await page.getByLabel('Semester / academic year').selectOption('2');
-    await expect(page.getByRole('status')).toContainText('UNPUBLISHED');
-    await expect(page.getByLabel('Semester / academic year')).toHaveValue('2');
-    await page.getByLabel('Semester / academic year').selectOption('');
-    await expect(page.getByRole('status')).toContainText('UNPUBLISHED');
-    await expect(page.getByLabel('Semester / academic year')).toHaveValue('');
+    await openOwnResults(page);
+    await page.getByLabel('Your registration number', { exact: true }).fill(number);
+    await page.getByRole('button', { name: 'Show my results', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('No published result');
 
     const review = (await (await maker.get(`/api/v1/result-review/${draft.resultId}`)).json()) as {
       subjects: { id: string }[];
@@ -481,14 +509,18 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
       policyId: policies.result,
       expectedVersion: 4,
     });
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('table')).toContainText('80 / 100');
-    await expect(page.getByRole('table')).toContainText('PASS');
-    await expect(page.getByRole('button', { name: 'Print published results' })).toBeVisible();
+    await page.getByRole('button', { name: 'Show my results', exact: true }).click();
+    const marks = page.getByRole('region', { name: /subject marks/ });
+    await expect(marks).toContainText('80');
+    await expect(marks).toContainText('100');
+    await expect(marks).toContainText('Pass');
+    // The owner's marksheet carries its genuine QR verification code.
+    await expect(page.getByRole('img', { name: 'Verification QR code' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Print Marksheet/ })).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await capture(page, 'verification-results-issued-mobile');
     await page.emulateMedia({ media: 'print' });
-    await expect(page.getByRole('table')).toBeVisible();
+    await expect(marks).toBeVisible();
     await page.pdf({ path: 'test-results/published-results-print.pdf', format: 'A4' });
     await page.emulateMedia({ media: 'screen' });
     await page.goto('/student/results');
@@ -501,9 +533,10 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await expectNoHorizontalOverflow(page);
     await capture(page, 'verification-student-documents-mobile');
     await page.goto('/results');
-    await page.getByLabel('Registration number', { exact: true }).fill(number);
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('table')).toBeVisible();
+    await openOwnResults(page);
+    await page.getByLabel('Your registration number', { exact: true }).fill(number);
+    await page.getByRole('button', { name: 'Show my results', exact: true }).click();
+    await expect(page.getByRole('region', { name: /subject marks/ })).toBeVisible();
     const ownDownload = await page.request.get(
       `/api/v1/student/official-documents/${cert.id}/download`,
     );
@@ -527,8 +560,8 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
       reason: 'Synthetic E2E revoked certificate',
     });
     await post(checker, `official-results/${draft.resultId}/withdraw`);
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
-    await expect(page.getByRole('status')).toContainText('UNPUBLISHED');
+    await page.getByRole('button', { name: 'Show my results', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('No published result');
   } finally {
     await maker.dispose();
     await checker.dispose();

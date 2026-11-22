@@ -157,7 +157,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261020090000_program_certificate_eligibility` (12C: course certificate sets, proposer ≠ decider),
   `20261117090000_staff_mfa_first_login` (staff first-login flag, TOTP MFA, recovery codes; ADR-0021),
   `20261122090000_student_uploads` (student-uploaded academic/identity files; ADR-0023),
-  `20261128090000_communication` (student messages, verification queries, notifications; ADR-0025).
+  `20261128090000_communication` (student messages, verification queries, notifications; ADR-0025),
+  `20261129090000_result_verification_token` (marksheet QR credential per publication; ADR-0024).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
