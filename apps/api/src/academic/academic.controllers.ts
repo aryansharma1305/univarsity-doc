@@ -31,6 +31,8 @@ import {
   createStudentSchema,
   type Dashboard,
   dashboardSchema,
+  type DashboardQuery,
+  dashboardQuerySchema,
   type Department,
   type DepartmentList,
   type DepartmentQuery,
@@ -389,10 +391,15 @@ export class DashboardController {
   @Get()
   @ApiOperation({
     summary: 'Admin dashboard counts',
-    description: 'Real counts only. `recentActivity` is included only for users with audit.read.',
+    description:
+      'Real counts only. Each workload count, `recentActivity` (audit.read) and `enrolment` (registrations.read) is null without its read permission.',
   })
+  @ApiListQuery(dashboardQuerySchema)
   @ApiOkResponse({ standardSchema: dashboardSchema })
-  get(@CurrentAuth() auth: AuthContext): Promise<Dashboard> {
-    return this.service.get(auth.user.permissions.has(PERMISSIONS.auditRead));
+  get(
+    @CurrentAuth() auth: AuthContext,
+    @Query(new ZodValidationPipe(dashboardQuerySchema)) query: DashboardQuery,
+  ): Promise<Dashboard> {
+    return this.service.get(auth.user.permissions, auth.user.id, query);
   }
 }
