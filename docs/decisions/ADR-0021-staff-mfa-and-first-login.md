@@ -128,3 +128,6 @@ does not know about MFA) — roll back only in an emergency, and turn enforcemen
 - Recovery-code regeneration and self-service MFA removal are not built; an access reset covers both.
 - Synthetic test fixtures (`prepare-e2e.mjs`, `deploy/scripts/fixture.mjs`,
   `deploy/coexist/full_stack_fixture.mjs`) pass `requirePasswordChange: false` explicitly.
+- Disabling, re-enabling or resetting a staff account also revokes any outstanding password-reset
+  link (`PasswordResetStore.revokeForUser`, inside the same transaction), so a link requested before
+  a disable can never sign anyone in after the account is re-enabled.

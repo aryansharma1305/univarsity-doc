@@ -10,6 +10,7 @@ import {
 } from '@docversity/validation';
 import { AuditService } from '../audit/audit.service.js';
 import { MfaService } from '../auth/mfa.service.js';
+import { PasswordResetStore } from '../auth/password-reset.store.js';
 import { PasswordService } from '../auth/password.service.js';
 import { SessionStore } from '../auth/session.store.js';
 import { AppError, Errors } from '../common/app-error.js';
@@ -35,6 +36,7 @@ export class StaffUsersService {
     private readonly passwords: PasswordService,
     private readonly mfa: MfaService,
     private readonly audit: AuditService,
+    private readonly resets: PasswordResetStore,
   ) {}
 
   async list(): Promise<StaffUser[]> {
@@ -95,7 +97,7 @@ export class StaffUsersService {
             action: AUDIT_ACTIONS.adminCreated,
             entityType: 'User',
             entityId: user.id,
-            metadata: { via: 'api', roles: [...input.roles].sort(), passwordChangeRequired: true },
+            metadata: { via: 'api', roles: [...input.roles].sort(), mustChangeAtFirstSignIn: true },
           },
           tx,
         );
@@ -185,6 +187,8 @@ export class StaffUsersService {
         const codes = await tx.staffMfaRecoveryCode.deleteMany({ where: { userId: targetUserId } });
         // Keep the row locked and the account disabled to other transactions until MFA cleanup succeeds.
         await this.mfa.clearEnrollmentAndLockout(targetUserId);
+        // Reset links from before the disable never sign anyone in after re-enablement.
+        await this.resets.revokeForUser(targetUserId);
         await this.audit.writeAuditEvent(
           {
             actorUserId,
@@ -292,6 +296,7 @@ export class StaffUsersService {
       });
       const codes = await tx.staffMfaRecoveryCode.deleteMany({ where: { userId: targetUserId } });
       const revoked = await this.sessions.revokeAllForUser(targetUserId);
+      await this.resets.revokeForUser(targetUserId);
       await this.audit.writeAuditEvent(
         {
           actorUserId,

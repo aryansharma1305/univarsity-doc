@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { staffUserSchema } from '@docversity/validation';
+import { PasswordResetStore } from '../../src/auth/password-reset.store.js';
 import { RedisService } from '../../src/redis/redis.service.js';
 import { StaffUsersService } from '../../src/users/staff-users.service.js';
 import {
@@ -81,8 +82,7 @@ describe('staff account management', () => {
     expect(audit.metadata).toEqual({
       via: 'api',
       roles: ['EXAM_ADMIN', 'REGISTRAR'],
-      // Keys naming a password are redacted by the audit writer.
-      passwordChangeRequired: '[REDACTED]',
+      mustChangeAtFirstSignIn: true,
     });
     expect(JSON.stringify(audit)).not.toContain(TEMP);
     // The new account signs in only into the forced password change.
@@ -246,6 +246,36 @@ describe('staff account management', () => {
           .send({ email: target.email, password: TEST_PASSWORD })
       ).status,
     ).toBe(401);
+  });
+
+  it('revokes outstanding password-reset links on disable, re-enable and access reset', async () => {
+    const resets = app.get(PasswordResetStore);
+    const reset = async (token: string) => {
+      const agent = browser(app);
+      const csrf = (await agent.get('/api/v1/auth/csrf')).body as { csrfToken: string };
+      return agent
+        .post('/api/v1/auth/reset-password')
+        .set('X-CSRF-Token', csrf.csrfToken)
+        .send({ token, newPassword: 'Someone else chose this 2026!' });
+    };
+    const target = await createTestUser({ roles: ['SUPER_ADMIN'] });
+    // A link requested while the account was active (e.g. by a departing staff member).
+    const before = await resets.issue(target.id);
+    await admin.post(`staff-users/${target.id}/disable`, { reason: 'OTHER' }).expect(200);
+    expect(await resets.peek(before.token)).toBeNull();
+    // Even a link that reappears is gone after re-enablement.
+    const during = await resets.issue(target.id);
+    await admin.post(`staff-users/${target.id}/enable`, { temporaryPassword: TEMP }).expect(200);
+    expect((await reset(before.token)).status).toBe(400);
+    expect((await reset(during.token)).status).toBe(400);
+    const row = await testDb().user.findUniqueOrThrow({ where: { id: target.id } });
+    expect(row.passwordChangeRequired).toBe(true);
+    // Access reset revokes too.
+    const later = await resets.issue(target.id);
+    await admin
+      .post(`staff-users/${target.id}/access-reset`, { temporaryPassword: TEMP })
+      .then((r) => expect(r.status, JSON.stringify(r.body)).toBe(200));
+    expect(await resets.peek(later.token)).toBeNull();
   });
 
   it('keeps re-enablement retryable when MFA cleanup fails', async () => {
