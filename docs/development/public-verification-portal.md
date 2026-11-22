@@ -8,7 +8,7 @@ server under [ADR-0024](../decisions/ADR-0024-anonymous-public-verification.md).
 
 | Service                               | Desktop (1440)                                                | Mobile (390)                                                 |
 | ------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
-| Registration Found                    | ![](public-verification-portal/registration-desktop.webp)     | ![](public-verification-portal/registration-mobile.webp)     |
+| Registration Active                   | ![](public-verification-portal/registration-desktop.webp)     | ![](public-verification-portal/registration-mobile.webp)     |
 | Certificate Valid (via QR)            | ![](public-verification-portal/certificate-desktop.webp)      | ![](public-verification-portal/certificate-mobile.webp)      |
 | Admission Letter Verified (by number) | ![](public-verification-portal/admission-letter-desktop.webp) | ![](public-verification-portal/admission-letter-mobile.webp) |
 | Marksheet Verified (via QR)           | ![](public-verification-portal/result-desktop.webp)           | ![](public-verification-portal/result-mobile.webp)           |

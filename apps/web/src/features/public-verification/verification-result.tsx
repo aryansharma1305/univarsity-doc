@@ -199,6 +199,13 @@ const REGISTRATION_TONES: Record<string, Tone> = {
   SUSPENDED: 'neutral',
   REVOKED: 'danger',
 };
+/** The banner names the recorded status; only ACTIVE reads as currently valid. */
+const REGISTRATION_TITLES: Record<string, string> = {
+  ACTIVE: 'Registration Active',
+  COMPLETED: 'Registration Completed',
+  SUSPENDED: 'Registration Suspended',
+  REVOKED: 'Registration Revoked',
+};
 /** Only statuses Docversity records; there is no expiry state, so none is shown or derived. */
 const LEGEND: readonly [string, Tone][] = [
   ['Active', 'success'],
@@ -210,10 +217,11 @@ const LEGEND: readonly [string, Tone][] = [
 function RegistrationResult({ response }: { response: OfficialVerificationResponse }) {
   const d = response.details ?? {};
   const status = response.recordStatus ?? (response.status === 'ACTIVE' ? 'ACTIVE' : undefined);
-  const tone = status ? (REGISTRATION_TONES[status] ?? 'neutral') : 'success';
+  const tone = status ? (REGISTRATION_TONES[status] ?? 'neutral') : 'neutral';
+  const title = (status && REGISTRATION_TITLES[status]) ?? 'Registration Found';
   return (
     <VerificationPrintView>
-      <VerificationStatusBanner tone={tone} title="Registration Found" message={response.message} />
+      <VerificationStatusBanner tone={tone} title={title} message={response.message} />
       <Card
         left={
           <VerificationIdentityPanel>
