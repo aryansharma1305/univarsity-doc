@@ -31,6 +31,10 @@ export async function courseTypeApproved(
   type: CertificateType,
   programId: string,
 ): Promise<boolean> {
+  // Inside a transaction, hold the course and its approved set until commit so a concurrent
+  // duration edit or supersession cannot slip between this check and the caller's write.
+  await db.$queryRaw`SELECT id FROM programs WHERE id = ${programId}::uuid FOR SHARE`;
+  await db.$queryRaw`SELECT id FROM program_certificate_eligibility WHERE program_id = ${programId}::uuid AND status = 'APPROVED' FOR SHARE`;
   const [program, approved] = await Promise.all([
     db.program.findUnique({
       where: { id: programId },

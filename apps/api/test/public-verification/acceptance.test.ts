@@ -1264,8 +1264,15 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
         .post('/api/v1/student/certificate-requests')
         .set('X-CSRF-Token', csrf)
         .send({ certificateType: 'MIGRATION', purpose: 'Transfer', submissionKey: randomUUID() });
+    const offered = async () =>
+      (
+        (await alice.agent.get('/api/v1/student/certificate-services').expect(200)).body as {
+          data: { certificateType: string; available: boolean }[];
+        }
+      ).data.find((d) => d.certificateType === 'MIGRATION')?.available;
     // An application policy alone is not enough: the course must be approved for migration
     // certificates (ADR-0018: more than 24 months, and an independently approved course set).
+    expect(await offered()).toBe(false);
     expect((await apply()).status).toBe(409);
     await people.registrar
       .patch(`programs/${s.programId}`, { durationValue: 3, durationUnit: 'YEARS' })
@@ -1297,6 +1304,7 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
       });
     };
     const approvedSet = await eligibility(1);
+    expect(await offered()).toBe(true);
     const request = certificateRequestSchema.parse(
       (
         await alice.agent
