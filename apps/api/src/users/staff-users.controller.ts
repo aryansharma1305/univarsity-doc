@@ -1,7 +1,18 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Res,
+} from '@nestjs/common';
 import {
   ApiBody,
   ApiCookieAuth,
+  ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiResponse,
@@ -14,6 +25,13 @@ import {
   okResponseSchema,
   staffAccessResetRequestSchema,
   type StaffAccessResetRequest,
+  staffCreateRequestSchema,
+  type StaffCreateRequest,
+  staffEnableRequestSchema,
+  type StaffEnableRequest,
+  staffRolesRequestSchema,
+  type StaffRolesRequest,
+  staffUserSchema,
   staffDisableRequestSchema,
   type StaffDisableRequest,
   type StaffUser,
@@ -43,6 +61,65 @@ export class StaffUsersController {
   async list(@Res({ passthrough: true }) res: Response): Promise<{ data: StaffUser[] }> {
     res.setHeader('Cache-Control', 'no-store');
     return { data: await this.staff.list() };
+  }
+
+  @Post()
+  @RequirePermissions(PERMISSIONS.usersManage)
+  @ApiSecurity('csrf')
+  @ApiOperation({
+    summary: 'Create a staff account with explicit roles',
+    description:
+      'The temporary password (handed over out of band) must be changed at first sign-in. Never ' +
+      'returned or audited. Audited (ADMIN_CREATED, via api).',
+  })
+  @ApiBody({ schema: openApiRequestSchema(staffCreateRequestSchema) })
+  @ApiCreatedResponse({ standardSchema: staffUserSchema })
+  @ApiResponse({ status: 409, description: 'Email already in use', ...errorResponse })
+  create(
+    @CurrentAuth() auth: AuthContext,
+    @Body(new ZodValidationPipe(staffCreateRequestSchema)) body: StaffCreateRequest,
+  ): Promise<StaffUser> {
+    return this.staff.create(auth.user.id, body);
+  }
+
+  @Patch(':userId/roles')
+  @RequirePermissions(PERMISSIONS.usersManage)
+  @ApiSecurity('csrf')
+  @ApiOperation({
+    summary: "Replace another staff member's roles",
+    description:
+      'Refuses your own account and removing SUPER_ADMIN from the last active SUPER_ADMIN. ' +
+      'Applies at the next request. Audited (STAFF_ROLES_CHANGED).',
+  })
+  @ApiBody({ schema: openApiRequestSchema(staffRolesRequestSchema) })
+  @ApiOkResponse({ standardSchema: staffUserSchema })
+  @ApiResponse({ status: 409, description: 'Refused', ...errorResponse })
+  setRoles(
+    @CurrentAuth() auth: AuthContext,
+    @Param('userId', userIdPipe) userId: string,
+    @Body(new ZodValidationPipe(staffRolesRequestSchema)) body: StaffRolesRequest,
+  ): Promise<StaffUser> {
+    return this.staff.setRoles(auth.user.id, userId, body.roles);
+  }
+
+  @Post(':userId/enable')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERMISSIONS.usersManage)
+  @ApiSecurity('csrf')
+  @ApiOperation({
+    summary: 'Re-enable a disabled staff account with a new temporary password',
+    description:
+      'Removes any authenticator; a new password is required at sign-in. Audited (USER_ENABLED).',
+  })
+  @ApiBody({ schema: openApiRequestSchema(staffEnableRequestSchema) })
+  @ApiOkResponse({ standardSchema: staffUserSchema })
+  @ApiResponse({ status: 409, description: 'Not disabled, or own account', ...errorResponse })
+  enable(
+    @CurrentAuth() auth: AuthContext,
+    @Param('userId', userIdPipe) userId: string,
+    @Body(new ZodValidationPipe(staffEnableRequestSchema)) body: StaffEnableRequest,
+  ): Promise<StaffUser> {
+    return this.staff.enable(auth.user.id, userId, body.temporaryPassword);
   }
 
   @Post(':userId/access-reset')
