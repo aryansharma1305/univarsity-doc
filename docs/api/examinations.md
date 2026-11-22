@@ -40,6 +40,21 @@ curriculum's structure. These rules are enforced again by the database (`examina
 the university notifies students through its existing process. Audit: `EXAMINATION_CREATED`,
 `_UPDATED`, `_OPENED`, `_ARCHIVED`, `_RE_EXAM_APPLICATIONS_OPENED`, `_RE_EXAM_APPLICATIONS_CLOSED`.
 
+### Timetable (staff: `examinations.read` / `examinations.manage`)
+
+| Method  | Path                                   | Notes                                                                                                                                                      |
+| ------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`   | `/examinations/:id/schedule`           | Timetable items plus the subjects of the examination's curriculum period                                                                                   |
+| `PATCH` | `/examinations/:id/schedule`           | Replace all items (`programSubjectId`, `examDate`, `startTime`/`endTime` "HH:MM" local, `venue?`). Period subjects only; no same-day overlap; not ARCHIVED |
+| `POST`  | `/examinations/:id/schedule/publish`   | OPEN examinations with at least one sitting                                                                                                                |
+| `POST`  | `/examinations/:id/schedule/unpublish` | Withdraws it from students                                                                                                                                 |
+
+Students see a published timetable in `GET /student/examinations` (`examinations[].schedule`, null
+until published). Audit: `EXAMINATION_SCHEDULE_UPDATED` (item count, published flag),
+`EXAMINATION_SCHEDULE_PUBLISHED`, `EXAMINATION_SCHEDULE_UNPUBLISHED`; they appear in the record's
+history. Times are stored as given (university local time); the database checks the format and that
+end is after start.
+
 ### Student
 
 | Method | Path                           | Purpose                                                                                                                                                                        |
