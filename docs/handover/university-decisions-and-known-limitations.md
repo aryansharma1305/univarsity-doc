@@ -52,3 +52,11 @@ questions), ADR-0014 to ADR-0018, ADR-0023, ADR-0024.
   real-data operation (Hostinger runbook).
 - **Legacy WordPress records and legacy QR links** are not migrated.
 - **Dashboard workload counts and reports** are limited in this release (PR #60 pending).
+
+## Security follow-ups (technical, not blocking)
+
+- **Break-glass CLI access reset** (`pnpm staff:reset-access`, `apps/api/src/cli/reset-staff-access-core.ts`)
+  does not revoke an outstanding password-reset link, because the CLI connects only to PostgreSQL. The
+  Admin Panel disable, re-enable and access reset (PR #61) do revoke it. Until the CLI also revokes it,
+  follow a CLI reset with a re-enable or Admin Panel access reset, or wait out
+  `PASSWORD_RESET_TOKEN_TTL_SECONDS`. It matters only when a reset notifier is configured (this release ships no email delivery).

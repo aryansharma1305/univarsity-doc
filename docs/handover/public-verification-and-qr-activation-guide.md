@@ -129,14 +129,14 @@ policy and whether it carries anonymous disclosure, which fields and the credent
 before and after every activation or disabling.
 
 Both scripts are operator-held and are **not in this repository**; their content and output format
-are **not verified** here. They must stay read-only and must not print secrets or personal data.
+are in [operator-scripts/](operator-scripts/README.md). They must stay read-only and must not print secrets or personal data.
 
 ## 7. Before activation (checklist)
 
 - [ ] Written authorization recorded (reference, date, signatory, institution name, courses, fields,
       credential option) per service.
 - [ ] Both Super Admin account holders confirmed by the university.
-- [ ] `dv-flag-check.sh` prints `OFFICIAL_VERIFICATION_ENABLED=true` (not `UNKNOWN`).
+- [ ] `dv-flag-check.sh` prints `EFFECTIVE OFFICIAL_VERIFICATION_ENABLED: on (file, mount and process agree)` (not `UNKNOWN`).
 - [ ] `dv-disclosure-inventory.sh` output saved as the "before" state.
 - [ ] A verified backup exists (see operations doc).
 
