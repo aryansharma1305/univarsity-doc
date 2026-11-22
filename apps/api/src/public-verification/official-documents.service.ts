@@ -153,6 +153,40 @@ export class OfficialDocumentsService {
       return { id, status: 'ACTIVE' };
     });
   }
+  /** The public QR verification link for an issued document (credential in the URL fragment). */
+  private verificationUrl(documentType: string, token: string) {
+    const service = documentType === 'ADMISSION_LETTER' ? 'admission-letter' : 'certificate';
+    return new URL(`/verify/${service}#token=${token}`, this.config.WEB_URL).href;
+  }
+
+  /**
+   * The QR verification link of an ISSUED official document, for staff to print on or attach to
+   * the physical document. Audited; revoked or unissued documents have no link.
+   */
+  async credentialLink(id: string, actor: string) {
+    const c = await this.prisma.client.certificate.findUnique({ where: { id } });
+    if (
+      c?.status !== 'ISSUED' ||
+      !c.verificationToken ||
+      !c.certificateNumber ||
+      !officialDocumentSnapshotSchema.safeParse(c.sourceSnapshot).success
+    )
+      throw Errors.notFound();
+    await this.audit.writeAuditEvent({
+      actorUserId: actor,
+      action: AUDIT_ACTIONS.officialDocumentChanged,
+      entityType: 'Certificate',
+      entityId: id,
+      metadata: { action: 'VERIFICATION_LINK_VIEWED' },
+    });
+    return {
+      id,
+      status: c.status,
+      certificateNumber: c.certificateNumber,
+      verificationUrl: this.verificationUrl(c.documentType, c.verificationToken),
+    };
+  }
+
   async ownDocuments(studentId: string) {
     const rows = await this.prisma.client.certificate.findMany({
       where: {
@@ -185,6 +219,9 @@ export class OfficialDocumentsService {
         documentType: c.documentType,
         certificateNumber: c.certificateNumber,
         issueDate: c.issueDate.toISOString().slice(0, 10),
+        ...(c.verificationToken
+          ? { verificationUrl: this.verificationUrl(c.documentType, c.verificationToken) }
+          : {}),
       });
     }
     return studentIssuedDocumentsSchema.parse(visible);
@@ -412,18 +449,16 @@ export class OfficialDocumentsService {
           tx,
         );
         const changed = await tx.certificate.findUniqueOrThrow({ where: { id } });
-        const service =
-          changed.documentType === 'ADMISSION_LETTER' ? 'admission-letter' : 'certificate';
         return {
           id,
           status: changed.status,
           certificateNumber: changed.certificateNumber,
           ...(changed.status === 'ISSUED' && changed.verificationToken
             ? {
-                verificationUrl: new URL(
-                  `/verify/${service}#token=${changed.verificationToken}`,
-                  this.config.WEB_URL,
-                ).href,
+                verificationUrl: this.verificationUrl(
+                  changed.documentType,
+                  changed.verificationToken,
+                ),
               }
             : {}),
         };

@@ -529,6 +529,39 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     await people.approver.get(`official-documents/${docs.admission.id}/file`).expect(200);
   });
 
+  it('A8b QR links: the owner lists their own; staff with certificates.issue retrieve one (audited)', async () => {
+    const list = studentIssuedDocumentsSchema.parse(
+      (await alice.agent.get('/api/v1/student/official-documents').expect(200)).body,
+    );
+    const own = list.find((d) => d.id === docs.admission.id);
+    expect(own?.verificationUrl).toMatch(/\/verify\/admission-letter#token=[A-Za-z0-9_-]{43}$/);
+    expect(tokenOf(own?.verificationUrl)).toBe(docs.admission.token);
+    expect(tokenOf(list.find((d) => d.id === docs.transcript.id)?.verificationUrl)).toBe(
+      docs.transcript.token,
+    );
+    const route = `official-documents/${docs.admission.id}/verification-link`;
+    // certificates.issue only: the preparer role and read-only staff are refused.
+    await people.viewer.post(route).expect(403);
+    await people.certAdmin.post(route).expect(403);
+    const before = await testDb().auditLog.count({
+      where: { entityId: docs.admission.id, action: 'OFFICIAL_DOCUMENT_CHANGED' },
+    });
+    const link = await people.approver.post(route).expect(200);
+    expect(link.headers['cache-control']).toBe('no-store');
+    const receipt = officialDocumentReceiptSchema.parse(link.body);
+    expect(receipt).toMatchObject({ status: 'ISSUED', certificateNumber: docs.admission.number });
+    expect(tokenOf(receipt.verificationUrl)).toBe(docs.admission.token);
+    const audits = await testDb().auditLog.findMany({
+      where: { entityId: docs.admission.id, action: 'OFFICIAL_DOCUMENT_CHANGED' },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(audits).toHaveLength(before + 1);
+    expect(audits.at(-1)?.metadata).toEqual({ action: 'VERIFICATION_LINK_VIEWED' });
+    expect(JSON.stringify(audits.at(-1))).not.toContain(docs.admission.token);
+    // Unknown and unissued documents have no link.
+    await people.approver.post(`official-documents/${randomUUID()}/verification-link`).expect(404);
+  });
+
   it('A9 registration verification: owner only, exact number, anonymous/staff/other students refused', async () => {
     const own = await verify(
       'registration',
@@ -1161,6 +1194,14 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
       .post(`official-documents/${docs.transcript.id}/revoke`, { reason: 'again' })
       .expect(409);
     await people.approver.post(`official-documents/${docs.transcript.id}/issue`).expect(409);
+    // A revoked document's QR link is no longer handed out to staff or the owner.
+    await people.approver
+      .post(`official-documents/${docs.transcript.id}/verification-link`)
+      .expect(404);
+    const owned = studentIssuedDocumentsSchema.parse(
+      (await alice.agent.get('/api/v1/student/official-documents').expect(200)).body,
+    );
+    expect(owned.map((d) => d.id)).not.toContain(docs.transcript.id);
   });
 
   it('A16 result withdrawal returns UNPUBLISHED; re-publication after withdrawal has no API path', async () => {
