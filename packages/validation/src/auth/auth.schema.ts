@@ -190,6 +190,52 @@ export const staffDisableRequestSchema = z
   .strict()
   .meta({ id: 'StaffDisableRequest' });
 
+/** Assignable staff roles (code-defined; the API re-checks the role exists). */
+export const staffRoleSchema = z.enum([
+  'SUPER_ADMIN',
+  'REGISTRAR',
+  'EXAM_ADMIN',
+  'CERTIFICATE_ADMIN',
+  'APPROVER',
+  'VIEWER',
+]);
+const staffRolesSchema = z
+  .array(staffRoleSchema)
+  .min(1, 'Choose at least one role.')
+  .max(6)
+  .refine((roles) => new Set(roles).size === roles.length, 'Choose each role once.');
+
+/**
+ * SUPER_ADMIN creates a staff account. The temporary password is handed over out of band and must be
+ * changed at first sign-in; it is never returned or audited.
+ */
+export const staffCreateRequestSchema = z
+  .object({
+    email: emailSchema,
+    displayName: z
+      .string()
+      .trim()
+      .min(2, 'Use 2–120 characters.')
+      .max(120, 'Use 2–120 characters.'),
+    roles: staffRolesSchema,
+    temporaryPassword: newPasswordSchema,
+  })
+  .strict()
+  .meta({ id: 'StaffCreateRequest' });
+
+export const staffRolesRequestSchema = z
+  .object({ roles: staffRolesSchema })
+  .strict()
+  .meta({ id: 'StaffRolesRequest' });
+
+export const staffEnableRequestSchema = z
+  .object({ temporaryPassword: newPasswordSchema })
+  .strict()
+  .meta({ id: 'StaffEnableRequest' });
+
+export type StaffCreateRequest = z.infer<typeof staffCreateRequestSchema>;
+export type StaffRolesRequest = z.infer<typeof staffRolesRequestSchema>;
+export type StaffEnableRequest = z.infer<typeof staffEnableRequestSchema>;
 export type MfaEnrollmentStartResponse = z.infer<typeof mfaEnrollmentStartResponseSchema>;
 export type MfaEnrollmentConfirmRequest = z.infer<typeof mfaEnrollmentConfirmRequestSchema>;
 export type MfaEnrollmentConfirmResponse = z.infer<typeof mfaEnrollmentConfirmResponseSchema>;
