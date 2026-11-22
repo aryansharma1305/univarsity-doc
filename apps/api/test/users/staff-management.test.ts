@@ -274,7 +274,9 @@ describe('staff account management', () => {
     const later = await resets.issue(target.id);
     await admin
       .post(`staff-users/${target.id}/access-reset`, { temporaryPassword: TEMP })
-      .then((r) => expect(r.status, JSON.stringify(r.body)).toBe(200));
+      .then((r) => {
+        expect(r.status, JSON.stringify(r.body)).toBe(200);
+      });
     expect(await resets.peek(later.token)).toBeNull();
   });
 
