@@ -1259,6 +1259,44 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     await people.policyApprover.post(`verification-policies/${policy.id}/approve`).expect(200);
     const templateId = await template('MIGRATION', policy.id);
     const csrf = await studentCsrf(alice.agent);
+    const apply = () =>
+      alice.agent
+        .post('/api/v1/student/certificate-requests')
+        .set('X-CSRF-Token', csrf)
+        .send({ certificateType: 'MIGRATION', purpose: 'Transfer', submissionKey: randomUUID() });
+    // An application policy alone is not enough: the course must be approved for migration
+    // certificates (ADR-0018: more than 24 months, and an independently approved course set).
+    expect((await apply()).status).toBe(409);
+    await people.registrar
+      .patch(`programs/${s.programId}`, { durationValue: 3, durationUnit: 'YEARS' })
+      .expect(200);
+    expect((await apply()).status).toBe(409);
+    // Synthetic course set, proposed and decided by two different people (DB-enforced).
+    const eligibility = async (revision: number) => {
+      const row = await testDb().programCertificateEligibility.create({
+        data: {
+          programId: s.programId,
+          revision,
+          certificateTypes: ['TRANSCRIPT', 'PROVISIONAL', 'CHARACTER', 'MIGRATION'],
+          policyId: 'UNIVERSITY_COURSE_DURATION_CERTIFICATES',
+          policyVersion: 1,
+          durationMonths: 36,
+          tier: 'MORE_THAN_TWO_YEARS',
+          authorityReference: 'SYNTHETIC TEST ONLY',
+          proposedByUserId: people.registrar.user.id,
+        },
+      });
+      return testDb().programCertificateEligibility.update({
+        where: { id: row.id },
+        data: {
+          status: 'APPROVED',
+          version: 2,
+          decidedByUserId: people.proposer.user.id,
+          decidedAt: new Date(),
+        },
+      });
+    };
+    const approvedSet = await eligibility(1);
     const request = certificateRequestSchema.parse(
       (
         await alice.agent
@@ -1297,6 +1335,13 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
         })
       ).status,
     ).toBe(409);
+    // Preparation re-checks the course approval: once the set is superseded it is refused.
+    await testDb().programCertificateEligibility.update({
+      where: { id: approvedSet.id },
+      data: { status: 'SUPERSEDED', version: 3, supersededAt: new Date() },
+    });
+    expect((await upload(people.certAdmin, { ...base, requestId: request.id })).status).toBe(409);
+    await eligibility(2);
     const prepared = await upload(people.certAdmin, { ...base, requestId: request.id });
     expect(prepared.status, JSON.stringify(prepared.body)).toBe(201);
     const id = officialDocumentReceiptSchema.parse(prepared.body).id;
