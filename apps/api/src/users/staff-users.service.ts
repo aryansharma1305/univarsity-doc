@@ -1,16 +1,20 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { AUDIT_ACTIONS, ROLE_NAMES } from '@docversity/types';
+import type { Prisma } from '@docversity/database';
+import { AUDIT_ACTIONS, ROLE_DESCRIPTIONS, ROLE_NAMES, type RoleName } from '@docversity/types';
 import {
   ERROR_CODES,
   passwordPolicyViolations,
   type StaffAccessResetRequest,
+  type StaffCreateRequest,
   type StaffUser,
 } from '@docversity/validation';
 import { AuditService } from '../audit/audit.service.js';
 import { MfaService } from '../auth/mfa.service.js';
+import { PasswordResetStore } from '../auth/password-reset.store.js';
 import { PasswordService } from '../auth/password.service.js';
 import { SessionStore } from '../auth/session.store.js';
 import { AppError, Errors } from '../common/app-error.js';
+import { rethrowAsFieldConflict } from '../common/conflicts.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { UsersService } from './users.service.js';
 
@@ -32,6 +36,7 @@ export class StaffUsersService {
     private readonly passwords: PasswordService,
     private readonly mfa: MfaService,
     private readonly audit: AuditService,
+    private readonly resets: PasswordResetStore,
   ) {}
 
   async list(): Promise<StaffUser[]> {
@@ -58,6 +63,189 @@ export class StaffUsersService {
       passwordChangeRequired: row.passwordChangeRequired,
       createdAt: row.createdAt.toISOString(),
     }));
+  }
+
+  /**
+   * Creates a staff account with explicit roles. The temporary password must be changed at first
+   * sign-in and is never returned or audited. Duplicate emails are refused.
+   */
+  async create(actorUserId: string, input: StaffCreateRequest): Promise<StaffUser> {
+    this.checkPassword(input.temporaryPassword, input.email, input.displayName);
+    const passwordHash = await this.passwords.hashPassword(input.temporaryPassword);
+    const id = await this.prisma.client
+      .$transaction(async (tx) => {
+        if (await tx.user.findUnique({ where: { email: input.email }, select: { id: true } }))
+          throw new AppError(
+            HttpStatus.CONFLICT,
+            ERROR_CODES.conflict,
+            'A staff account with this email already exists.',
+            { details: [{ path: 'email', message: 'This email is already in use.' }] },
+          );
+        const roleIds = await this.roleIds(tx, input.roles);
+        const user = await tx.user.create({
+          data: {
+            email: input.email,
+            displayName: input.displayName,
+            passwordHash,
+            passwordChangeRequired: true,
+            roles: { create: roleIds.map((roleId) => ({ roleId })) },
+          },
+        });
+        await this.audit.writeAuditEvent(
+          {
+            actorUserId,
+            action: AUDIT_ACTIONS.adminCreated,
+            entityType: 'User',
+            entityId: user.id,
+            metadata: { via: 'api', roles: [...input.roles].sort(), mustChangeAtFirstSignIn: true },
+          },
+          tx,
+        );
+        return user.id;
+      })
+      .catch((error: unknown) =>
+        // A concurrent create with the same email loses at the unique index: same 409 as above.
+        rethrowAsFieldConflict(error, {
+          users_email_key: { path: 'email', message: 'This email is already in use.' },
+        }),
+      );
+    return this.one(id);
+  }
+
+  /**
+   * Replaces another staff member's roles. Your own roles cannot be changed (no self-escalation or
+   * self-lockout); removing SUPER_ADMIN from the last active SUPER_ADMIN is refused under the same
+   * lock as disabling. Permissions are re-read on every request, so the change applies at once.
+   */
+  async setRoles(actorUserId: string, targetUserId: string, roles: RoleName[]): Promise<StaffUser> {
+    if (actorUserId === targetUserId)
+      throw refused('Your own roles can only be changed by another SUPER_ADMIN.');
+    await this.prisma.client.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${SUPER_ADMIN_LOCK}, 0))`;
+      const target = await tx.user.findUnique({
+        where: { id: targetUserId },
+        select: { status: true, roles: { select: { role: { select: { name: true } } } } },
+      });
+      if (!target) throw Errors.notFound();
+      const before = target.roles.map((link) => link.role.name).sort();
+      const after = [...roles].sort();
+      if (before.join() === after.join()) return;
+      if (
+        target.status === 'ACTIVE' &&
+        before.includes(ROLE_NAMES.superAdmin) &&
+        !after.includes(ROLE_NAMES.superAdmin) &&
+        (await this.otherActiveSuperAdmins(tx, targetUserId)) === 0
+      )
+        throw refused('The last active SUPER_ADMIN must keep the SUPER_ADMIN role.');
+      const roleIds = await this.roleIds(tx, roles);
+      await tx.userRole.deleteMany({ where: { userId: targetUserId } });
+      await tx.userRole.createMany({
+        data: roleIds.map((roleId) => ({ userId: targetUserId, roleId })),
+      });
+      await this.audit.writeAuditEvent(
+        {
+          actorUserId,
+          action: AUDIT_ACTIONS.staffRolesChanged,
+          entityType: 'User',
+          entityId: targetUserId,
+          metadata: { before, after },
+        },
+        tx,
+      );
+    });
+    return this.one(targetUserId);
+  }
+
+  /**
+   * Re-enables a disabled account with a new temporary password (changed at next sign-in) and no
+   * authenticator, so whoever held the old credentials cannot sign in.
+   */
+  async enable(
+    actorUserId: string,
+    targetUserId: string,
+    temporaryPassword: string,
+  ): Promise<StaffUser> {
+    if (actorUserId === targetUserId) throw refused('You cannot re-enable your own account.');
+    const target = await this.users.findForAuthById(targetUserId);
+    if (!target) throw Errors.notFound();
+    this.checkPassword(temporaryPassword, target.email, target.displayName);
+    const passwordHash = await this.passwords.hashPassword(temporaryPassword);
+    await this.prisma.client.$transaction(
+      async (tx) => {
+        const changed = await tx.user.updateMany({
+          where: { id: targetUserId, status: 'DISABLED' },
+          data: {
+            status: 'ACTIVE',
+            passwordHash,
+            passwordChangeRequired: true,
+            mfaTotpSecretEnc: null,
+            mfaTotpLastUsedStep: null,
+            mfaEnabledAt: null,
+          },
+        });
+        if (changed.count === 0) throw refused('This account is not disabled.');
+        const codes = await tx.staffMfaRecoveryCode.deleteMany({ where: { userId: targetUserId } });
+        // Keep the row locked and the account disabled to other transactions until MFA cleanup succeeds.
+        await this.mfa.clearEnrollmentAndLockout(targetUserId);
+        // Reset links from before the disable never sign anyone in after re-enablement.
+        await this.resets.revokeForUser(targetUserId);
+        await this.audit.writeAuditEvent(
+          {
+            actorUserId,
+            action: AUDIT_ACTIONS.userEnabled,
+            entityType: 'User',
+            entityId: targetUserId,
+            metadata: { temporaryLoginSet: true, recoveryCodesRemoved: codes.count },
+          },
+          tx,
+        );
+      },
+      // MFA Redis operations can take up to five seconds. Leave time to finish the SQL transaction.
+      { timeout: 10_000 },
+    );
+    return this.one(targetUserId);
+  }
+
+  private async one(id: string): Promise<StaffUser> {
+    const user = (await this.list()).find((row) => row.id === id);
+    if (!user) throw Errors.notFound();
+    return user;
+  }
+
+  private checkPassword(password: string, email: string, displayName: string) {
+    const problems = passwordPolicyViolations(password, { email, displayName });
+    if (problems.length > 0)
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        ERROR_CODES.authPasswordPolicy,
+        'Choose a stronger temporary password.',
+        {
+          details: problems.map((problem) => ({
+            path: 'temporaryPassword',
+            message: `Password ${problem}.`,
+          })),
+        },
+      );
+  }
+
+  /** Role rows for code-defined role names, creating any missing record (never other roles). */
+  private async roleIds(tx: Prisma.TransactionClient, roles: RoleName[]) {
+    await tx.role.createMany({
+      data: roles.map((name) => ({ name, description: ROLE_DESCRIPTIONS[name] })),
+      skipDuplicates: true,
+    });
+    const rows = await tx.role.findMany({ where: { name: { in: roles } }, select: { id: true } });
+    return rows.map((row) => row.id);
+  }
+
+  private otherActiveSuperAdmins(tx: Prisma.TransactionClient, userId: string) {
+    return tx.user.count({
+      where: {
+        id: { not: userId },
+        status: 'ACTIVE',
+        roles: { some: { role: { name: ROLE_NAMES.superAdmin } } },
+      },
+    });
   }
 
   /**
@@ -108,6 +296,7 @@ export class StaffUsersService {
       });
       const codes = await tx.staffMfaRecoveryCode.deleteMany({ where: { userId: targetUserId } });
       const revoked = await this.sessions.revokeAllForUser(targetUserId);
+      await this.resets.revokeForUser(targetUserId);
       await this.audit.writeAuditEvent(
         {
           actorUserId,

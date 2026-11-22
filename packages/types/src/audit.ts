@@ -38,6 +38,10 @@ export const AUDIT_ACTIONS = {
   mfaEnrollmentCleanupIncomplete: 'MFA_ENROLLMENT_CLEANUP_INCOMPLETE',
   mfaRecoveryCodeUsed: 'MFA_RECOVERY_CODE_USED',
   staffAccessReset: 'STAFF_ACCESS_RESET',
+  /** A SUPER_ADMIN replaced another staff member's roles. Metadata: role names before/after. */
+  staffRolesChanged: 'STAFF_ROLES_CHANGED',
+  /** A SUPER_ADMIN re-enabled a disabled staff account (a new password is required). */
+  userEnabled: 'USER_ENABLED',
   adminCreated: 'ADMIN_CREATED',
   departmentCreated: 'DEPARTMENT_CREATED',
   departmentUpdated: 'DEPARTMENT_UPDATED',

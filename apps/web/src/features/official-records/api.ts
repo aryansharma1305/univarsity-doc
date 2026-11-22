@@ -28,6 +28,15 @@ export const officialApi = {
     apiRequest('POST', `official-documents/${id}/${action}`, officialDocumentReceiptSchema, {
       body: reason ? { reason } : {},
     }),
+  verificationLink: (id: string) =>
+    apiRequest(
+      'POST',
+      `official-documents/${id}/verification-link`,
+      officialDocumentReceiptSchema,
+      {
+        body: {},
+      },
+    ),
   prepare: (body: unknown, file: File) => {
     const form = new FormData();
     form.set('metadata', JSON.stringify(body));

@@ -29,6 +29,7 @@ import { AdminBreadcrumbs } from './admin-breadcrumbs';
 import { BreadcrumbLabelProvider } from './breadcrumb-context';
 import { NAV_GROUPS, visibleAdminNav } from './nav';
 import { activeNavHref } from './nav-groups';
+import { NotificationsLink } from './notifications-link';
 import { UserMenu } from './user-menu';
 
 const COLLAPSE_KEY = 'docversity.admin.sidebarCollapsed';
@@ -268,6 +269,7 @@ export function AdminShell({ user, children }: { user: AuthUser; children: React
                   <div className="min-w-0 flex-1">
                     <AdminBreadcrumbs />
                   </div>
+                  <NotificationsLink />
                   <UserMenu />
                 </header>
                 <main

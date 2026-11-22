@@ -58,12 +58,14 @@ describe('secrets never reach logs', () => {
         password: 'x',
         headers: { cookie: 'c', authorization: 'a' },
         sessionId: 's',
+        receipt: { verificationUrl: 'https://x.invalid/verify/certificate#token=t' },
         count: 2,
       }),
     ).toEqual({
       password: REDACTED,
       headers: { cookie: REDACTED, authorization: REDACTED },
       sessionId: REDACTED,
+      receipt: { verificationUrl: REDACTED },
       count: 2,
     });
   });
