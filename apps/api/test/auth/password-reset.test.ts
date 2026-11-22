@@ -109,7 +109,14 @@ describe('password reset with a (test) delivery channel', () => {
     const user = await createTestUser();
     const token = randomToken();
     const prefix = app.get<ApiConfig>(API_CONFIG).REDIS_KEY_PREFIX;
-    await app.get(RedisService).client.set(`${prefix}pwreset:${sha256(token)}`, user.id, 'EX', 60);
+    const redis = app.get(RedisService).client;
+    const tokenHash = sha256(token);
+    await redis
+      .multi()
+      .set(`${prefix}pwreset:${tokenHash}`, user.id, 'EX', 60)
+      .set(`${prefix}pwreset-user:${user.id}`, tokenHash, 'EX', 60)
+      .exec();
+    expect(await app.get(PasswordResetStore).peek(token)).toBeNull();
     await expectInvalidLink(token);
   });
 
