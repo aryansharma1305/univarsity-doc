@@ -168,33 +168,37 @@ export class StaffUsersService {
     if (!target) throw Errors.notFound();
     this.checkPassword(temporaryPassword, target.email, target.displayName);
     const passwordHash = await this.passwords.hashPassword(temporaryPassword);
-    await this.prisma.client.$transaction(async (tx) => {
-      const changed = await tx.user.updateMany({
-        where: { id: targetUserId, status: 'DISABLED' },
-        data: {
-          status: 'ACTIVE',
-          passwordHash,
-          passwordChangeRequired: true,
-          mfaTotpSecretEnc: null,
-          mfaTotpLastUsedStep: null,
-          mfaEnabledAt: null,
-        },
-      });
-      if (changed.count === 0) throw refused('This account is not disabled.');
-      const codes = await tx.staffMfaRecoveryCode.deleteMany({ where: { userId: targetUserId } });
-      await this.audit.writeAuditEvent(
-        {
-          actorUserId,
-          action: AUDIT_ACTIONS.userEnabled,
-          entityType: 'User',
-          entityId: targetUserId,
-          metadata: { temporaryLoginSet: true, recoveryCodesRemoved: codes.count },
-        },
-        tx,
-      );
-    });
-    await this.mfa.discardEnrollment(targetUserId);
-    await this.mfa.clearLockout(targetUserId);
+    await this.prisma.client.$transaction(
+      async (tx) => {
+        const changed = await tx.user.updateMany({
+          where: { id: targetUserId, status: 'DISABLED' },
+          data: {
+            status: 'ACTIVE',
+            passwordHash,
+            passwordChangeRequired: true,
+            mfaTotpSecretEnc: null,
+            mfaTotpLastUsedStep: null,
+            mfaEnabledAt: null,
+          },
+        });
+        if (changed.count === 0) throw refused('This account is not disabled.');
+        const codes = await tx.staffMfaRecoveryCode.deleteMany({ where: { userId: targetUserId } });
+        // Keep the row locked and the account disabled to other transactions until MFA cleanup succeeds.
+        await this.mfa.clearEnrollmentAndLockout(targetUserId);
+        await this.audit.writeAuditEvent(
+          {
+            actorUserId,
+            action: AUDIT_ACTIONS.userEnabled,
+            entityType: 'User',
+            entityId: targetUserId,
+            metadata: { temporaryLoginSet: true, recoveryCodesRemoved: codes.count },
+          },
+          tx,
+        );
+      },
+      // MFA Redis operations can take up to five seconds. Leave time to finish the SQL transaction.
+      { timeout: 10_000 },
+    );
     return this.one(targetUserId);
   }
 

@@ -1,7 +1,8 @@
 import type { INestApplication } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createHash, randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { staffUserSchema } from '@docversity/validation';
+import { RedisService } from '../../src/redis/redis.service.js';
 import { StaffUsersService } from '../../src/users/staff-users.service.js';
 import {
   type Staff,
@@ -245,5 +246,44 @@ describe('staff account management', () => {
           .send({ email: target.email, password: TEST_PASSWORD })
       ).status,
     ).toBe(401);
+  });
+
+  it('keeps re-enablement retryable when MFA cleanup fails', async () => {
+    const target = await createTestUser({ roles: ['VIEWER'] });
+    await admin.post(`staff-users/${target.id}/disable`, { reason: 'OTHER' }).expect(200);
+    const db = testDb();
+    const recovery = await db.staffMfaRecoveryCode.create({
+      data: {
+        userId: target.id,
+        codeHash: createHash('sha256').update(randomUUID()).digest('hex'),
+      },
+    });
+    const before = await db.user.findUniqueOrThrow({ where: { id: target.id } });
+    const auditWhere = { action: 'USER_ENABLED', entityId: target.id };
+    const redis = app.get(RedisService).client;
+    const outage = vi
+      .spyOn(redis, 'del')
+      .mockRejectedValueOnce(new Error('Synthetic Redis outage'));
+    const enable = () => admin.post(`staff-users/${target.id}/enable`, { temporaryPassword: TEMP });
+    try {
+      const failed = await enable().expect(503);
+      expect(errorOf(failed).code).toBe('AUTH_SERVICE_UNAVAILABLE');
+    } finally {
+      outage.mockRestore();
+    }
+    const after = await db.user.findUniqueOrThrow({ where: { id: target.id } });
+    expect(after.status).toBe('DISABLED');
+    expect(after.passwordHash === before.passwordHash).toBe(true);
+    expect(await db.staffMfaRecoveryCode.count({ where: { id: recovery.id } })).toBe(1);
+    expect(await db.auditLog.count({ where: auditWhere })).toBe(0);
+
+    const retried = await enable().expect(200);
+    expect(staffUserSchema.parse(retried.body)).toMatchObject({
+      status: 'ACTIVE',
+      passwordChangeRequired: true,
+      mfaEnabled: false,
+    });
+    expect(await db.staffMfaRecoveryCode.count({ where: { id: recovery.id } })).toBe(0);
+    expect(await db.auditLog.count({ where: auditWhere })).toBe(1);
   });
 });

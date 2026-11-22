@@ -88,6 +88,11 @@ notifier is configured), so recovery must work without email.
    `USER_DISABLED`, refuses self and the last active SUPER_ADMIN) reuses `UsersService.disableUser` to
    retire demo accounts. The last-SUPER_ADMIN count and the status change run in one transaction under
    `pg_advisory_xact_lock`, so concurrent disables cannot remove the last one.
+
+   Re-enabling a disabled staff account clears its pending MFA enrollment and lockout before the
+   account update and audit commit. If Redis cleanup fails, the account stays disabled and the
+   administrator can retry.
+
 5. Roles and permissions are unchanged; student authentication is untouched (student routes skip the
    staff guard entirely).
 
