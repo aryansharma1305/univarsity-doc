@@ -165,11 +165,19 @@ export class OfficialDocumentsService {
    */
   async credentialLink(id: string, actor: string) {
     const c = await this.prisma.client.certificate.findUnique({ where: { id } });
+    const snapshot = officialDocumentSnapshotSchema.safeParse(c?.sourceSnapshot);
+    // Same visibility as the owner's list: issued under a policy that is still current.
     if (
       c?.status !== 'ISSUED' ||
       !c.verificationToken ||
       !c.certificateNumber ||
-      !officialDocumentSnapshotSchema.safeParse(c.sourceSnapshot).success
+      !snapshot.success ||
+      !(await this.policies.current(
+        c.documentType === 'ADMISSION_LETTER' ? 'admission-letter' : 'certificate',
+        c.programId,
+        this.prisma.client,
+        snapshot.data.policyId,
+      ))
     )
       throw Errors.notFound();
     await this.audit.writeAuditEvent({

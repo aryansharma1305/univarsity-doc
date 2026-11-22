@@ -384,6 +384,10 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     await people.certAdmin.post(`official-documents/${docs.admission.id}/approve`).expect(403);
     await people.approver.post(`official-documents/${docs.admission.id}/issue`).expect(409);
     await people.approver.post(`official-documents/${docs.admission.id}/approve`).expect(200);
+    // An approved but unissued document has no credential to hand out.
+    await people.approver
+      .post(`official-documents/${docs.admission.id}/verification-link`)
+      .expect(404);
     expect(
       (await verify('admission-letter', { reference: docs.admission.number })).body?.status,
     ).toBe('NOT_FOUND');
@@ -530,9 +534,9 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
   });
 
   it('A8b QR links: the owner lists their own; staff with certificates.issue retrieve one (audited)', async () => {
-    const list = studentIssuedDocumentsSchema.parse(
-      (await alice.agent.get('/api/v1/student/official-documents').expect(200)).body,
-    );
+    const listed = await alice.agent.get('/api/v1/student/official-documents').expect(200);
+    expect(listed.headers['cache-control']).toBe('no-store');
+    const list = studentIssuedDocumentsSchema.parse(listed.body);
     const own = list.find((d) => d.id === docs.admission.id);
     expect(own?.verificationUrl).toMatch(/\/verify\/admission-letter#token=[A-Za-z0-9_-]{43}$/);
     expect(tokenOf(own?.verificationUrl)).toBe(docs.admission.token);
