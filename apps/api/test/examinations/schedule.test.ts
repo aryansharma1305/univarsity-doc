@@ -153,5 +153,42 @@ describe('examination timetable', () => {
       ],
     });
     expect(locked.status).toBe(409);
+    // Archived: publication state cannot change either.
+    expect((await examAdmin.post(`examinations/${exam.id}/schedule/publish`)).status).toBe(409);
+    expect((await examAdmin.post(`examinations/${exam.id}/schedule/unpublish`)).status).toBe(409);
+  });
+
+  it('keeps a published timetable non-empty and blocks period changes that would leave it stale', async () => {
+    const fixture = await academicFixture(app, registrar, { subjectsPerPeriod: 1 });
+    const exam = await examination(examAdmin, fixture, { period: 1 });
+    const subject = (await read(examAdmin, exam.id)).subjects[0];
+    const items = [
+      {
+        programSubjectId: subject?.programSubjectId,
+        examDate: '2026-12-03',
+        startTime: '10:00',
+        endTime: '13:00',
+        venue: null,
+      },
+    ];
+    await examAdmin.patch(`examinations/${exam.id}/schedule`, { items }).expect(200);
+    // Draft record: moving it to another period while sittings exist is refused.
+    const moved = await examAdmin.patch(`examinations/${exam.id}`, { periodNumber: 2 });
+    expect(moved.status).toBe(409);
+    expect(errorOf(moved).message).toMatch(/Clear the timetable/);
+    await examAdmin.patch(`examinations/${exam.id}/schedule`, { items: [] }).expect(200);
+    await examAdmin.patch(`examinations/${exam.id}`, { periodNumber: 2 }).expect(200);
+    await examAdmin.patch(`examinations/${exam.id}`, { periodNumber: 1 }).expect(200);
+
+    await examAdmin.post(`examinations/${exam.id}/open`).expect(200);
+    await examAdmin.patch(`examinations/${exam.id}/schedule`, { items }).expect(200);
+    await examAdmin.post(`examinations/${exam.id}/schedule/publish`).expect(200);
+    // Published: emptying it is refused; withdraw first.
+    const emptied = await examAdmin.patch(`examinations/${exam.id}/schedule`, { items: [] });
+    expect(emptied.status).toBe(409);
+    expect(errorOf(emptied).message).toMatch(/Withdraw the published timetable/);
+    expect((await read(examAdmin, exam.id)).items).toHaveLength(1);
+    await examAdmin.post(`examinations/${exam.id}/schedule/unpublish`).expect(200);
+    await examAdmin.patch(`examinations/${exam.id}/schedule`, { items: [] }).expect(200);
   });
 });

@@ -391,6 +391,12 @@ export class ExaminationsService {
       if (input.periodNumber !== undefined && before.curriculumId) {
         await this.checkCurriculumPeriod(tx, before.curriculumId, input.periodNumber);
       }
+      if (
+        input.periodNumber !== undefined &&
+        input.periodNumber !== before.semesterNumber &&
+        (await tx.examinationScheduleItem.count({ where: { examinationId: id } }))
+      )
+        throw notEditable('Clear the timetable before changing the examination period.');
       if (input.academicSessionId !== undefined) {
         await this.checkSession(tx, input.academicSessionId);
       }
@@ -502,6 +508,8 @@ export class ExaminationsService {
     await this.prisma.client.$transaction(async (tx) => {
       const exam = await this.lock(tx, id);
       if (exam.status === 'ARCHIVED') throw notEditable('Archived examinations cannot change.');
+      if (exam.schedulePublishedAt && input.items.length === 0)
+        throw notEditable('Withdraw the published timetable before removing every sitting.');
       if (!exam.curriculumId)
         throw notEditable('Link the examination to a curriculum version before scheduling.');
       const allowed = new Set(
@@ -565,6 +573,7 @@ export class ExaminationsService {
   async publishSchedule(id: string, publish: boolean, actorUserId: string) {
     await this.prisma.client.$transaction(async (tx) => {
       const exam = await this.lock(tx, id);
+      if (exam.status === 'ARCHIVED') throw notEditable('Archived examinations cannot change.');
       if (publish) {
         if (exam.status !== 'OPEN')
           throw notEditable('Open the examination before publishing its timetable.');
