@@ -6,8 +6,8 @@
  *   STAFF_EMAIL=… STAFF_TEMP_PASSWORD=… pnpm staff:reset-access   non-interactive
  *
  * Removes the authenticator and recovery codes, sets the temporary password and requires a new one at
- * next sign-in. All existing sessions stop working (they are bound to the password hash). Never prints
- * the password. Email reset stays disabled; hand the temporary password over out of band.
+ * next sign-in. Existing sessions and reset links stop working. Hand the temporary password over
+ * out of band.
  */
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   try {
     const result = await resetStaffAccess(db, { email, temporaryPassword });
     console.log(
-      `Reset access for ${result.email} (id ${result.id}): authenticator ${
+      `Staff access reset: authenticator ${
         result.mfaWasEnabled ? 'removed' : 'was not set up'
       }, temporary password set, new password required at next sign-in.`,
     );

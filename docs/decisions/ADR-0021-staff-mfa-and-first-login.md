@@ -81,8 +81,8 @@ notifier is configured), so recovery must work without email.
    recovery codes, replaces the password with a **required**, policy-checked temporary password — so
    anyone who knew the old password is locked out — sets the password-change flag, clears the MFA
    lockout, revokes all sessions; audited `STAFF_ACCESS_RESET`). When no administrator can sign in, the operator CLI
-   `pnpm staff:reset-access` does the same on the server with a mandatory temporary password (all
-   sessions die because they are bound to the password hash).
+   `pnpm staff:reset-access` performs credential recovery on the server with a mandatory temporary
+   password. Sessions and issued email reset links become invalid when the SQL change commits.
 4. **Session revocation** on password change (others), MFA enrollment (others), access reset (all) and
    account disable (all). `POST /api/v1/staff-users/:id/disable` (SUPER_ADMIN, reason code, audited
    `USER_DISABLED`, refuses self and the last active SUPER_ADMIN) reuses `UsersService.disableUser` to
@@ -128,6 +128,7 @@ does not know about MFA) — roll back only in an emergency, and turn enforcemen
 - Recovery-code regeneration and self-service MFA removal are not built; an access reset covers both.
 - Synthetic test fixtures (`prepare-e2e.mjs`, `deploy/scripts/fixture.mjs`,
   `deploy/coexist/full_stack_fixture.mjs`) pass `requirePasswordChange: false` explicitly.
-- Disabling, re-enabling or resetting a staff account also revokes any outstanding password-reset
-  link (`PasswordResetStore.revokeForUser`, inside the same transaction), so a link requested before
-  a disable can never sign anyone in after the account is re-enabled.
+- Web staff actions still delete outstanding links through `PasswordResetStore.revokeForUser`.
+  Redemption also checks a keyed binding to the current staff password hash and MFA state. This
+  invalidates links when the direct database CLI commits a credential reset, including links whose
+  issuance races the reset. Email recovery is unavailable during a required password handover.

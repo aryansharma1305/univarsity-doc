@@ -59,8 +59,8 @@ The browser only ever talks to the web origin, so the session cookie is **host-o
 | `dv:session:<sha256(sessionId)>` | `{ publicId, userId, createdAt, lastSeenAt, absoluteExpiresAt, device, ipHash }` | min(idle timeout, time to absolute expiry) |
 | `dv:user-sessions:<userId>`      | SET of session hashes (listing, revoke-all)                                      | absolute lifetime                          |
 | `dv:rl:<scope>:<key>`            | attempt counter                                                                  | rate-limit window                          |
-| `dv:pwreset:<sha256(token)>`     | userId                                                                           | reset-token TTL                            |
-| `dv:pwreset-user:<userId>`       | sha256 of the user's current reset token                                         | reset-token TTL                            |
+| `dv:pwreset-v2:<sha256(token)>`  | User ID and keyed credential binding                                             | reset-token TTL                            |
+| `dv:pwreset-v2-user:<userId>`    | SHA-256 of the user's current reset token                                        | reset-token TTL                            |
 
 No passwords, raw IPs, raw User-Agents, raw emails or CSRF tokens are stored. `device` is a coarse
 "Chrome on macOS" summary; `ipHash`/email hashes are HMAC-SHA256 with `SESSION_SECRET`.
@@ -175,11 +175,12 @@ attempt in a window is audited (`reason: rate_limited`), not every attempt. Also
 
 ## Password reset (backend foundation)
 
-- `POST /api/v1/auth/forgot-password` → single-use 256-bit token; only `sha256(token)` is stored in Redis
-  (30 min TTL); a new request invalidates the previous token; the link carries the token in the URL
+- `POST /api/v1/auth/forgot-password` → single-use 256-bit token; Redis stores its digest and keyed
+  credential binding (30 min TTL); a new request invalidates the previous token; the link carries the token in the URL
   **fragment** (`/admin/reset-password#token=…`) so it never reaches server logs or `Referer`.
-- `POST /api/v1/auth/reset-password` → policy checked **before** the token is consumed; token consumed
-  atomically (`GETDEL`); password replaced; **all** sessions revoked; `AUTH_PASSWORD_RESET` audited.
+- `POST /api/v1/auth/reset-password` → credential binding and password policy checked before consumption;
+  Redis atomically compares and removes the current token; password replaced; all sessions revoked;
+  `AUTH_PASSWORD_RESET` audited.
 - **Email delivery does not exist yet.** The default `PasswordResetNotifier` reports "not configured", and
   forgot-password answers `503 PASSWORD_RESET_UNAVAILABLE` for every address — it never pretends an email
   was sent. The reset page in the web app is not built yet. Until mail is available, an administrator
@@ -378,9 +379,11 @@ pnpm staff:reset-access                                        # prompts; tempor
 STAFF_EMAIL=… STAFF_TEMP_PASSWORD=… pnpm staff:reset-access    # non-interactive
 ```
 
-Removes the authenticator and recovery codes, sets the temporary password and the password-change flag,
-audits `STAFF_ACCESS_RESET (via: cli)`. Existing sessions stop working at once (bound to the password
-hash). Email reset stays disabled.
+Removes the authenticator and recovery codes, sets a different temporary password and the password-change flag,
+and audits `STAFF_ACCESS_RESET (via: cli)`. Existing sessions and reset links stop working at commit.
+Email reset is unavailable for that account during the temporary-password handover. With
+`STAFF_MFA_ENFORCED=true`, the user must then enroll MFA before gaining access to staff routes.
+The CLI prints a generic confirmation and keeps the target account ID in the audit record.
 
 **Configuration.** `STAFF_MFA_ENCRYPTION_KEY` (64 hex chars, never equal to `SESSION_SECRET`) is
 required in production and whenever `STAFF_MFA_ENFORCED=true`; without it (development only) enrollment answers `503 MFA_UNAVAILABLE`.

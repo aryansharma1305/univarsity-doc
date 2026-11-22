@@ -5,6 +5,8 @@ import { PasswordResetStore } from '../../src/auth/password-reset.store.js';
 import { RedisService } from '../../src/redis/redis.service.js';
 import { API_CONFIG, type ApiConfig } from '../../src/config/api-config.js';
 import { createTestApp, realConfig } from '../helpers.js';
+
+const credential = () => ({ userId: randomUUID(), credentialVersion: 'a'.repeat(64) });
 let app: INestApplication;
 beforeAll(async () => {
   app = await createTestApp(realConfig());
@@ -17,8 +19,8 @@ it('keeps only one live reset link when requests issue concurrently', async () =
   const store = app.get(PasswordResetStore);
   const redis = app.get(RedisService).client;
   const config = app.get<ApiConfig>(API_CONFIG);
-  const userId = randomUUID();
-  const key = `${config.REDIS_KEY_PREFIX}pwreset-user:${userId}`;
+  const binding = credential();
+  const key = `${config.REDIS_KEY_PREFIX}pwreset-v2-user:${binding.userId}`;
   const read = redis.get.bind(redis);
   let arrivals = 0;
   let release: () => void = () => undefined;
@@ -35,7 +37,7 @@ it('keeps only one live reset link when requests issue concurrently', async () =
   });
   let tokens: { token: string }[];
   try {
-    tokens = await Promise.all([store.issue(userId), store.issue(userId)]);
+    tokens = await Promise.all([store.issue(binding), store.issue(binding)]);
   } finally {
     spy.mockRestore();
   }
@@ -46,13 +48,16 @@ it('keeps only one live reset link when requests issue concurrently', async () =
 it('does not lose the current reset pointer when consuming and issuing concurrently', async () => {
   const store = app.get(PasswordResetStore);
   for (let i = 0; i < 10; i++) {
-    const userId = randomUUID();
-    const previous = await store.issue(userId);
-    const [, next] = await Promise.all([store.consume(previous.token), store.issue(userId)]);
-    const newest = await store.issue(userId);
+    const binding = credential();
+    const previous = await store.issue(binding);
+    const [, next] = await Promise.all([
+      store.consume(previous.token, binding),
+      store.issue(binding),
+    ]);
+    const newest = await store.issue(binding);
     expect(await store.peek(next.token)).toBeNull();
-    expect(await store.peek(newest.token)).toBe(userId);
-    expect(await store.consume(newest.token)).toBe(userId);
-    expect(await store.consume(newest.token)).toBeNull();
+    expect(await store.peek(newest.token)).toEqual(binding);
+    expect(await store.consume(newest.token, binding)).toBe(true);
+    expect(await store.consume(newest.token, binding)).toBe(false);
   }
 });

@@ -16,14 +16,14 @@ export interface ResetStaffAccessInput {
  * - removes the authenticator secret and every recovery code;
  * - sets a temporary password and the password-change flag;
  * - re-enables nothing: a DISABLED account stays disabled.
- * Every existing session stops working immediately because sessions are bound to the password hash
- * (the AuthGuard compares the binding on every request). Audited as STAFF_ACCESS_RESET (via: cli).
+ * Sessions and password-reset links stop working at commit because both are bound to the password
+ * hash. Audited as STAFF_ACCESS_RESET (via: cli).
  */
 export async function resetStaffAccess(
   db: PrismaClient,
   input: ResetStaffAccessInput,
   passwords: PasswordService = new PasswordService(),
-): Promise<{ id: string; email: string; mfaWasEnabled: boolean; status: string }> {
+): Promise<{ id: string; mfaWasEnabled: boolean; status: string }> {
   const email = emailSchema.safeParse(input.email);
   if (!email.success) throw new CreateAdminError('Enter a valid email address.');
   const user = await db.user.findUnique({ where: { email: email.data } });
@@ -37,11 +37,23 @@ export async function resetStaffAccess(
       `Temporary password rejected: ${problems.map((p) => `password ${p}`).join('; ')}.`,
     );
   }
+  if (
+    user.passwordHash &&
+    (await passwords.verifyPassword(user.passwordHash, input.temporaryPassword))
+  ) {
+    throw new CreateAdminError('Choose a temporary password different from the current password.');
+  }
   const passwordHash = await passwords.hashPassword(input.temporaryPassword);
   const mfaWasEnabled = user.mfaEnabledAt !== null;
   await db.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: user.id },
+    const updated = await tx.user.updateMany({
+      where: {
+        id: user.id,
+        email: email.data,
+        passwordHash: user.passwordHash,
+        mfaEnabledAt: user.mfaEnabledAt,
+        status: user.status,
+      },
       data: {
         passwordHash,
         passwordChangeRequired: true,
@@ -50,6 +62,11 @@ export async function resetStaffAccess(
         mfaEnabledAt: null,
       },
     });
+    if (updated.count !== 1) {
+      throw new CreateAdminError(
+        'The account changed during the reset. Verify the account and retry.',
+      );
+    }
     const codes = await tx.staffMfaRecoveryCode.deleteMany({ where: { userId: user.id } });
     await tx.auditLog.create({
       data: {
@@ -65,5 +82,5 @@ export async function resetStaffAccess(
       },
     });
   });
-  return { id: user.id, email: user.email, mfaWasEnabled, status: user.status };
+  return { id: user.id, mfaWasEnabled, status: user.status };
 }

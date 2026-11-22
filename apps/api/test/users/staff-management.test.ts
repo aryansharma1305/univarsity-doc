@@ -259,19 +259,21 @@ describe('staff account management', () => {
         .send({ token, newPassword: 'Someone else chose this 2026!' });
     };
     const target = await createTestUser({ roles: ['SUPER_ADMIN'] });
+    const credential = { userId: target.id, credentialVersion: 'a'.repeat(64) };
     // A link requested while the account was active (e.g. by a departing staff member).
-    const before = await resets.issue(target.id);
+    const before = await resets.issue(credential);
     await admin.post(`staff-users/${target.id}/disable`, { reason: 'OTHER' }).expect(200);
     expect(await resets.peek(before.token)).toBeNull();
     // Even a link that reappears is gone after re-enablement.
-    const during = await resets.issue(target.id);
+    const during = await resets.issue(credential);
     await admin.post(`staff-users/${target.id}/enable`, { temporaryPassword: TEMP }).expect(200);
+    expect(await resets.peek(during.token)).toBeNull();
     expect((await reset(before.token)).status).toBe(400);
     expect((await reset(during.token)).status).toBe(400);
     const row = await testDb().user.findUniqueOrThrow({ where: { id: target.id } });
     expect(row.passwordChangeRequired).toBe(true);
     // Access reset revokes too.
-    const later = await resets.issue(target.id);
+    const later = await resets.issue(credential);
     await admin
       .post(`staff-users/${target.id}/access-reset`, { temporaryPassword: TEMP })
       .then((r) => {

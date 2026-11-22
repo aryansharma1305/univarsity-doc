@@ -16,7 +16,7 @@ import { UsersService, type UserForAuth } from '../users/users.service.js';
 import type { AuthContext } from './auth.decorators.js';
 import { describeUser } from './auth-user.js';
 import { summariseUserAgent } from './device-summary.js';
-import { IdentifierHasher } from './identifier-hasher.js';
+import { IdentifierHasher, safeEqual } from './identifier-hasher.js';
 import { MFA_PENDING_SESSION_SECONDS, MfaService } from './mfa.service.js';
 import { PASSWORD_RESET_NOTIFIER, type PasswordResetNotifier } from './password-reset.notifier.js';
 import { PasswordResetStore } from './password-reset.store.js';
@@ -274,9 +274,12 @@ export class AuthService {
     if (limit.limited) throw Errors.rateLimited(limit.retryAfterSeconds);
 
     const user = await this.users.findForAuthByEmail(email);
-    if (user?.status !== 'ACTIVE') return;
+    if (user?.status !== 'ACTIVE' || user.passwordChangeRequired) return;
 
-    const { token, expiresAt } = await this.resets.issue(user.id);
+    const { token, expiresAt } = await this.resets.issue({
+      userId: user.id,
+      credentialVersion: this.resetCredentialVersion(user),
+    });
     // The token travels in the URL fragment, which browsers never send to servers or in Referer.
     const resetUrl = `${new URL(this.config.WEB_URL).origin}/admin/reset-password#token=${encodeURIComponent(token)}`;
     await this.resetNotifier.sendResetLink({
@@ -302,16 +305,23 @@ export class AuthService {
         ERROR_CODES.authInvalidResetToken,
         'This password reset link is invalid or has expired.',
       );
-    const pendingUserId = await this.resets.peek(input.token);
-    const user = pendingUserId ? await this.users.findForAuthById(pendingUserId) : null;
-    if (user?.status !== 'ACTIVE') throw invalid();
+    const pending = await this.resets.peek(input.token);
+    if (!pending) throw invalid();
+    const user = await this.users.findForAuthById(pending.userId);
+    if (
+      user?.status !== 'ACTIVE' ||
+      user.passwordChangeRequired ||
+      !safeEqual(pending.credentialVersion, this.resetCredentialVersion(user))
+    ) {
+      throw invalid();
+    }
     // Check the policy before consuming the token so a rejected password doesn't burn the link.
     assertPasswordPolicy(input.newPassword, user);
-    if ((await this.resets.consume(input.token)) !== user.id) throw invalid();
+    if (!(await this.resets.consume(input.token, pending))) throw invalid();
 
     const passwordHash = await this.passwords.hashPassword(input.newPassword);
     try {
-      await this.users.setPasswordHash(user.id, passwordHash, user.passwordHash);
+      await this.users.setPasswordHash(user.id, passwordHash, user.passwordHash, user.mfaEnabledAt);
     } catch (error) {
       if (error instanceof AppError && error.code === ERROR_CODES.authInvalidCredentials)
         throw invalid();
@@ -325,6 +335,14 @@ export class AuthService {
       entityId: user.id,
       metadata: { sessionsRevoked: revoked },
     });
+  }
+
+  private resetCredentialVersion(user: UserForAuth): string {
+    // Password changes invalidate prior links at commit, including issue requests still in flight.
+    return this.hasher.hash(
+      'password-reset-credential',
+      JSON.stringify([user.id, user.passwordHash, user.mfaEnabledAt]),
+    );
   }
 
   private async auditLoginFailure(
