@@ -67,6 +67,7 @@ export class StudentsService {
         where,
         include: {
           registrations: {
+            ...(query.academicSessionId ? { where: registrationFilter } : {}),
             orderBy: { createdAt: 'desc' },
             take: 1,
             include: {

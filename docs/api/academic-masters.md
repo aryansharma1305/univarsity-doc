@@ -42,6 +42,9 @@ rejected (`400 VALIDATION_FAILED`). Malformed or unknown IDs answer `404`.
 | `POST /registrations`                                     | `registrations.write`                    | Adds a registration to an existing student                                                 |
 | `PATCH /registrations/:id`                                | `registrations.write`                    | Includes status changes                                                                    |
 
+When `GET /students` includes `academicSessionId`, `latestRegistration` is the newest registration
+that matches the session and any supplied `programId` and `status` filters.
+
 ## Business rules (server-side)
 
 - **No deletes.** Departments, programs and sessions are deactivated/archived via `status`; students and
