@@ -342,6 +342,8 @@ export const studentIssuedDocumentsSchema = z.array(
     documentType: z.string(),
     certificateNumber: z.string(),
     issueDate: z.string(),
+    /** The owner's own QR verification link (credential in the fragment). */
+    verificationUrl: z.url().optional(),
   }),
 );
 

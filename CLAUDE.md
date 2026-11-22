@@ -161,6 +161,7 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261129090000_result_verification_token` (marksheet QR credential per publication; ADR-0024),
   `20261202090000_migration_certificate_type` (`DocumentType.MIGRATION` for official issuance;
   COURSE_COMPLETION stays non-issuable until the university authorizes its application policy).
+  `20261201090000_examination_schedule` (subject-wise examination timetable + publication time).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -243,7 +244,9 @@ Examinations are taken in the university's **separate** examination application 
 schedules, proctors or marks them. `/admin/examinations` keeps examination records tied to a curriculum
 version and one of its semesters/years (`examinations.curriculum_id`, `kind`), and configures the https-only
 links of the external application (`/admin/examinations/application`); students see them at
-`/student/examinations`. Permissions `examinations.read` / `examinations.manage` (EXAM_ADMIN). Students apply
+`/student/examinations`. Each examination has a subject-wise timetable (date, local times, venue;
+same-day sittings may not overlap) that EXAM_ADMIN edits and publishes on its detail page; students
+see it under Apply for Exam only once published and while the examination is OPEN. Permissions `examinations.read` / `examinations.manage` (EXAM_ADMIN). Students apply
 for re-exams (one subject per application, identity from the registration, attempt and fee derived and
 snapshotted by the server) at `/student/examinations/re-exam`; staff decide at `/admin/re-exam-applications`
 (`reExamApplications.read/.decide`); fee rules are versioned, integer minor units (`reExamFees.manage`). Policy gaps

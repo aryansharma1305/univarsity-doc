@@ -37,6 +37,7 @@ import { SessionStore } from './session.store.js';
     IdentifierHasher,
     RateLimiter,
     MfaService,
+    PasswordResetStore,
   ],
 })
 export class AuthModule {}
