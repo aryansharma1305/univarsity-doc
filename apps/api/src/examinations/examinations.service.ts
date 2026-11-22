@@ -10,11 +10,13 @@ import {
   type ExaminationList,
   type ExaminationQuery,
   type ExaminationRow,
+  type ExaminationSchedule,
   type ExternalExamApp,
   type ExternalExamAppList,
   periodLabel,
   type StudentExaminations,
   type UpdateExamination,
+  type UpdateExaminationSchedule,
   type UpdateExternalExamApp,
 } from '@docversity/validation';
 import { AuditService } from '../audit/audit.service.js';
@@ -37,7 +39,29 @@ const SUMMARIES: Partial<Record<AuditAction, string>> = {
   EXAMINATION_ARCHIVED: 'Archived',
   EXAMINATION_RE_EXAM_APPLICATIONS_OPENED: 'Re-exam applications opened',
   EXAMINATION_RE_EXAM_APPLICATIONS_CLOSED: 'Re-exam applications closed',
+  EXAMINATION_SCHEDULE_UPDATED: 'Timetable updated',
+  EXAMINATION_SCHEDULE_PUBLISHED: 'Timetable published to students',
+  EXAMINATION_SCHEDULE_UNPUBLISHED: 'Timetable withdrawn from students',
 };
+
+const day = (value: Date) => value.toISOString().slice(0, 10);
+const sitting = (item: {
+  examDate: Date;
+  startTime: string;
+  endTime: string;
+  venue: string | null;
+  programSubject: { subject: { code: string; name: string } };
+}) => ({
+  examDate: day(item.examDate),
+  startTime: item.startTime,
+  endTime: item.endTime,
+  venue: item.venue,
+  subject: { code: item.programSubject.subject.code, name: item.programSubject.subject.name },
+});
+const SITTING_INCLUDE = {
+  programSubject: { select: { subject: { select: { code: true, name: true } } } },
+} as const;
+const SITTING_ORDER = [{ examDate: 'asc' }, { startTime: 'asc' }] as const;
 
 const examInclude = {
   program: { select: { id: true, code: true, name: true } },
@@ -430,6 +454,144 @@ export class ExaminationsService {
     return this.detail(id);
   }
 
+  /** The examination's timetable and the subjects of its curriculum period that can be scheduled. */
+  async schedule(id: string): Promise<ExaminationSchedule> {
+    const exam = await this.prisma.client.examination.findUnique({ where: { id } });
+    if (!exam) throw Errors.notFound();
+    const [subjects, items] = await Promise.all([
+      exam.curriculumId
+        ? this.prisma.client.programSubject.findMany({
+            where: { curriculumId: exam.curriculumId, semesterNumber: exam.semesterNumber },
+            orderBy: { displayOrder: 'asc' },
+            include: { subject: { select: { code: true, name: true } } },
+          })
+        : Promise.resolve([]),
+      this.prisma.client.examinationScheduleItem.findMany({
+        where: { examinationId: id },
+        include: SITTING_INCLUDE,
+        orderBy: [...SITTING_ORDER],
+      }),
+    ]);
+    return {
+      examinationId: id,
+      status: exam.status,
+      publishedAt: exam.schedulePublishedAt?.toISOString() ?? null,
+      subjects: subjects.map((row) => ({
+        programSubjectId: row.id,
+        code: row.subject.code,
+        name: row.subject.name,
+      })),
+      items: items.map((item) => ({
+        id: item.id,
+        programSubjectId: item.programSubjectId,
+        ...sitting(item),
+      })),
+    };
+  }
+
+  /**
+   * Replaces the timetable. Subjects must belong to the examination's curriculum period; two
+   * sittings on the same day may not overlap (every student of the period sits all of them).
+   * Archived examinations are read-only. A published timetable stays published and is audited.
+   */
+  async updateSchedule(
+    id: string,
+    input: UpdateExaminationSchedule,
+    actorUserId: string,
+  ): Promise<ExaminationSchedule> {
+    await this.prisma.client.$transaction(async (tx) => {
+      const exam = await this.lock(tx, id);
+      if (exam.status === 'ARCHIVED') throw notEditable('Archived examinations cannot change.');
+      if (!exam.curriculumId)
+        throw notEditable('Link the examination to a curriculum version before scheduling.');
+      const allowed = new Set(
+        (
+          await tx.programSubject.findMany({
+            where: { curriculumId: exam.curriculumId, semesterNumber: exam.semesterNumber },
+            select: { id: true },
+          })
+        ).map((row) => row.id),
+      );
+      const details = input.items.flatMap((item, index) =>
+        allowed.has(item.programSubjectId)
+          ? []
+          : [
+              {
+                path: `items.${String(index)}.programSubjectId`,
+                message: "This subject is not part of the examination's period.",
+              },
+            ],
+      );
+      const sorted = input.items
+        .map((item, index) => ({ ...item, index }))
+        .sort((a, b) => `${a.examDate}${a.startTime}`.localeCompare(`${b.examDate}${b.startTime}`));
+      for (let i = 1; i < sorted.length; i++) {
+        const before = sorted[i - 1];
+        const current = sorted[i];
+        if (current && before?.examDate === current.examDate && current.startTime < before.endTime)
+          details.push({
+            path: `items.${String(current.index)}.startTime`,
+            message: 'This sitting overlaps another sitting on the same day.',
+          });
+      }
+      if (details.length) throw Errors.validation(details);
+      await tx.examinationScheduleItem.deleteMany({ where: { examinationId: id } });
+      await tx.examinationScheduleItem.createMany({
+        data: input.items.map((item) => ({
+          examinationId: id,
+          programSubjectId: item.programSubjectId,
+          examDate: new Date(`${item.examDate}T00:00:00.000Z`),
+          startTime: item.startTime,
+          endTime: item.endTime,
+          // Blank venue means none.
+          venue: item.venue?.trim() ? item.venue.trim() : null,
+        })),
+      });
+      await this.audit.writeAuditEvent(
+        {
+          actorUserId,
+          action: AUDIT_ACTIONS.examinationScheduleUpdated,
+          entityType: EXAM_ENTITY,
+          entityId: id,
+          metadata: { items: input.items.length, published: exam.schedulePublishedAt !== null },
+        },
+        tx,
+      );
+    });
+    return this.schedule(id);
+  }
+
+  /** Publish (students of the course see it while the examination is OPEN) or withdraw. */
+  async publishSchedule(id: string, publish: boolean, actorUserId: string) {
+    await this.prisma.client.$transaction(async (tx) => {
+      const exam = await this.lock(tx, id);
+      if (publish) {
+        if (exam.status !== 'OPEN')
+          throw notEditable('Open the examination before publishing its timetable.');
+        if (exam.schedulePublishedAt) throw notEditable('The timetable is already published.');
+        if ((await tx.examinationScheduleItem.count({ where: { examinationId: id } })) === 0)
+          throw notEditable('Add at least one sitting before publishing.');
+      } else if (!exam.schedulePublishedAt) throw notEditable('The timetable is not published.');
+      await tx.examination.update({
+        where: { id },
+        data: { schedulePublishedAt: publish ? new Date() : null },
+      });
+      await this.audit.writeAuditEvent(
+        {
+          actorUserId,
+          action: publish
+            ? AUDIT_ACTIONS.examinationSchedulePublished
+            : AUDIT_ACTIONS.examinationScheduleUnpublished,
+          entityType: EXAM_ENTITY,
+          entityId: id,
+          metadata: {},
+        },
+        tx,
+      );
+    });
+    return this.schedule(id);
+  }
+
   /** DRAFT/OPEN → ARCHIVED (also closes re-exam applications). The record stays readable. */
   async archive(id: string, actorUserId: string): Promise<ExaminationDetail> {
     await this.prisma.client.$transaction(async (tx) => {
@@ -515,6 +677,9 @@ export class ExaminationsService {
               examinations: {
                 where: { status: 'OPEN' },
                 orderBy: [{ semesterNumber: 'asc' }, { createdAt: 'asc' }],
+                include: {
+                  scheduleItems: { include: SITTING_INCLUDE, orderBy: [...SITTING_ORDER] },
+                },
               },
             },
           },
@@ -559,6 +724,12 @@ export class ExaminationsService {
               label: periodLabel(curriculum?.structureType ?? 'SEMESTER_WISE', exam.semesterNumber),
             },
             reExamApplicationsOpen: exam.reExamApplicationsOpen,
+            schedule: exam.schedulePublishedAt
+              ? {
+                  publishedAt: exam.schedulePublishedAt.toISOString(),
+                  items: exam.scheduleItems.map(sitting),
+                }
+              : null,
           })),
         };
       }),

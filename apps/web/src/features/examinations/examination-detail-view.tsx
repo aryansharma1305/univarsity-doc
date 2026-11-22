@@ -23,6 +23,7 @@ import { errorMessage } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { examinationsApi, useExamination, useExaminationMutation } from './api';
 import { ExamStatusBadge } from './examinations-view';
+import { ScheduleEditor } from './schedule-editor';
 
 type Action = 'open' | 'archive' | 'accept' | 'close' | null;
 
@@ -182,10 +183,12 @@ export function ExaminationDetailView({ examinationId }: { examinationId: string
           </dl>
           <p className="text-xs text-foreground/80">
             The examination is conducted in the university’s examination application. Docversity
-            keeps the record only; it does not schedule examinations or decide eligibility.
+            keeps the record and its published timetable; it does not decide eligibility.
           </p>
         </CardContent>
       </Card>
+
+      <ScheduleEditor examinationId={examinationId} canManage={canManage} />
 
       <Card className="gap-0 py-0 shadow-card">
         <CardContent className="flex flex-col gap-4 p-5">

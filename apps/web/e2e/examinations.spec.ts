@@ -168,6 +168,42 @@ test('examination application links and year-wise examination records reach the 
   await portal.context().close();
 });
 
+test('examination timetable: EXAM_ADMIN schedules and publishes; only the course students see it', async ({
+  browser,
+}) => {
+  const { examAdmin, examStudents } = fixtures();
+  const [alpha] = examStudents;
+  if (!alpha || !shared.examinationUrl) throw new Error('needs the first examination test');
+  const staff = await staffPage(browser, examAdmin);
+  await staff.goto(shared.examinationUrl);
+  await expect(staff.getByText('Not published. Students cannot see it yet.')).toBeVisible();
+  await staff.getByRole('button', { name: 'Edit timetable' }).click();
+  await staff.getByLabel(/E2E-SUB-2 .* date$/).fill('2026-12-01');
+  await staff.getByLabel(/E2E-SUB-2 .* start time$/).fill('09:30');
+  await staff.getByLabel(/E2E-SUB-2 .* end time$/).fill('08:00');
+  await staff.getByRole('button', { name: 'Save timetable' }).click();
+  await expect(staff.getByRole('alert').first()).toBeVisible();
+  await staff.getByLabel(/E2E-SUB-2 .* end time$/).fill('12:30');
+  await staff.getByLabel(/E2E-SUB-2 .* venue$/).fill('E2E Hall A');
+  await staff.getByRole('button', { name: 'Save timetable' }).click();
+  await expect(staff.getByText('E2E Hall A')).toBeVisible();
+  await staff.getByRole('button', { name: 'Publish timetable' }).click();
+  await expect(staff.getByText(/Published to students/)).toBeVisible();
+  await expect(staff.getByText('Timetable published to students')).toBeVisible();
+  await expectNoSeriousA11yViolations(staff);
+  await capture(staff, 'examination-timetable-desktop');
+  await staff.context().close();
+
+  const portal = await studentPage(browser, alpha, 390);
+  await portal.goto('/student/examinations/apply');
+  const table = portal.getByRole('table', { name: /E2E Year 2 Examination timetable/ });
+  await expect(table).toContainText('09:30–12:30');
+  await expect(table).toContainText('E2E Hall A');
+  await expectNoSeriousA11yViolations(portal);
+  await capture(portal, 'student-timetable-mobile');
+  await portal.context().close();
+});
+
 test('re-exam application: confirmed fee schedule, verified identity, attempt and fee snapshot, staff decision', async ({
   browser,
 }) => {

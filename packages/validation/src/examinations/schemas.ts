@@ -10,6 +10,7 @@ import {
   refSchema,
 } from '../academic/common.js';
 import { academicStructureSchema } from '../academic/curricula.js';
+import { dateOnlySchema } from '../academic/common.js';
 
 /**
  * Examinations (Phase 9A).
@@ -230,6 +231,59 @@ export const examinationQuerySchema = listQuerySchema(EXAMINATION_SORT_FIELDS, '
  * links only) and, per own registration, the periods of the assigned curriculum and the OPEN
  * examination records of that curriculum. No schedules or eligibility are implied.
  */
+const timeSchema = z
+  .string()
+  .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, 'Use 24-hour time, e.g. 09:30.');
+
+/** One subject sitting in an examination timetable (local university time). */
+export const scheduleSittingSchema = z.object({
+  examDate: dateOnlySchema,
+  startTime: timeSchema,
+  endTime: timeSchema,
+  venue: z.string().trim().max(200).nullable(),
+});
+
+/** Replaces the whole timetable. Each subject at most once; end after start. */
+export const updateExaminationScheduleSchema = z
+  .object({
+    items: z
+      .array(
+        scheduleSittingSchema
+          .extend({ programSubjectId: z.uuid() })
+          .strict()
+          .refine((item) => item.endTime > item.startTime, {
+            message: 'The end time must be after the start time.',
+            path: ['endTime'],
+          }),
+      )
+      .max(100)
+      .refine(
+        (items) => new Set(items.map((item) => item.programSubjectId)).size === items.length,
+        'Schedule each subject once.',
+      ),
+  })
+  .strict()
+  .meta({ id: 'UpdateExaminationSchedule' });
+
+const scheduleSubjectSchema = z.object({ code: z.string(), name: z.string() });
+
+export const examinationScheduleSchema = z
+  .object({
+    examinationId: z.uuid(),
+    status: examinationStatusSchema,
+    publishedAt: z.iso.datetime().nullable(),
+    /** Subjects of the examination's curriculum period (what can be scheduled). */
+    subjects: z.array(scheduleSubjectSchema.extend({ programSubjectId: z.uuid() })),
+    items: z.array(
+      scheduleSittingSchema.extend({
+        id: z.uuid(),
+        programSubjectId: z.uuid(),
+        subject: scheduleSubjectSchema,
+      }),
+    ),
+  })
+  .meta({ id: 'ExaminationSchedule' });
+
 export const studentExaminationsSchema = z
   .object({
     applications: z.array(
@@ -265,6 +319,13 @@ export const studentExaminationsSchema = z
             examType: z.string().nullable(),
             period: periodSchema,
             reExamApplicationsOpen: z.boolean(),
+            /** Published timetable only; null until the examination office publishes it. */
+            schedule: z
+              .object({
+                publishedAt: z.iso.datetime(),
+                items: z.array(scheduleSittingSchema.extend({ subject: scheduleSubjectSchema })),
+              })
+              .nullable(),
           }),
         ),
       }),
@@ -288,3 +349,5 @@ export type ExaminationDetail = z.infer<typeof examinationDetailSchema>;
 export type ExaminationList = z.infer<typeof examinationListSchema>;
 export type ExaminationQuery = z.infer<typeof examinationQuerySchema>;
 export type StudentExaminations = z.infer<typeof studentExaminationsSchema>;
+export type UpdateExaminationSchedule = z.infer<typeof updateExaminationScheduleSchema>;
+export type ExaminationSchedule = z.infer<typeof examinationScheduleSchema>;

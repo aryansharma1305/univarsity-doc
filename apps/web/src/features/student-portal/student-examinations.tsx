@@ -8,6 +8,7 @@ import {
   MonitorSmartphoneIcon,
 } from 'lucide-react';
 import { EXAMINATION_KIND_LABELS, type StudentExaminations } from '@docversity/validation';
+import { formatDate, formatDateTime } from '@/lib/format';
 import { PageIntro, PortalCard, PortalEmptyState } from './portal-ui';
 
 const optionClass =
@@ -158,6 +159,7 @@ export function StudentExamApply({ data }: { data: StudentExaminations | null })
                               Re-exam applications are open for this examination.
                             </span>
                           )}
+                          {exam.schedule && <Timetable schedule={exam.schedule} name={exam.name} />}
                         </li>
                       ))}
                     </ul>
@@ -169,5 +171,59 @@ export function StudentExamApply({ data }: { data: StudentExaminations | null })
         </div>
       )}
     </>
+  );
+}
+
+type Schedule = NonNullable<
+  StudentExaminations['registrations'][number]['examinations'][number]['schedule']
+>;
+
+/** The published, subject-wise timetable (dates and local times as set by the examination office). */
+function Timetable({ schedule, name }: { schedule: Schedule; name: string }) {
+  return (
+    <div
+      // Keyboard users must be able to scroll the table on narrow screens (axe scrollable-region-focusable).
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
+      role="region"
+      aria-label={`${name} timetable`}
+      className="mt-2 overflow-x-auto rounded-md border border-border focus-visible:outline-2 focus-visible:outline-brand"
+    >
+      <table className="w-full text-sm">
+        <caption className="px-3 pt-2 text-left text-xs text-muted-foreground">
+          {name} timetable · published {formatDateTime(schedule.publishedAt)}
+        </caption>
+        <thead className="text-left text-xs text-muted-foreground">
+          <tr>
+            <th scope="col" className="px-3 py-2">
+              Date
+            </th>
+            <th scope="col" className="px-3 py-2">
+              Time
+            </th>
+            <th scope="col" className="px-3 py-2">
+              Subject
+            </th>
+            <th scope="col" className="px-3 py-2">
+              Venue
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {schedule.items.map((item) => (
+            <tr key={`${item.subject.code}-${item.examDate}`}>
+              <td className="px-3 py-2 whitespace-nowrap">{formatDate(item.examDate)}</td>
+              <td className="px-3 py-2 whitespace-nowrap tabular-nums">
+                {item.startTime}–{item.endTime}
+              </td>
+              <td className="px-3 py-2">
+                <span className="font-medium">{item.subject.code}</span> {item.subject.name}
+              </td>
+              <td className="px-3 py-2">{item.venue ?? '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

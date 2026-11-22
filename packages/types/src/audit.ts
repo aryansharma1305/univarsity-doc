@@ -110,6 +110,10 @@ export const AUDIT_ACTIONS = {
   examinationArchived: 'EXAMINATION_ARCHIVED',
   examinationReExamApplicationsOpened: 'EXAMINATION_RE_EXAM_APPLICATIONS_OPENED',
   examinationReExamApplicationsClosed: 'EXAMINATION_RE_EXAM_APPLICATIONS_CLOSED',
+  /** Timetable replaced. Metadata: item count and whether it was published at the time. */
+  examinationScheduleUpdated: 'EXAMINATION_SCHEDULE_UPDATED',
+  examinationSchedulePublished: 'EXAMINATION_SCHEDULE_PUBLISHED',
+  examinationScheduleUnpublished: 'EXAMINATION_SCHEDULE_UNPUBLISHED',
   reExamFeeRuleCreated: 'RE_EXAM_FEE_RULE_CREATED',
   reExamFeeRuleActivated: 'RE_EXAM_FEE_RULE_ACTIVATED',
   reExamFeeRuleRetired: 'RE_EXAM_FEE_RULE_RETIRED',
