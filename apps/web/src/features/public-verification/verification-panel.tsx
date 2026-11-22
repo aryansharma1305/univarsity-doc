@@ -198,6 +198,10 @@ export function VerificationPanel({ service }: { service: PublicVerificationServ
           busy={busy}
           token={token}
           onChange={reset}
+          onInvalid={() => {
+            reset();
+            setError('Enter a valid roll number and select a course and semester or year.');
+          }}
           onSearch={(body) =>
             run(() =>
               studentRequest(
@@ -366,6 +370,7 @@ function ResultSearchForm({
   busy,
   token,
   onChange,
+  onInvalid,
   onSearch,
   onMarksheet,
   onOwn,
@@ -374,6 +379,7 @@ function ResultSearchForm({
   busy: boolean;
   token: string;
   onChange: () => void;
+  onInvalid: () => void;
   onSearch: (body: unknown) => Promise<void>;
   onMarksheet: () => Promise<void>;
   onOwn: (reference: string) => Promise<void>;
@@ -417,6 +423,8 @@ function ResultSearchForm({
       <form
         className="mx-auto grid max-w-3xl gap-4 rounded-[20px] border border-border bg-card p-5 sm:grid-cols-3"
         aria-busy={busy}
+        aria-describedby={`${id}-result`}
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           const body = publicResultSearchSchema.safeParse({
@@ -426,6 +434,7 @@ function ResultSearchForm({
             periodNumber: Number(period),
           });
           if (body.success) void onSearch(body.data);
+          else onInvalid();
         }}
       >
         <div className="sm:col-span-3">
@@ -470,7 +479,6 @@ function ResultSearchForm({
             value={roll}
             required
             maxLength={64}
-            pattern="[A-Za-z0-9][A-Za-z0-9._/\-]*"
             autoComplete="off"
             spellCheck={false}
             disabled={busy}

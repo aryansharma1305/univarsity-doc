@@ -348,6 +348,28 @@ describe('verification queries', () => {
     expect(JSON.stringify(wrong.body)).not.toContain('Synthetic Employer');
   });
 
+  it('accepts session CSRF tokens for public support without linking the student record', async () => {
+    await clearPublicBudgets();
+    const student = await activatedStudent(app, registrar, 'VQ');
+    const submitted = await studentPost(student.agent, 'public/verification-queries', {
+      requesterName: 'Synthetic Requester',
+      category: 'HOW_TO_VERIFY',
+      message: 'How do we verify a transcript?',
+    });
+    expect(submitted.status).toBe(201);
+    const receipt = publicVerificationQueryReceiptSchema.parse(submitted.body);
+    const row = await testDb().verificationQuery.findUniqueOrThrow({
+      where: { reference: receipt.reference },
+    });
+    expect(row).toMatchObject({ source: 'PUBLIC', studentId: null });
+    const status = await studentPost(student.agent, 'public/verification-queries/status', {
+      reference: receipt.reference,
+      accessCode: receipt.accessCode,
+    });
+    expect(status.status).toBe(200);
+    expect(requesterVerificationQuerySchema.parse(status.body).status).toBe('OPEN');
+  });
+
   it('rate-limits public submissions per client', async () => {
     await clearPublicBudgets();
     const agent = browser(app);

@@ -50,5 +50,6 @@ identifiers, not secrets; treating them as passwords would let anyone harvest re
 - Publications made before this migration have no marksheet credential (status-only verification).
 - Reviewers must consider combinations: approving REGISTRATION_NUMBER for certificates exposes a
   number that can then be used for an anonymous registration lookup where that is also enabled.
-- Student photographs remain unavailable publicly; adding them needs a separate, explicitly approved
-  design (consent, minimised image, credential-gated delivery).
+- Structured public responses exclude student photographs. A credential-gated PDF returns the
+  approved document as issued, so approval must cover all printed contents, including any photograph
+  or other student information.
