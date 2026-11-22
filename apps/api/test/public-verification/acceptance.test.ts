@@ -1209,7 +1209,20 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
   });
 
   it('A16 result withdrawal returns UNPUBLISHED; re-publication after withdrawal has no API path', async () => {
+    const workload = async () =>
+      (
+        (await people.proposer.get('dashboard').expect(200)).body as {
+          workload: { resultsPublished: number; resultsWithheld: number };
+        }
+      ).workload;
+    const before = await workload();
     await people.approver.post(`official-results/${resultId}/withdraw`).expect(200);
+    // The dashboard stops counting it as published and counts it as withdrawn.
+    const after = await workload();
+    expect([after.resultsPublished, after.resultsWithheld]).toEqual([
+      before.resultsPublished - 1,
+      before.resultsWithheld + 1,
+    ]);
     expect(
       (await verify('result', { reference: alice.registrationNumber }, { as: alice.agent })).body
         ?.status,

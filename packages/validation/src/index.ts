@@ -42,3 +42,4 @@ export * from './canonical-json.js';
 export * from './payment-buttons.js';
 
 export * from './public-verification/official.js';
+export * from './reports.js';
