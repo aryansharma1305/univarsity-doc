@@ -27,7 +27,7 @@ import { QueryProvider } from '@/components/providers/query-provider';
 import { SessionProvider } from '@/components/providers/session-context';
 import { AdminBreadcrumbs } from './admin-breadcrumbs';
 import { BreadcrumbLabelProvider } from './breadcrumb-context';
-import { COMMUNICATION_UNAVAILABLE, NAV_GROUPS, visibleAdminNav } from './nav';
+import { NAV_GROUPS, visibleAdminNav } from './nav';
 import { activeNavHref } from './nav-groups';
 import { UserMenu } from './user-menu';
 
@@ -92,9 +92,6 @@ function NavLinks({
               >
                 {group}
               </h2>
-              {group === 'Chat & Communication' && !collapsed && (
-                <p className="px-3 text-xs text-white/65">{COMMUNICATION_UNAVAILABLE}</p>
-              )}
               {!!links.length && (
                 <ul className="space-y-1">
                   {links.map((item, index) => {

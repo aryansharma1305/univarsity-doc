@@ -107,6 +107,14 @@ export const PERMISSIONS = {
    * Personal data: REGISTRAR and SUPER_ADMIN only; every list view and download is audited.
    */
   studentUploadsRead: 'studentUploads.read',
+  /** Student messages: read the administration inbox (conversations with students). */
+  studentMessagesRead: 'studentMessages.read',
+  /** Reply to, resolve and reopen student conversations. */
+  studentMessagesRespond: 'studentMessages.respond',
+  /** Verification support queries from students and external verifiers: list and view. */
+  verificationQueriesRead: 'verificationQueries.read',
+  /** Answer and resolve verification support queries (answers are visible to the requester). */
+  verificationQueriesRespond: 'verificationQueries.respond',
   auditRead: 'audit.read',
   usersManage: 'users.manage',
   settingsManage: 'settings.manage',
@@ -167,6 +175,10 @@ export const ROLE_PERMISSIONS: Readonly<Record<RoleName, readonly Permission[]>>
     P.studentProfileRequestsRead,
     P.studentProfileRequestsReview,
     P.studentUploadsRead,
+    P.studentMessagesRead,
+    P.studentMessagesRespond,
+    P.verificationQueriesRead,
+    P.verificationQueriesRespond,
     P.subjectsWrite,
     P.curriculaWrite,
     P.curriculaActivate,

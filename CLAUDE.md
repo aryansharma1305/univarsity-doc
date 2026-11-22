@@ -156,7 +156,8 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261016093000_re_exam_payment_destination_editor_check` (9C: approver ≠ last editor),
   `20261020090000_program_certificate_eligibility` (12C: course certificate sets, proposer ≠ decider),
   `20261117090000_staff_mfa_first_login` (staff first-login flag, TOTP MFA, recovery codes; ADR-0021),
-  `20261122090000_student_uploads` (student-uploaded academic/identity files; ADR-0023).
+  `20261122090000_student_uploads` (student-uploaded academic/identity files; ADR-0023),
+  `20261128090000_communication` (student messages, verification queries, notifications; ADR-0025).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
@@ -301,6 +302,17 @@ author/XMP metadata and embedded image EXIF remain; stripping is a follow-up); n
 every student write and staff view/download audited (IDs and categories only); `no-store`; rate
 limited. Read [ADR-0023](docs/decisions/ADR-0023-student-uploads.md) and
 [docs/api/student-uploads.md](docs/api/student-uploads.md) before changing it.
+
+## 10g-2. Chat & Communication
+
+Students message the administration at `/student/messages` (private threads, append-only messages);
+staff answer at `/admin/messages` (`studentMessages.read/.respond`, REGISTRAR + SUPER_ADMIN).
+Verification support queries come from students (`/student/verification-queries`) and the public
+(`/verify/support`, reference + one-time access code); staff answer at `/admin/verification-queries`
+(`verificationQueries.read/.respond`). In-app notifications only (`/student/notifications`,
+`/admin/notifications`), issued in the event's transaction, idempotent, minimal copy. Read
+[ADR-0025](docs/decisions/ADR-0025-chat-and-communication.md) and
+[docs/api/communication.md](docs/api/communication.md) before changing it.
 
 ## 10h. Reviewer staging (Phase 14B)
 

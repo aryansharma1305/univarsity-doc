@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowUpRightIcon } from 'lucide-react';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@docversity/ui/components/tabs';
-import { COMMUNICATION_UNAVAILABLE, NAV_GROUPS, visibleAdminNav } from '@/components/admin/nav';
+import { NAV_GROUPS, visibleAdminNav } from '@/components/admin/nav';
 import { useSessionUser } from '@/components/providers/session-context';
 
 export function WorkspaceNavigator() {
@@ -107,9 +107,6 @@ export function WorkspaceNavigator() {
               <div data-workspace-rule className="h-px bg-white/20" />
               {groups.map((group) => (
                 <TabsContent key={group} value={group} className="mt-3">
-                  {group === 'Chat & Communication' && (
-                    <p className="text-sm text-white/75">{COMMUNICATION_UNAVAILABLE}</p>
-                  )}
                   <ul data-workspace-links className="grid gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
                     {links
                       .filter((item) => item.group === group)

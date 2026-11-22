@@ -120,8 +120,9 @@ test('a student activates with a university code, sees only their own record, si
       await expect(page.locator('main input, main form')).toHaveCount(0);
     }
     if (route === '/student/notifications') {
-      await expect(page.getByText(/are not available yet/)).toBeVisible();
-      await expect(page.locator('main input, main form')).toHaveCount(0);
+      await expect(page.getByText('No notifications yet')).toBeVisible();
+      // Only the "Show unread only" filter; nothing is submitted from this page.
+      await expect(page.locator('main form')).toHaveCount(0);
     }
     if (route === '/student/documents') {
       // Nothing published by the university; the student's own uploads have one row per category.
