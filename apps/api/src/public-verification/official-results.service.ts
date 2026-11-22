@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { Prisma } from '@docversity/database';
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import {
   officialPublishedResultSchema,
@@ -13,6 +13,7 @@ import { PrismaService } from '../database/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { AppError, Errors } from '../common/app-error.js';
 import { VerificationPoliciesService } from './verification-policies.service.js';
+import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const conflict = () =>
   new AppError(
@@ -26,6 +27,7 @@ export class OfficialResultsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly policies: VerificationPoliciesService,
+    @Inject(API_CONFIG) private readonly config: ApiConfig,
   ) {}
   async attestingActor(id: string, version: number, tx: Prisma.TransactionClient) {
     // Result versions serialize attestations; transaction timestamps do not establish their order.
@@ -152,6 +154,8 @@ export class OfficialResultsService {
           approvalEventId: approval.id,
           publishedById: actor,
           snapshotDigest: digest(approval.snapshot),
+          // The marksheet QR credential: random, never derived from roll or registration numbers.
+          verificationToken: randomBytes(32).toString('base64url'),
         },
       });
       await tx.result.update({
@@ -201,12 +205,13 @@ export class OfficialResultsService {
       periodNumber?: number;
       examinationId?: string;
       id?: string;
+      owner?: boolean;
     } = {},
   ) {
     return (await this.read(studentId, filter)).data;
   }
   async page(studentId: string, query: StudentResultsQuery) {
-    const { data, total } = await this.read(studentId, {}, query);
+    const { data, total } = await this.read(studentId, { owner: true }, query);
     return {
       publicationAvailable: total > 0,
       data,
@@ -220,7 +225,14 @@ export class OfficialResultsService {
   }
   private async read(
     studentId: string,
-    filter: { registrationId?: string; periodNumber?: number; examinationId?: string; id?: string },
+    filter: {
+      registrationId?: string;
+      periodNumber?: number;
+      examinationId?: string;
+      id?: string;
+      /** The owning student: include the marksheet QR link (never for anonymous callers). */
+      owner?: boolean;
+    },
     page?: StudentResultsQuery,
   ) {
     // Count and page share one eligibility predicate and one policy/publication snapshot.
@@ -259,6 +271,7 @@ export class OfficialResultsService {
           include: {
             examination: true,
             items: { include: { programSubject: { include: { subject: true } } } },
+            officialPublication: { select: { verificationToken: true } },
           },
           orderBy: [{ publishedAt: 'desc' }, { id: 'asc' }],
           skip: page ? (page.page - 1) * page.pageSize : 0,
@@ -279,6 +292,15 @@ export class OfficialResultsService {
               publishedAt: r.publishedAt.toISOString(),
               sgpa: r.sgpa?.toString() ?? null,
               outcome: r.outcome,
+              ...(filter.owner && r.officialPublication?.verificationToken
+                ? {
+                    // Fragment, not query: the credential never reaches server or proxy logs.
+                    verificationUrl: new URL(
+                      `/results#token=${r.officialPublication.verificationToken}`,
+                      this.config.WEB_URL,
+                    ).toString(),
+                  }
+                : {}),
               subjects: r.items.map((i) => ({
                 programSubjectId: i.programSubjectId,
                 code: i.programSubject.subject.code,

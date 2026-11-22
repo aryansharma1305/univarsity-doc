@@ -11,6 +11,7 @@ import {
   StudentOfficialDocumentsController,
 } from './official-workflows.controller.js';
 import { Module } from '@nestjs/common';
+import { AnonymousVerificationService } from './anonymous-verification.service.js';
 import { PublicVerificationController } from './public-verification.controller.js';
 import { PublicVerificationGuard } from './public-verification.guard.js';
 import { PublicVerificationServiceHandler } from './public-verification.service.js';
@@ -31,6 +32,7 @@ import { PublicVerificationServiceHandler } from './public-verification.service.
     OfficialDocumentsService,
     OfficialResultsService,
     OfficialVerificationService,
+    AnonymousVerificationService,
   ],
   exports: [VerificationPoliciesService, OfficialResultsService],
 })

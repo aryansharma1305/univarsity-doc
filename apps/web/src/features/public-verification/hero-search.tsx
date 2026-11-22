@@ -21,7 +21,13 @@ export function HeroSearch() {
   const router = useRouter();
   const [service, setService] = useState<PublicVerificationService | ''>('');
   const [reference, setReference] = useState('');
-  const placeholder = service ? SERVICES[service].placeholder : 'Enter your registration number';
+  // Check Result asks for course, roll number and semester on its own page.
+  const numberless = service === 'result';
+  const placeholder = numberless
+    ? 'Choose course, roll number and semester next'
+    : service
+      ? SERVICES[service].placeholder
+      : 'Enter your registration number';
 
   function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,9 +35,9 @@ export function HeroSearch() {
     const value = reference.trim();
     const input = event.currentTarget.querySelector('input');
     // minLength counts spaces; validate the number that will actually be sent.
-    input?.setCustomValidity(value.length >= 3 ? '' : 'Enter at least 3 characters.');
+    input?.setCustomValidity(numberless || value.length >= 3 ? '' : 'Enter at least 3 characters.');
     if (!option || !event.currentTarget.reportValidity()) return;
-    storeHeroSearch(option.service, value);
+    if (!numberless) storeHeroSearch(option.service, value);
     router.push(option.href);
   }
 
@@ -68,12 +74,13 @@ export function HeroSearch() {
         id={`${id}-reference`}
         className={styles.searchInput}
         placeholder={placeholder}
-        value={reference}
+        value={numberless ? '' : reference}
         onChange={(event) => {
           event.target.setCustomValidity('');
           setReference(event.target.value);
         }}
-        required
+        disabled={numberless}
+        required={!numberless}
         minLength={3}
         maxLength={128}
         autoComplete="off"

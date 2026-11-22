@@ -1959,13 +1959,16 @@ model ResultPublication {
   approvalEvent ResultReviewEvent  @relation(fields: [approvalEventId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   publishedBy   User               @relation(fields: [publishedById], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
-  id              String   @id @default(uuid(7)) @db.Uuid
-  resultId        String   @unique @map("result_id") @db.Uuid
-  policyId        String   @map("policy_id") @db.Uuid
-  approvalEventId String   @map("approval_event_id") @db.Uuid
-  publishedById   String   @map("published_by_id") @db.Uuid
-  snapshotDigest  String   @map("snapshot_digest") @db.Char(64)
-  publishedAt     DateTime @default(now()) @map("published_at") @db.Timestamptz(3)
+  id                String   @id @default(uuid(7)) @db.Uuid
+  resultId          String   @unique @map("result_id") @db.Uuid
+  policyId          String   @map("policy_id") @db.Uuid
+  approvalEventId   String   @map("approval_event_id") @db.Uuid
+  publishedById     String   @map("published_by_id") @db.Uuid
+  snapshotDigest    String   @map("snapshot_digest") @db.Char(64)
+  /// Opaque random credential for the full marksheet (QR on the student's marksheet); never derived
+  /// from a roll or registration number. NULL for publications made before it existed.
+  verificationToken String?  @unique @map("verification_token") @db.VarChar(64)
+  publishedAt       DateTime @default(now()) @map("published_at") @db.Timestamptz(3)
 
   @@map("result_publications")
 }

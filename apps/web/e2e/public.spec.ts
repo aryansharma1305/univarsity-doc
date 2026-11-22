@@ -9,10 +9,26 @@ const NAVIGATION = [
   ['Student Sign in', '/student/login'],
 ] as const;
 const VERIFICATION = [
-  ['/verify/admission-letter', 'Verify Admission Letter', 'Enter admission letter number'],
-  ['/verify/certificate', 'Verify Certificate', 'Enter the code printed on the certificate'],
-  ['/verify/registration', 'Verify Registration', 'Enter registration number'],
-  ['/results', 'Check Result', 'Enter result code or registration number'],
+  [
+    '/verify/admission-letter',
+    'Verify Admission Letter',
+    'Enter admission letter number',
+    'Verify Admission Letter',
+  ],
+  [
+    '/verify/certificate',
+    'Verify Certificate',
+    'Enter the code printed on the certificate',
+    'Verify Certificate',
+  ],
+  [
+    '/verify/registration',
+    'Verify Registration',
+    'Enter registration number',
+    'Verify Registration',
+  ],
+  // Check Result: course + roll number + semester; signed-in students use the disclosure below.
+  ['/results', 'Check Result', 'Your registration number', 'Show my results'],
 ] as const;
 
 for (const width of [1440, 768, 390, 320]) {
@@ -28,6 +44,10 @@ for (const width of [1440, 768, 390, 320]) {
     );
     await page.route('**/api/v1/public/verify/*', async (route) => {
       expect(route.request().method()).toBe('POST');
+      if (route.request().url().endsWith('/result-options')) {
+        await route.fulfill({ json: { programs: [] } });
+        return;
+      }
       expect(route.request().postDataJSON()).toEqual({
         contractVersion: 2,
         reference: 'SYNTHETIC-REFERENCE',
@@ -42,11 +62,17 @@ for (const width of [1440, 768, 390, 320]) {
         },
       });
     });
-    for (const [path, title, placeholder] of VERIFICATION) {
+    for (const [path, title, placeholder, action] of VERIFICATION) {
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
+      if (path === '/results') {
+        await expect(page.getByLabel('Course Name', { exact: true })).toBeVisible();
+        await expect(page.getByLabel('Roll Number', { exact: true })).toBeVisible();
+        await expect(page.getByLabel('Semester', { exact: true })).toBeVisible();
+        await page.getByText('Student? See your own published marks after signing in').click();
+      }
       const input = page.getByPlaceholder(placeholder);
-      const button = page.getByRole('button', { name: 'Verify', exact: true });
+      const button = page.getByRole('button', { name: action, exact: true });
       await expect(input).toBeVisible();
       await expect(input).toHaveAttribute('placeholder', placeholder);
       await button.click();
@@ -80,7 +106,11 @@ for (const width of [1440, 768, 390, 320]) {
       await expect(page.getByRole('dialog')).toHaveCount(0);
     }
     expect(
-      requests.filter((url) => new URL(url).pathname.startsWith('/api/v1/public/verify/')),
+      requests.filter(
+        (url) =>
+          new URL(url).pathname.startsWith('/api/v1/public/verify/') &&
+          !url.endsWith('/result-options'),
+      ),
     ).toHaveLength(4);
   });
 

@@ -77,13 +77,15 @@ async function signedIn(
  * second) once and retry.
  */
 async function verifyNow(page: Page) {
-  const verify = page.getByRole('button', { name: 'Verify', exact: true });
+  const verify = page.getByRole('button', {
+    name: /^(Verify (Registration|Admission Letter|Certificate)|Show my results)$/,
+  });
   const checked = page.waitForResponse(
     (r) => r.request().method() === 'POST' && r.url().includes('/api/v1/public/verify/'),
   );
   await verify.click();
   const response = await checked;
-  await expect(page.locator('main form')).toHaveAttribute('aria-busy', 'false', {
+  await expect(page.locator('main form[aria-busy]')).toHaveAttribute('aria-busy', 'false', {
     timeout: 15_000,
   });
   if (response.status() === 429) {
@@ -93,7 +95,7 @@ async function verifyNow(page: Page) {
     expect(seconds).toBeLessThanOrEqual(60);
     await new Promise((resolve) => setTimeout(resolve, seconds * 1000 + 1000));
     await verify.click();
-    await expect(page.locator('main form')).toHaveAttribute('aria-busy', 'false', {
+    await expect(page.locator('main form[aria-busy]')).toHaveAttribute('aria-busy', 'false', {
       timeout: 15_000,
     });
   }
@@ -309,20 +311,23 @@ test('acceptance: issued, revoked and published states are responsive and printa
     });
 
     await page.goto('/results');
-    await page.getByLabel('Registration number', { exact: true }).fill(number);
+    await page.getByText('Student? See your own published marks after signing in').click();
+    await page.getByLabel('Your registration number', { exact: true }).fill(number);
     await verifyNow(page);
+    const marks = page.getByRole('region', { name: /subject marks/ });
     await atEveryWidth(page, async () => {
-      await expect(page.getByRole('table')).toContainText('83 / 100');
-      await expect(page.getByRole('button', { name: 'Print published results' })).toBeVisible();
+      await expect(marks).toContainText('83');
+      await expect(marks).toContainText('100');
+      await expect(page.getByRole('button', { name: /Print Marksheet/ })).toBeVisible();
     });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.emulateMedia({ media: 'print' });
-    await expect(page.getByRole('table')).toBeVisible();
-    await expect(page.getByRole('table')).toContainText('PASS');
-    // Only the marked area prints: the lookup form and print control are hidden.
-    await expect(page.getByRole('button', { name: 'Verify', exact: true })).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Print published results' })).toBeHidden();
-    await expect(page.getByLabel('Registration number', { exact: true })).toBeHidden();
+    await expect(marks).toBeVisible();
+    await expect(marks).toContainText('Pass');
+    // Only the marked area prints: the lookup forms and print control are hidden.
+    await expect(page.getByRole('button', { name: 'Show my results', exact: true })).toBeHidden();
+    await expect(page.getByRole('button', { name: /Print Marksheet/ })).toBeHidden();
+    await expect(page.getByLabel('Your registration number', { exact: true })).toBeHidden();
     await page.emulateMedia({ media: 'screen' });
   } finally {
     for (const c of [proposer, checker, examAdmin, approver]) await c.client.dispose();

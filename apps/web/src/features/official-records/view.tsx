@@ -11,6 +11,10 @@ import {
   proposeVerificationPolicySchema,
   publicVerificationServiceSchema,
   type Registration,
+  PUBLIC_CREDENTIAL_ACCESS_LABELS,
+  PUBLIC_DISCLOSURE_FIELD_LABELS,
+  PUBLIC_DISCLOSURE_FIELDS,
+  type PublicDisclosure,
 } from '@docversity/validation';
 import { Button } from '@docversity/ui/components/button';
 import { Input } from '@docversity/ui/components/input';
@@ -38,6 +42,25 @@ function useOfficialList() {
 }
 const types = ['ADMISSION_LETTER', 'TRANSCRIPT', 'PROVISIONAL', 'CHARACTER'] as const;
 const label = (value: string) => value.replaceAll('_', ' ');
+function isDocumentService(service: string) {
+  return service === 'admission-letter' || service === 'certificate';
+}
+function policyAudience(service: string, disclosure?: PublicDisclosure) {
+  if (disclosure?.anonymousLookup) {
+    const fields = disclosure.fields.map((f) => PUBLIC_DISCLOSURE_FIELD_LABELS[f] ?? f).join(', ');
+    const credential = disclosure.documentWithCredential
+      ? ` ${PUBLIC_CREDENTIAL_ACCESS_LABELS[service] ?? ''}.`
+      : '';
+    return `Anyone can check this ${label(service).toLowerCase()} without signing in. Shown: ${fields || 'status only'}.${credential}`;
+  }
+  if (isDocumentService(service))
+    return 'Anyone with the document number or secure QR code can check its status and approved details. The PDF stays private.';
+  if (service === 'registration')
+    return 'Only the signed-in student can check their own registration.';
+  if (service === 'result')
+    return 'Only the signed-in student can view their own published results.';
+  return '';
+}
 function Field({
   title,
   name,
@@ -156,7 +179,8 @@ function PolicyPanel() {
   const { page, setPage, values } = useOfficialList();
   const selectedService = publicVerificationServiceSchema.safeParse(values.service).data;
   const [service, setService] = useState<string>(selectedService ?? 'admission-letter'),
-    [application, setApplication] = useState(false);
+    [application, setApplication] = useState(false),
+    [anonymous, setAnonymous] = useState(false);
   const query = useQuery({
     queryKey: ['official', 'policies', page, selectedService],
     queryFn: () =>
@@ -196,6 +220,15 @@ function PolicyPanel() {
                     discloseIssueDate: data.has('discloseIssueDate'),
                     identityFactor: 'AUTHENTICATED_OWNER',
                     resultMode: 'REVIEWED_VALUES_ONLY',
+                    ...(anonymous
+                      ? {
+                          publicDisclosure: {
+                            anonymousLookup: true,
+                            fields: data.getAll('publicField').map(String),
+                            documentWithCredential: data.has('documentWithCredential'),
+                          },
+                        }
+                      : {}),
                     ...(service === 'certificate' && application
                       ? {
                           application: {
@@ -238,16 +271,21 @@ function PolicyPanel() {
               </option>
             ))}
           </Choice>
+          {service && <p className="text-sm sm:col-span-2">{policyAudience(service)}</p>}
           <Field title="Approved legal issuing institution" name="institutionName" />
           <Field title="University approval reference" name="authorizationReference" />
-          <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
-            <input name="discloseProgram" type="checkbox" />
-            Program name disclosure is approved
-          </label>
-          <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
-            <input name="discloseIssueDate" type="checkbox" />
-            Issue date disclosure is approved
-          </label>
+          {(isDocumentService(service) || service === 'registration') && (
+            <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
+              <input name="discloseProgram" type="checkbox" />
+              Program name disclosure is approved
+            </label>
+          )}
+          {isDocumentService(service) && (
+            <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
+              <input name="discloseIssueDate" type="checkbox" />
+              Issue date disclosure is approved
+            </label>
+          )}
           {service === 'certificate' && (
             <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm sm:col-span-2">
               <input
@@ -288,6 +326,48 @@ function PolicyPanel() {
               </p>
             </>
           )}
+          <fieldset className="grid gap-3 rounded-lg border border-border p-4 sm:col-span-2">
+            <legend className="px-1 text-sm font-semibold">
+              Anonymous verification (no sign-in)
+            </legend>
+            <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={anonymous}
+                onChange={(event) => {
+                  setAnonymous(event.target.checked);
+                }}
+              />
+              The university authorizes checks without a student sign-in for this course
+            </label>
+            {anonymous && (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Choose only the fields the university has approved for public display. Photos,
+                  dates of birth, identity numbers, contact details and uploads can never be shown.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {PUBLIC_DISCLOSURE_FIELDS[publicVerificationServiceSchema.parse(service)].map(
+                    (field) => (
+                      <label
+                        key={field}
+                        className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm"
+                      >
+                        <input type="checkbox" name="publicField" value={field} />
+                        {PUBLIC_DISCLOSURE_FIELD_LABELS[field]}
+                      </label>
+                    ),
+                  )}
+                </div>
+                {PUBLIC_CREDENTIAL_ACCESS_LABELS[service] && (
+                  <label className="flex min-h-11 h-auto whitespace-normal items-center gap-3 text-sm">
+                    <input type="checkbox" name="documentWithCredential" />
+                    Allow: {PUBLIC_CREDENTIAL_ACCESS_LABELS[service]}
+                  </label>
+                )}
+              </>
+            )}
+          </fieldset>
           <Button
             type="submit"
             disabled={operation.action.isPending}
@@ -321,23 +401,32 @@ function PolicyPanel() {
                     <p className="mt-1 text-xs break-all text-muted-foreground">
                       {p.definition.authorizationReference}
                     </p>
+                    <p className="mt-2 text-sm">
+                      {policyAudience(p.service, p.definition.publicDisclosure)}
+                    </p>
                     <details className="mt-3 text-sm">
                       <summary className="cursor-pointer font-medium">
                         Review proposed rules
                       </summary>
                       <dl className="mt-3 grid gap-2">
-                        <div>
-                          <dt className="font-medium">Public program</dt>
-                          <dd>{p.definition.discloseProgram ? 'Allowed' : 'Hidden'}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-medium">Public issue date</dt>
-                          <dd>{p.definition.discloseIssueDate ? 'Allowed' : 'Hidden'}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-medium">Identity rule</dt>
-                          <dd>{label(p.definition.identityFactor)}</dd>
-                        </div>
+                        {(isDocumentService(p.service) || p.service === 'registration') && (
+                          <div>
+                            <dt className="font-medium">Program name</dt>
+                            <dd>{p.definition.discloseProgram ? 'Allowed' : 'Hidden'}</dd>
+                          </div>
+                        )}
+                        {isDocumentService(p.service) && (
+                          <div>
+                            <dt className="font-medium">Issue date</dt>
+                            <dd>{p.definition.discloseIssueDate ? 'Allowed' : 'Hidden'}</dd>
+                          </div>
+                        )}
+                        {p.service === 'result' && (
+                          <div>
+                            <dt className="font-medium">Results available to the student</dt>
+                            <dd>Independently reviewed and published results</dd>
+                          </div>
+                        )}
                         {p.definition.application && (
                           <>
                             <div>

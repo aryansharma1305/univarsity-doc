@@ -90,7 +90,7 @@ test('without JavaScript the admission-letter page discloses unavailability and 
     await expect(page.getByRole('status')).toContainText('No record checked yet');
     const input = page.getByPlaceholder('Enter admission letter number');
     await input.fill('SYNTHETIC-LOCAL-ONLY');
-    await page.getByRole('button', { name: 'Verify', exact: true }).click();
+    await page.getByRole('button', { name: 'Verify Admission Letter', exact: true }).click();
     await expect(page).toHaveURL(
       (url) => url.pathname === '/verify/admission-letter' && url.search === '',
     );
@@ -112,7 +112,6 @@ test('homepage search opens each service, runs exactly one server-decided check 
     ['Verify Certificate', '/verify/certificate', 'certificate'],
     ['Verify Registration', '/verify/registration', 'registration'],
     ['Verify Admission Letter', '/verify/admission-letter', 'admission-letter'],
-    ['Check Result', '/results', 'result'],
   ] as const;
   const reference = 'SYNTHETIC-HOME-SEARCH';
   const posts: string[] = [];
@@ -140,7 +139,7 @@ test('homepage search opens each service, runs exactly one server-decided check 
     // the public rate limit may also answer 429. Each is shown, never a silent page.
     expect([200, 429]).toContain((await lookup).status());
     await expect(page.locator('[role="status"], [role="alert"]').first()).toContainText(
-      /UNAVAILABLE|NOT FOUND|No matching record|Too many checks/i,
+      /Verification not available|No verified record found|Sign in required|Too many checks/i,
     );
     await expect(page.getByRole('textbox')).toHaveValue(reference);
     await expect.poll(() => posts).toEqual([`/api/v1/public/verify/${service}`]);
@@ -151,4 +150,16 @@ test('homepage search opens each service, runs exactly one server-decided check 
     expect(posts).toHaveLength(1);
   }
   expect(urls.filter((url) => url.includes(reference))).toEqual([]);
+
+  // Check Result takes course, roll number and semester on its own page: no number, no lookup.
+  posts.length = 0;
+  await page.goto('/');
+  const search = page.getByRole('search', { name: 'Verify a record' });
+  await search.getByRole('combobox', { name: 'Service' }).selectOption({ label: 'Check Result' });
+  await expect(search.getByRole('textbox')).toBeDisabled();
+  await search.getByRole('button', { name: 'Search' }).click();
+  await expect(page).toHaveURL((url) => url.pathname === '/results');
+  await expect(page.getByLabel('Course Name', { exact: true })).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(posts).toEqual(['/api/v1/public/verify/result-options']);
 });
