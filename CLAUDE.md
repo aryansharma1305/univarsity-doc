@@ -3,6 +3,7 @@
 Onboarding guide for contributors and Claude Code. It summarises what **exists in the code today**;
 `docs/` holds the detail. Source code, Prisma migrations, tests and ADRs are authoritative — this file,
 `README.md` and the graph in `graphify-out/` are navigation aids.
+University handover (user guides, roles, runbooks, decisions, UAT): [docs/handover/](docs/handover/README.md).
 
 ## 1. Product and status
 
