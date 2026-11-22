@@ -3,6 +3,7 @@ import type { Prisma } from '@docversity/database';
 import { AUDIT_ACTIONS } from '@docversity/types';
 import { AuditService } from '../audit/audit.service.js';
 import { SessionStore } from '../auth/session.store.js';
+import { PasswordResetStore } from '../auth/password-reset.store.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Errors } from '../common/app-error.js';
 
@@ -30,6 +31,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly sessions: SessionStore,
     private readonly audit: AuditService,
+    private readonly resets: PasswordResetStore,
   ) {}
 
   async findForAuthByEmail(email: string): Promise<UserForAuth | null> {
@@ -89,6 +91,8 @@ export class UsersService {
       await options.beforeDisable?.(tx);
       await tx.user.update({ where: { id: userId }, data: { status: 'DISABLED' } });
       const revoked = await this.sessions.revokeAllForUser(userId);
+      // A reset link issued earlier must not survive the disable (or a later re-enable).
+      await this.resets.revokeForUser(userId);
       await this.audit.writeAuditEvent(
         {
           actorUserId,

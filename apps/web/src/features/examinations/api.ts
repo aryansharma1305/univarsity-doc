@@ -4,10 +4,12 @@ import {
   type CreateExternalExamApp,
   examinationDetailSchema,
   examinationListSchema,
+  examinationScheduleSchema,
   type ExaminationQuery,
   externalExamAppListSchema,
   externalExamAppSchema,
   type UpdateExamination,
+  type UpdateExaminationSchedule,
   type UpdateExternalExamApp,
 } from '@docversity/validation';
 import { apiRequest } from '@/lib/api';
@@ -23,6 +25,16 @@ export const examinationsApi = {
   list: (query: Partial<ExaminationQuery>) =>
     apiRequest('GET', 'examinations', examinationListSchema, { query }),
   get: (id: string) => apiRequest('GET', `examinations/${id}`, examinationDetailSchema),
+  schedule: (id: string) =>
+    apiRequest('GET', `examinations/${id}/schedule`, examinationScheduleSchema),
+  saveSchedule: (id: string, body: UpdateExaminationSchedule) =>
+    apiRequest('PATCH', `examinations/${id}/schedule`, examinationScheduleSchema, { body }),
+  publishSchedule: (id: string, publish: boolean) =>
+    apiRequest(
+      'POST',
+      `examinations/${id}/schedule/${publish ? 'publish' : 'unpublish'}`,
+      examinationScheduleSchema,
+    ),
   create: (body: CreateExamination) =>
     apiRequest('POST', 'examinations', examinationDetailSchema, { body }),
   update: (id: string, body: UpdateExamination) =>

@@ -65,6 +65,7 @@ const data = (overrides: Partial<StudentExaminations> = {}): StudentExaminations
           examType: null,
           period: { number: 2, label: 'Year 2' },
           reExamApplicationsOpen: true,
+          schedule: null,
         },
       ],
     },
@@ -104,6 +105,49 @@ describe('student examinations page', () => {
         .map((li) => li.textContent),
     ).toEqual(['Year 1', 'Year 2']);
     expect(screen.getByText(/Re-examination · Year 2 · May–June 2026/)).toBeInTheDocument();
+  });
+
+  it('shows a published timetable, and nothing before publication', () => {
+    const base = data();
+    const registration = base.registrations[0];
+    const exam = registration?.examinations[0];
+    if (!registration || !exam) throw new Error('fixture');
+    const { unmount } = render(<StudentExamApply data={base} />);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    unmount();
+    render(
+      <StudentExamApply
+        data={{
+          ...base,
+          registrations: [
+            {
+              ...registration,
+              examinations: [
+                {
+                  ...exam,
+                  schedule: {
+                    publishedAt: '2026-11-20T10:00:00.000Z',
+                    items: [
+                      {
+                        examDate: '2026-12-01',
+                        startTime: '09:30',
+                        endTime: '12:30',
+                        venue: 'Hall A',
+                        subject: { code: 'SYN101', name: 'Synthetic Subject' },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+    const table = screen.getByRole('table', { name: /Year 2 Re-examination timetable/ });
+    expect(within(table).getByText('09:30–12:30')).toBeInTheDocument();
+    expect(within(table).getByText('Hall A')).toBeInTheDocument();
+    expect(within(table).getByText('SYN101')).toBeInTheDocument();
   });
 
   it('shows honest states when nothing is configured, assigned or available', () => {

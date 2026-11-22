@@ -29,6 +29,8 @@ import {
   errorResponseSchema,
   type ExaminationDetail,
   examinationDetailSchema,
+  examinationScheduleSchema,
+  type ExaminationSchedule,
   type ExaminationList,
   examinationListSchema,
   type ExaminationQuery,
@@ -43,6 +45,8 @@ import {
   studentExaminationsSchema,
   type UpdateExamination,
   updateExaminationSchema,
+  updateExaminationScheduleSchema,
+  type UpdateExaminationSchedule,
   type UpdateExternalExamApp,
   updateExternalExamAppSchema,
 } from '@docversity/validation';
@@ -203,6 +207,59 @@ export class ExaminationsController {
     @Body(new ZodValidationPipe(setReExamApplicationsSchema)) body: SetReExamApplications,
   ): Promise<ExaminationDetail> {
     return this.service.setReExamApplications(id, body.open, auth.user.id);
+  }
+
+  @Get(':id/schedule')
+  @RequirePermissions(PERMISSIONS.examinationsRead)
+  @ApiOperation({ summary: 'Subject-wise timetable and the subjects that can be scheduled' })
+  @ApiOkResponse({ standardSchema: examinationScheduleSchema })
+  schedule(@Param('id', UuidParamPipe) id: string): Promise<ExaminationSchedule> {
+    return this.service.schedule(id);
+  }
+
+  @Patch(':id/schedule')
+  @RequirePermissions(PERMISSIONS.examinationsManage)
+  @ApiSecurity('csrf')
+  @ApiOperation({
+    summary: 'Replace the timetable',
+    description:
+      'Subjects must belong to the examination period; same-day sittings may not overlap; archived ' +
+      'examinations are read-only. Audited (EXAMINATION_SCHEDULE_UPDATED).',
+  })
+  @ApiBody({ schema: openApiRequestSchema(updateExaminationScheduleSchema) })
+  @ApiOkResponse({ standardSchema: examinationScheduleSchema })
+  updateSchedule(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidParamPipe) id: string,
+    @Body(new ZodValidationPipe(updateExaminationScheduleSchema)) body: UpdateExaminationSchedule,
+  ): Promise<ExaminationSchedule> {
+    return this.service.updateSchedule(id, body, auth.user.id);
+  }
+
+  @Post(':id/schedule/publish')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERMISSIONS.examinationsManage)
+  @ApiSecurity('csrf')
+  @ApiOperation({ summary: 'Publish the timetable to students (OPEN examinations with sittings)' })
+  @ApiOkResponse({ standardSchema: examinationScheduleSchema })
+  publishSchedule(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidParamPipe) id: string,
+  ): Promise<ExaminationSchedule> {
+    return this.service.publishSchedule(id, true, auth.user.id);
+  }
+
+  @Post(':id/schedule/unpublish')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERMISSIONS.examinationsManage)
+  @ApiSecurity('csrf')
+  @ApiOperation({ summary: 'Withdraw the published timetable from students' })
+  @ApiOkResponse({ standardSchema: examinationScheduleSchema })
+  unpublishSchedule(
+    @CurrentAuth() auth: AuthContext,
+    @Param('id', UuidParamPipe) id: string,
+  ): Promise<ExaminationSchedule> {
+    return this.service.publishSchedule(id, false, auth.user.id);
   }
 }
 

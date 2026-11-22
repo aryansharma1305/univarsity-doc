@@ -607,6 +607,7 @@ model ProgramSubject {
   subject            Subject             @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   resultItems        ResultItem[]
   reExamApplications ReExamApplication[]
+  scheduleItems      ExaminationScheduleItem[]
 
   /// A subject appears at most once per curriculum version of a program.
   @@unique([programId, curriculumVersion, subjectId])
@@ -667,6 +668,8 @@ model Examination {
   curriculumId           String?            @map("curriculum_id") @db.Uuid
   kind                   ExaminationKind    @default(REGULAR)
   /// Re-examinations only: students may apply while this is true (and the examination is OPEN).
+  /// Set while the subject-wise timetable is published to students; null = not published.
+  schedulePublishedAt    DateTime?          @map("schedule_published_at") @db.Timestamptz(3)
   reExamApplicationsOpen Boolean            @default(false) @map("re_exam_applications_open")
   createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -678,6 +681,7 @@ model Examination {
   gradingScheme      GradingScheme?      @relation(fields: [gradingSchemeId], references: [id], onDelete: Restrict)
   results            Result[]
   reExamApplications ReExamApplication[]
+  scheduleItems      ExaminationScheduleItem[]
 
   @@index([curriculumId, status])
   @@index([programId, academicSessionId, semesterNumber])
@@ -2117,4 +2121,25 @@ model Notification {
   @@index([studentId, createdAt])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+/// One subject's sitting in an examination's timetable. Times are local "HH:MM" (24-hour) in the
+/// university's time zone; the subject must belong to the examination's curriculum and period.
+model ExaminationScheduleItem {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  examinationId    String   @map("examination_id") @db.Uuid
+  programSubjectId String   @map("program_subject_id") @db.Uuid
+  examDate         DateTime @map("exam_date") @db.Date
+  startTime        String   @map("start_time") @db.VarChar(5)
+  endTime          String   @map("end_time") @db.VarChar(5)
+  venue            String?  @db.VarChar(200)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  examination    Examination    @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  programSubject ProgramSubject @relation(fields: [programSubjectId], references: [id], onDelete: Restrict)
+
+  @@unique([examinationId, programSubjectId])
+  @@index([examinationId, examDate, startTime])
+  @@map("examination_schedule_items")
 }

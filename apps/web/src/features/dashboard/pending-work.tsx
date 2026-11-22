@@ -1,69 +1,114 @@
 'use client';
 
 import Link from 'next/link';
-import { useQueries } from '@tanstack/react-query';
-import { ArrowRightIcon, ClipboardCheckIcon, UserRoundPenIcon, WalletIcon } from 'lucide-react';
-import { PERMISSIONS } from '@docversity/types';
-import { Button } from '@docversity/ui/components/button';
-import { Skeleton } from '@docversity/ui/components/skeleton';
+import type { Route } from 'next';
+import {
+  ArrowRightIcon,
+  ClipboardCheckIcon,
+  FileCheck2Icon,
+  FileSignatureIcon,
+  LifeBuoyIcon,
+  type LucideIcon,
+  MessagesSquareIcon,
+  ScrollTextIcon,
+  UserRoundPenIcon,
+  WalletIcon,
+} from 'lucide-react';
+import { PERMISSIONS, type Permission } from '@docversity/types';
+import type { Dashboard } from '@docversity/validation';
 import { useSessionUser } from '@/components/providers/session-context';
-import { profileRequestsApi, profileRequestKeys } from '@/features/profile-requests/api';
-import { reExamsApi, reExamKeys } from '@/features/re-exams/api';
-import { paymentsApi, paymentKeys } from '@/features/re-exam-payments/api';
 
-const PROFILE_QUERY = { status: 'PENDING', pageSize: 1 } as const;
-const APPLICATION_QUERY = { status: 'SUBMITTED', pageSize: 1 } as const;
-const PAYMENT_QUERY = { status: 'SUBMITTED', pageSize: 1 } as const;
+type Workload = Dashboard['workload'];
 
-const QUEUES = [
+const QUEUES: readonly {
+  key: keyof Workload;
+  label: string;
+  description: string;
+  href: Route;
+  icon: LucideIcon;
+  /** The permission that acts on the queue; read-only accounts are not shown it as their work. */
+  act: Permission;
+}[] = [
   {
+    key: 'profileRequestsPending',
+    act: PERMISSIONS.studentProfileRequestsReview,
     label: 'Profile requests',
     description: 'Changes awaiting a staff decision',
-    href: '/admin/profile-requests',
-    status: 'PENDING',
-    permission: PERMISSIONS.studentProfileRequestsRead,
+    href: '/admin/profile-requests?status=PENDING',
     icon: UserRoundPenIcon,
-    queryKey: profileRequestKeys.list(PROFILE_QUERY),
-    queryFn: async () => (await profileRequestsApi.list(PROFILE_QUERY)).meta.total,
   },
   {
+    key: 'certificateRequestsAwaitingStaff',
+    act: PERMISSIONS.certificateRequestsReview,
+    label: 'Certificate requests',
+    description: 'Submitted, in review or with new information from the student',
+    href: '/admin/certificate-requests',
+    icon: FileSignatureIcon,
+  },
+  {
+    key: 'reExamApplicationsPending',
+    act: PERMISSIONS.reExamApplicationsDecide,
     label: 'Re-exam applications',
     description: 'Applications awaiting a staff decision',
-    href: '/admin/re-exam-applications',
-    status: 'SUBMITTED',
-    permission: PERMISSIONS.reExamApplicationsRead,
+    href: '/admin/re-exam-applications?status=SUBMITTED',
     icon: ClipboardCheckIcon,
-    queryKey: reExamKeys.list(APPLICATION_QUERY),
-    queryFn: async () => (await reExamsApi.list(APPLICATION_QUERY)).meta.total,
   },
   {
+    key: 'reExamPaymentsPending',
+    act: PERMISSIONS.reExamPaymentsVerify,
     label: 'Payment submissions',
     description: 'Submitted payments awaiting verification',
-    href: '/admin/re-exam-payments',
-    status: 'SUBMITTED',
-    permission: PERMISSIONS.reExamPaymentsRead,
+    href: '/admin/re-exam-payments?status=SUBMITTED',
     icon: WalletIcon,
-    queryKey: paymentKeys.list(PAYMENT_QUERY),
-    queryFn: async () => (await paymentsApi.list(PAYMENT_QUERY)).meta.total,
   },
-] as const;
+  {
+    key: 'resultsUnderReview',
+    act: PERMISSIONS.resultsReview,
+    label: 'Results under review',
+    description: 'Submitted marks versions awaiting review',
+    href: '/admin/results/review',
+    icon: ScrollTextIcon,
+  },
+  {
+    key: 'documentsAwaitingApproval',
+    act: PERMISSIONS.certificatesApprove,
+    label: 'Documents awaiting approval',
+    description: 'Prepared official documents awaiting an independent approval',
+    href: '/admin/official-records?tab=documents',
+    icon: FileCheck2Icon,
+  },
+  {
+    key: 'messagesAwaitingReply',
+    act: PERMISSIONS.studentMessagesRespond,
+    label: 'Student messages',
+    description: 'Open conversations with unread student messages',
+    href: '/admin/messages?status=OPEN&unread=true',
+    icon: MessagesSquareIcon,
+  },
+  {
+    key: 'verificationQueriesOpen',
+    act: PERMISSIONS.verificationQueriesRespond,
+    label: 'Verification queries',
+    description: 'Open queries awaiting a response',
+    href: '/admin/verification-queries?status=OPEN',
+    icon: LifeBuoyIcon,
+  },
+];
 
-export function PendingWork() {
-  const user = useSessionUser();
-  const queues = QUEUES.filter((queue) => user.permissions.includes(queue.permission));
-  const results = useQueries({
-    queries: queues.map((queue) => ({
-      queryKey: ['dashboard-pending', ...queue.queryKey],
-      queryFn: queue.queryFn,
-    })),
+/** Queues awaiting staff action: shown only when the user may read (non-null) and act on them. */
+export function visibleQueues(workload: Workload, permissions: readonly string[]) {
+  return QUEUES.flatMap((queue) => {
+    const value = workload[queue.key];
+    return value === null || !permissions.includes(queue.act) ? [] : [{ ...queue, value }];
   });
+}
+
+export function PendingWork({ workload }: { workload: Workload }) {
+  const user = useSessionUser();
+  const queues = visibleQueues(workload, user.permissions);
   if (!queues.length) return null;
   return (
-    <section
-      aria-busy={results.some((result) => result.isPending)}
-      aria-labelledby="pending-heading"
-      className="rounded-xl border border-border bg-card"
-    >
+    <section aria-labelledby="pending-heading" className="rounded-xl border border-border bg-card">
       <div className="border-b border-border px-5 py-4">
         <h2 id="pending-heading" className="text-section-title text-navy-950">
           Pending work
@@ -71,47 +116,27 @@ export function PendingWork() {
         <p className="mt-1 text-sm text-muted-foreground">Queues available to your account.</p>
       </div>
       <ul className="divide-y divide-border">
-        {queues.map((queue, index) => {
-          const result = results[index];
-          if (!result) return null;
-          return (
-            <li key={queue.href} className="flex items-center gap-3 px-5 py-4">
-              <queue.icon aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <Link
-                  href={{ pathname: queue.href, query: { status: queue.status } }}
-                  className="rounded-sm text-sm font-medium text-navy-950 hover:text-brand focus-visible:outline-2 focus-visible:outline-brand-accent"
-                >
-                  {queue.label}
-                </Link>
-                <p className="mt-1 text-xs text-muted-foreground">{queue.description}</p>
-              </div>
-              {result.isPending ? (
-                <Skeleton className="h-7 w-9" />
-              ) : result.isError ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => void result.refetch()}
-                  aria-label={`Retry ${queue.label.toLowerCase()}`}
-                >
-                  Retry
-                </Button>
-              ) : (
-                <span
-                  aria-label={`${result.data} pending ${queue.label.toLowerCase()}`}
-                  className="min-w-8 text-right text-xl font-semibold text-navy-950 tabular-nums"
-                >
-                  {result.data.toLocaleString('en-IN')}
-                </span>
-              )}
-              <ArrowRightIcon
-                aria-hidden="true"
-                className="size-4 shrink-0 text-muted-foreground"
-              />
-            </li>
-          );
-        })}
+        {queues.map((queue) => (
+          <li key={queue.key} className="flex items-center gap-3 px-5 py-4">
+            <queue.icon aria-hidden="true" className="size-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <Link
+                href={queue.href}
+                className="rounded-sm text-sm font-medium text-navy-950 hover:text-brand focus-visible:outline-2 focus-visible:outline-brand-accent"
+              >
+                {queue.label}
+              </Link>
+              <p className="mt-1 text-xs text-muted-foreground">{queue.description}</p>
+            </div>
+            <span
+              aria-label={`${queue.value} pending ${queue.label.toLowerCase()}`}
+              className="min-w-8 text-right text-xl font-semibold text-navy-950 tabular-nums"
+            >
+              {queue.value.toLocaleString('en-IN')}
+            </span>
+            <ArrowRightIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          </li>
+        ))}
       </ul>
     </section>
   );
