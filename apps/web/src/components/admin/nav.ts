@@ -134,6 +134,14 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   },
   {
     group: 'Certificates',
+    href: '/admin/official-records?tab=documents&type=MIGRATION',
+    label: 'Migration Certificate',
+    subsection: 'Generate Certificates',
+    icon: FileBadgeIcon,
+    permissions: [p.certificatesRead, p.certificatesGenerate],
+  },
+  {
+    group: 'Certificates',
     href: '/admin/official-records?tab=policies&service=certificate',
     label: 'Certificate Verification',
     icon: ShieldCheckIcon,

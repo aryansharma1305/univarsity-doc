@@ -176,7 +176,7 @@ async function upload(by: Staff, metadata: Record<string, unknown>, file = pdf) 
     .field('metadata', JSON.stringify(metadata))
     .attach('file', file, { filename: 'document.pdf', contentType: 'application/pdf' });
 }
-async function template(type: 'ADMISSION_LETTER' | 'TRANSCRIPT', policyId: string) {
+async function template(type: 'ADMISSION_LETTER' | 'TRANSCRIPT' | 'MIGRATION', policyId: string) {
   const t = (
     await people.certAdmin
       .post('official-documents/templates', {
@@ -1241,5 +1241,82 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
       { as: alice.agent },
     );
     expect(own.body?.status).toBe('ACTIVE');
+  });
+
+  it('A18 migration certificate: its own application policy -> request -> review -> issue -> ISSUED', async () => {
+    const policy = (
+      await people.proposer
+        .post('verification-policies', {
+          service: 'certificate',
+          programId: s.programId,
+          definition: {
+            ...DEFINITION,
+            application: { ...APPLICATION, certificateType: 'MIGRATION' },
+          },
+        })
+        .expect(201)
+    ).body as { id: string };
+    await people.policyApprover.post(`verification-policies/${policy.id}/approve`).expect(200);
+    const templateId = await template('MIGRATION', policy.id);
+    const csrf = await studentCsrf(alice.agent);
+    const request = certificateRequestSchema.parse(
+      (
+        await alice.agent
+          .post('/api/v1/student/certificate-requests')
+          .set('X-CSRF-Token', csrf)
+          .send({ certificateType: 'MIGRATION', purpose: 'Transfer', submissionKey: randomUUID() })
+          .expect(201)
+      ).body,
+    );
+    await people.certAdmin
+      .post(`certificate-requests/${request.id}/record-review`, {
+        version: 1,
+        privateNote: 'Review',
+      })
+      .expect(200);
+    await people.certAdmin
+      .post(`certificate-requests/${request.id}/complete-review`, { version: 2 })
+      .expect(200);
+    const number = `ACC-MG-${randomBytes(4).toString('hex').toUpperCase()}`;
+    const base = {
+      registrationId: alice.registrationId,
+      policyId: policy.id,
+      templateId,
+      documentType: 'MIGRATION',
+      certificateNumber: number,
+      issueDate: '2026-11-03',
+      authorityReference: 'Local acceptance migration authority',
+    };
+    // The request must be the same type: a migration request cannot back a transcript.
+    expect(
+      (
+        await upload(people.certAdmin, {
+          ...base,
+          documentType: 'TRANSCRIPT',
+          requestId: request.id,
+        })
+      ).status,
+    ).toBe(409);
+    const prepared = await upload(people.certAdmin, { ...base, requestId: request.id });
+    expect(prepared.status, JSON.stringify(prepared.body)).toBe(201);
+    const id = officialDocumentReceiptSchema.parse(prepared.body).id;
+    await people.certAdmin.post(`official-documents/${id}/approve`).expect(403);
+    await people.approver.post(`official-documents/${id}/approve`).expect(200);
+    const issued = officialDocumentReceiptSchema.parse(
+      (await people.approver.post(`official-documents/${id}/issue`).expect(200)).body,
+    );
+    const byQr = await verify('certificate', { token: tokenOf(issued.verificationUrl) });
+    expect(byQr.body).toMatchObject({ status: 'ISSUED', documentType: 'MIGRATION' });
+    expect((await verify('certificate', { reference: number })).body?.status).toBe('ISSUED');
+    // Course-completion applications stay closed until the university authorizes them.
+    const completion = await alice.agent
+      .post('/api/v1/student/certificate-requests')
+      .set('X-CSRF-Token', csrf)
+      .send({
+        certificateType: 'COURSE_COMPLETION',
+        purpose: 'Completion',
+        submissionKey: randomUUID(),
+      });
+    expect(completion.status).not.toBe(201);
   });
 });

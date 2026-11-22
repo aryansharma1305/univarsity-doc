@@ -40,7 +40,7 @@ function useOfficialList() {
     },
   };
 }
-const types = ['ADMISSION_LETTER', 'TRANSCRIPT', 'PROVISIONAL', 'CHARACTER'] as const;
+const types = ['ADMISSION_LETTER', 'TRANSCRIPT', 'PROVISIONAL', 'CHARACTER', 'MIGRATION'] as const;
 const label = (value: string) => value.replaceAll('_', ' ');
 function isDocumentService(service: string) {
   return service === 'admission-letter' || service === 'certificate';
