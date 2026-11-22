@@ -243,6 +243,20 @@ export class OfficialDocumentsController {
   ) {
     return this.service.command(id, 'ISSUE', auth.user.id);
   }
+  @Post(':id/verification-link')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.certificatesIssue)
+  @Header('Cache-Control', 'no-store')
+  @ApiBody({ schema: openApiRequestSchema(emptyOfficialCommandSchema) })
+  @ApiOkResponse({ standardSchema: officialDocumentReceiptSchema })
+  verificationLink(
+    @Param('id', UuidParamPipe) id: string,
+    @CurrentAuth() auth: AuthContext,
+    @Body(new ZodValidationPipe(emptyOfficialCommandSchema))
+    _body: z.infer<typeof emptyOfficialCommandSchema>,
+  ) {
+    return this.service.credentialLink(id, auth.user.id);
+  }
   @Post(':id/revoke')
   @HttpCode(200)
   @RequirePermissions(PERMISSIONS.certificatesRevoke)
