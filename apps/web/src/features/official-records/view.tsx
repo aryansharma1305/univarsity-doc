@@ -27,6 +27,7 @@ import { useProgramOptions } from '@/features/programs/api';
 import { certificateRequestsApi } from '@/features/certificate-requests/api';
 import { resultReviewApi } from '@/features/result-review/api';
 import { officialApi as api } from './api';
+import { VerificationQRCode } from '@/features/public-verification/verification-result';
 import { useListParams } from '@/hooks/use-list-params';
 const listKeys = ['tab', 'service', 'type'] as const;
 function useOfficialList() {
@@ -749,7 +750,11 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
       )}
       {verificationUrl && (
         <div role="status" className="my-4 rounded-xl border border-border bg-card p-5 text-sm">
-          <p>The issued document’s secure verification link is ready.</p>
+          <p>
+            The issued document’s secure verification link is ready. Print this QR code on or with
+            the document; anyone holding it can verify the document.
+          </p>
+          <VerificationQRCode url={verificationUrl} caption="Official verification QR code" />
           <a
             href={verificationUrl}
             className="mt-2 inline-flex min-h-11 h-auto whitespace-normal items-center font-medium text-brand underline"
@@ -1052,6 +1057,21 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
                         }}
                       >
                         Issue approved document
+                      </Button>
+                    )}
+                    {issue && d.status === 'ISSUED' && (
+                      <Button
+                        variant="outline"
+                        className="min-h-11 h-auto whitespace-normal"
+                        disabled={operation.action.isPending}
+                        onClick={() => {
+                          operation.action.mutate(async () => {
+                            const receipt = await api.verificationLink(d.id);
+                            setVerificationUrl(receipt.verificationUrl ?? '');
+                          });
+                        }}
+                      >
+                        Show QR code
                       </Button>
                     )}
                     {revoke && d.status === 'ISSUED' && (

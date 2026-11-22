@@ -53,3 +53,9 @@ identifiers, not secrets; treating them as passwords would let anyone harvest re
 - Structured public responses exclude student photographs. A credential-gated PDF returns the
   approved document as issued, so approval must cover all printed contents, including any photograph
   or other student information.
+- QR delivery for documents: official PDFs are uploaded and hash-pinned before issue, so their
+  credential cannot be printed inside them. The credential is created at issue and is retrievable
+  afterwards: the owning student sees their own document's QR in `/student/documents`, and staff with
+  `certificates.issue` retrieve it with `POST /official-documents/:id/verification-link` (audited as
+  `VERIFICATION_LINK_VIEWED`, no token in the audit) to print on or attach to the physical document.
+  Revoked documents have no link. Marksheet QR codes stay owner-only, printed with the marksheet.
