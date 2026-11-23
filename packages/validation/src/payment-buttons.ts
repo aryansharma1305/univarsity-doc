@@ -6,6 +6,25 @@ export const RAZORPAY_BUTTONS = {
   RE_EXAM: { id: 'pl_TyWTRF7DImX3Pu', label: 'Pay Re-Exam Fee' },
   CERTIFICATE_HARD_COPY: { id: 'pl_TyWXU0D8UbPlEC', label: 'Pay for Hard Copy Certificate' },
 } as const;
+/**
+ * University fee schedule (mentor-supplied amounts, INR paise). Display and form defaults only:
+ * it creates no obligation and enables no collection. Re-exam charges still come from the
+ * activated, versioned re-exam fee rule, which staff create with this amount.
+ */
+export const FEE_SCHEDULE = {
+  EXAM: { label: 'Examination Fee', amountMinor: 150_000 },
+  RE_EXAM: { label: 'Re-examination Fee', amountMinor: 250_000 },
+  CERTIFICATE_HARD_COPY: { label: 'Certificate Fee', amountMinor: 350_000 },
+} as const;
+export const FEE_CURRENCY = 'INR';
+/** "₹3,500" (en-IN grouping, whole rupees). */
+export function formatFee(amountMinor: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: FEE_CURRENCY,
+    maximumFractionDigits: 0,
+  }).format(amountMinor / 100);
+}
 export const paymentButtonServiceSchema = z.enum(['EXAM', 'RE_EXAM', 'CERTIFICATE_HARD_COPY']);
 export type PaymentButtonService = z.infer<typeof paymentButtonServiceSchema>;
 export const PAYMENT_BUTTON_STATE_LABELS = {

@@ -218,6 +218,9 @@ test('re-exam application: confirmed fee schedule, verified identity, attempt an
   await finance.getByRole('button', { name: 'New version' }).click();
   const dialog = finance.getByRole('dialog', { name: 'New fee rule version' });
   await choose(finance, 'Fee is charged', 'Per subject (paper)');
+  // Pre-filled from the university fee schedule (₹2,500); staff may still enter another amount.
+  await expect(dialog.getByLabel(/Attempt 1 amount/)).toHaveValue('2500');
+  await expect(dialog).toContainText('Re-examination Fee ₹2,500');
   await dialog.getByLabel(/Attempt 1 amount/).fill('1000');
   await dialog.getByRole('button', { name: 'Add attempt 2' }).click();
   await dialog.getByLabel(/Attempt 2 amount/).fill('2500');

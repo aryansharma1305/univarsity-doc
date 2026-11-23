@@ -22,6 +22,8 @@ import { Textarea } from '@docversity/ui/components/textarea';
 import {
   type CreateReExamFeeRuleInput,
   createReExamFeeRuleSchema,
+  FEE_SCHEDULE,
+  formatFee,
   formatMoney,
   RE_EXAM_ATTEMPT_BASIS_LABEL,
   RE_EXAM_FEE_SCOPE_LABELS,
@@ -56,7 +58,8 @@ function CreateRuleDialog({
     defaultValues: {
       scope: '' as CreateReExamFeeRuleInput['scope'],
       currency: 'INR',
-      rates: [{ attemptNumber: 1, amount: '' }],
+      // University fee schedule; staff still confirm it before saving and activating.
+      rates: [{ attemptNumber: 1, amount: String(FEE_SCHEDULE.RE_EXAM.amountMinor / 100) }],
       note: '',
     },
   });
@@ -78,9 +81,10 @@ function CreateRuleDialog({
         <DialogHeader>
           <DialogTitle>New fee rule version</DialogTitle>
           <DialogDescription>
-            Enter only amounts the university has approved. Attempts without an amount have no fee —
-            students with such an attempt cannot start payment. Choose the scope the university
-            confirmed.
+            University fee schedule: {FEE_SCHEDULE.RE_EXAM.label}{' '}
+            {formatFee(FEE_SCHEDULE.RE_EXAM.amountMinor)}. Enter only amounts the university has
+            approved. Attempts without an amount have no fee — students with such an attempt cannot
+            start payment. Choose the scope the university confirmed.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(event) => void onSubmit(event)} noValidate className="grid gap-4">
