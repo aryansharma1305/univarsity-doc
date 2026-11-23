@@ -180,6 +180,7 @@ enum DocumentType {
   PROVISIONAL
   TRANSCRIPT
   CHARACTER
+  MIGRATION
 }
 
 enum TemplateStatus {
