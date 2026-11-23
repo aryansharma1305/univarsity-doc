@@ -183,7 +183,8 @@ export class AnonymousVerificationService {
         ...this.courseFields(program),
         STUDENT_NAME: { studentName: registration.student.fullName },
         REGISTRATION_NUMBER: { registrationNumber: registration.registrationNumber },
-        REGISTRATION_DATE: { registrationDate: day(registration.createdAt) },
+        // REGISTRATION_DATE: no stored registration date exists (the workbook column is not imported,
+        // and created_at is the import time), so nothing is disclosed even when a policy allows it.
         ACADEMIC_SESSION: { academicSession: registration.academicSession.name },
         ADMISSION_DATE: { admissionDate: day(registration.admissionDate) },
         COMPLETION_DATE: { completionDate: day(registration.completionDate) },
