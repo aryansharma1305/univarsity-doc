@@ -1,7 +1,8 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useDeferredValue, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { Button } from '@docversity/ui/components/button';
@@ -17,13 +18,14 @@ import { Input } from '@docversity/ui/components/input';
 import { Textarea } from '@docversity/ui/components/textarea';
 import {
   type CreateProgramInput,
+  type DepartmentList,
   PROGRAM_LEVEL_SUGGESTIONS,
   type Program,
   createProgramSchema,
 } from '@docversity/validation';
 import { Field, SelectField } from '@/components/forms/fields';
 import { applyServerErrors } from '@/components/forms/server-errors';
-import { useActiveDepartmentOptions } from '@/features/departments/api';
+import { departmentKeys, useActiveDepartmentOptions } from '@/features/departments/api';
 import { DURATION_UNIT_OPTIONS, STRUCTURE_OPTIONS } from '@/features/curricula/labels';
 import { useSaveProgram } from './api';
 
@@ -56,12 +58,17 @@ export function ProgramDialog({
   program?: Program;
 }) {
   const save = useSaveProgram();
-  const departments = useActiveDepartmentOptions();
+  const [departmentSearch, setDepartmentSearch] = useState('');
+  const search = useDeferredValue(departmentSearch.trim());
+  const departments = useActiveDepartmentOptions(search || undefined);
   const form = useForm<CreateProgramInput>({
     resolver: zodResolver(createProgramSchema),
     defaultValues: EMPTY,
   });
   const structure = useWatch({ control: form.control, name: 'academicStructure' });
+  const watchedDepartment: unknown = useWatch({ control: form.control, name: 'departmentId' });
+  const departmentId = typeof watchedDepartment === 'string' ? watchedDepartment : '';
+  const client = useQueryClient();
   const periodWord = structure === 'YEAR_WISE' ? 'years' : 'semesters';
 
   useEffect(() => {
@@ -84,16 +91,18 @@ export function ProgramDialog({
     );
   }, [open, program, form]);
 
-  // Keep the current department selectable even if it has since been deactivated.
+  // Keep the current department selectable even if it has since been deactivated or the search no
+  // longer matches it: labels come from every department list loaded (any search).
+  const known: Record<string, string> = {};
+  if (program?.department)
+    known[program.department.id] = `${program.department.code} — ${program.department.name}`;
+  for (const [, page] of client.getQueriesData<DepartmentList>({ queryKey: departmentKeys.all }))
+    for (const d of page?.data ?? []) known[d.id] = `${d.code} — ${d.name}`;
   const departmentOptions =
-    program?.department && !departments.options.some((o) => o.value === program.department?.id)
-      ? [
-          ...departments.options,
-          {
-            value: program.department.id,
-            label: `${program.department.code} — ${program.department.name}`,
-          },
-        ]
+    departmentId &&
+    known[departmentId] &&
+    !departments.options.some((o) => o.value === departmentId)
+      ? [{ value: departmentId, label: known[departmentId] }, ...departments.options]
       : departments.options;
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -159,14 +168,37 @@ export function ProgramDialog({
               </>
             )}
           </Field>
-          <div className="sm:col-span-2">
+          <div className="grid gap-2 sm:col-span-2">
+            <Input
+              type="search"
+              aria-label="Search departments by code or name"
+              placeholder="Search departments by code or name"
+              value={departmentSearch}
+              onChange={(event) => {
+                setDepartmentSearch(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                // Enter searches; it must not submit the course form.
+                if (event.key === 'Enter') event.preventDefault();
+              }}
+              autoComplete="off"
+            />
             <SelectField
               control={form.control}
               name="departmentId"
               label="Department / school"
               options={departmentOptions}
               allowNone
-              placeholder="None"
+              placeholder={
+                search && !departments.options.length && !departments.isFetching
+                  ? 'No department matches the search'
+                  : 'None'
+              }
+              hint={
+                departments.data && departments.data.meta.total > departments.options.length
+                  ? `Showing ${departments.options.length} of ${departments.data.meta.total}; search to narrow the list.`
+                  : undefined
+              }
             />
           </div>
           <Field control={form.control} name="durationValue" label="Duration">

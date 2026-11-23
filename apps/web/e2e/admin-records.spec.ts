@@ -55,8 +55,14 @@ test('SUPER_ADMIN creates a department, program, session and student, then finds
   await programDialog.getByLabel('Academic structure').click();
   await page.getByRole('option', { name: 'Semester-wise' }).click();
   await programDialog.getByLabel('Number of semesters').fill('6');
+  // Searching narrows the department list on the server; the choice survives a later search.
+  await programDialog.getByLabel('Search departments by code or name').fill(department);
   await programDialog.getByLabel('Department / school').click();
+  await expect(page.getByRole('option')).toHaveText(['None', new RegExp(department)]);
   await page.getByRole('option', { name: new RegExp(department) }).click();
+  await programDialog.getByLabel('Search departments by code or name').fill('zz-no-such-dept');
+  await expect(programDialog.getByLabel('Department / school')).toContainText(department);
+  await capture(page, 'course-create-department-search');
   await programDialog.getByRole('button', { name: 'Create course' }).click();
   await expect(page.getByText(`Course ${program} created`)).toBeVisible();
 
