@@ -248,8 +248,8 @@ describe('UI-02 navigation and dashboard', () => {
     const queries: string[] = [];
     vi.stubGlobal(
       'fetch',
-      vi.fn((input: RequestInfo | URL) => {
-        const url = new URL(String(input), 'http://localhost');
+      vi.fn((input: string) => {
+        const url = new URL(input, 'http://localhost');
         if (url.pathname.endsWith('/dashboard')) queries.push(url.search);
         return Promise.resolve(
           Response.json(
