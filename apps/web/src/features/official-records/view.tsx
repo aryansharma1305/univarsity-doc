@@ -1070,6 +1070,14 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
                     {label(d.documentType)} · {d.registrationNumber} · {d.program}
                   </p>
                   <p className="mt-1 text-sm font-medium">{label(d.status)}</p>
+                  {d.pdfSource === 'GENERATED' && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Generated letter — unsigned. The university signs and seals the printed copy.
+                    </p>
+                  )}
+                  {d.pdfSource === 'UPLOADED' && (
+                    <p className="mt-1 text-sm text-muted-foreground">Uploaded PDF</p>
+                  )}
                   <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                     <div>
                       <dt className="text-muted-foreground">Issuing institution</dt>

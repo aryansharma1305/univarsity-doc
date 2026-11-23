@@ -519,6 +519,11 @@ function LetterDetails({
             </label>
           ))}
         </fieldset>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {mode === 'generate'
+            ? 'Generated letters are unsigned: print the issued letter for the university’s signature and seal, or upload the already signed PDF instead.'
+            : 'Upload the university’s signed PDF. It is stored unchanged with its checksum.'}
+        </p>
         {mode === 'upload' && (
           <label
             htmlFor={`${formId}-file`}

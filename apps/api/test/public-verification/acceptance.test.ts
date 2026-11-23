@@ -492,6 +492,17 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     const stored = await testDb().certificate.findUniqueOrThrow({ where: { id } });
     expect(stored.status).toBe('PENDING_APPROVAL');
     expect(stored.pdfHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored.sourceSnapshot).toMatchObject({ pdfSource: 'GENERATED' });
+    expect(
+      (await testDb().certificate.findUniqueOrThrow({ where: { id: docs.admission.id } }))
+        .sourceSnapshot,
+    ).toMatchObject({ pdfSource: 'UPLOADED' });
+    const listed = (
+      await people.certAdmin.get('official-documents?documentType=ADMISSION_LETTER').expect(200)
+    ).body as { data: { id: string; pdfSource: string | null }[] };
+    expect(listed.data.find((d) => d.id === id)?.pdfSource).toBe('GENERATED');
+    // Uploading under a number already in use is refused before anything is stored.
+    expect((await upload(people.certAdmin, { ...metadata, generate: undefined })).status).toBe(409);
     await people.certAdmin.post(`official-documents/${id}/approve`).expect(403);
     await people.approver.post(`official-documents/${id}/approve`).expect(200);
     const issued = officialDocumentReceiptSchema.parse(

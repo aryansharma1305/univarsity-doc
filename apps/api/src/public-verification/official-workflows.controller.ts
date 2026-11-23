@@ -217,7 +217,7 @@ export class OfficialDocumentsController {
       throw Errors.validation([
         { path: 'file', message: 'Provide valid authority metadata and a PDF.' },
       ]);
-    return this.service.prepare(metadata, bytes, auth.user.id);
+    return this.service.prepare(metadata, bytes, auth.user.id, generate ? 'GENERATED' : 'UPLOADED');
   }
   @Post('admission-letter/preview')
   @HttpCode(200)

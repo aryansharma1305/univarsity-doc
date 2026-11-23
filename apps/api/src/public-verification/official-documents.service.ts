@@ -315,6 +315,7 @@ export class OfficialDocumentsService {
     body: PrepareOfficialDocument,
     bytes: Buffer,
     actor: string,
+    pdfSource: 'GENERATED' | 'UPLOADED' = 'UPLOADED',
   ): Promise<z.infer<typeof officialDocumentReceiptSchema>> {
     if (bytes.length > 10 * 1024 * 1024 || sniffContentType(bytes) !== 'application/pdf')
       throw Errors.validation([{ path: 'file', message: 'Upload a static PDF up to 10 MB.' }]);
@@ -386,6 +387,7 @@ export class OfficialDocumentsService {
             authorityReference: body.authorityReference,
             requestId: body.requestId ?? null,
             requestVersion,
+            pdfSource,
           });
           const c = await tx.certificate.create({
             data: {

@@ -142,10 +142,14 @@ export async function renderAdmissionLetter(raw: unknown): Promise<Buffer> {
       `Its authenticity can be checked at ${d.verifyUrl} with the letter number, or with the verification QR code issued with this letter.`,
       { width },
     );
+  doc.moveDown(0.6);
+  doc.fillColor(ink).text('This letter is valid only when signed and sealed by the university.', {
+    width,
+  });
 
   // Signature block and footer sit in the bottom margin; never let them start a new page.
   doc.page.margins.bottom = 0;
-  const sign = Math.min(Math.max(doc.y + 32, doc.page.height - 200), doc.page.height - 140);
+  const sign = Math.min(Math.max(doc.y + 28, doc.page.height - 210), doc.page.height - 160);
   doc.fillColor(ink).font('Body').fontSize(10.5);
   doc.text(`For ${d.institutionName}`, left + width - 220, sign, { width: 220, align: 'right' });
   doc
@@ -155,6 +159,14 @@ export async function renderAdmissionLetter(raw: unknown): Promise<Buffer> {
     .strokeColor(ink)
     .stroke();
   doc.text('Authorised Signatory', left + width - 220, sign + 70, { width: 220, align: 'right' });
+  doc
+    .font('Body')
+    .fontSize(8.5)
+    .fillColor(muted)
+    .text('Signature and seal of the issuing authority', left + width - 220, sign + 86, {
+      width: 220,
+      align: 'right',
+    });
 
   doc.font('Body').fontSize(8).fillColor(muted);
   doc.text(
