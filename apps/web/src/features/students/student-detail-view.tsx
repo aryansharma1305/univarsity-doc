@@ -218,6 +218,7 @@ export function StudentDetailView({ studentId }: { studentId: string }) {
                 <Detail label="Mother’s name" value={student.motherName} />
                 <Detail label="Date of birth" value={formatDate(student.dateOfBirth)} />
                 <Detail label="Gender" value={student.gender} />
+                <Detail label="Nationality" value={student.nationality} />
                 <Detail label="Record created" value={formatDateTime(student.createdAt)} />
               </dl>
             </CardContent>

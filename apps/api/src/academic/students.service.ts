@@ -24,7 +24,14 @@ import {
   toRegistration,
 } from './registrations.service.js';
 
-const PERSONAL_FIELDS = ['fullName', 'fatherName', 'motherName', 'dateOfBirth', 'gender'] as const;
+const PERSONAL_FIELDS = [
+  'fullName',
+  'fatherName',
+  'motherName',
+  'dateOfBirth',
+  'gender',
+  'nationality',
+] as const;
 
 @Injectable()
 export class StudentsService {
@@ -118,6 +125,7 @@ export class StudentsService {
       motherName: row.motherName,
       dateOfBirth: toDateOnly(row.dateOfBirth),
       gender: row.gender,
+      nationality: row.nationality,
       hasPhoto: row.photoStorageKey !== null,
       registrations: row.registrations.map(toRegistration),
       createdAt: row.createdAt.toISOString(),
@@ -140,6 +148,7 @@ export class StudentsService {
             motherName: input.student.motherName ?? null,
             dateOfBirth: fromDateOnly(input.student.dateOfBirth) ?? null,
             gender: input.student.gender ?? null,
+            nationality: input.student.nationality ?? null,
           },
         });
         await this.audit.writeAuditEvent(
@@ -178,6 +187,7 @@ export class StudentsService {
           motherName: input.motherName,
           dateOfBirth: fromDateOnly(input.dateOfBirth),
           gender: input.gender,
+          nationality: input.nationality,
         },
       });
       const changed = changedFields(before, after, PERSONAL_FIELDS);

@@ -211,10 +211,28 @@ export async function apiUpload<TSchema extends z.ZodType>(
  * Downloads a private file (template, error report) through the authenticated API and hands it to
  * the browser as a file. Nothing is cached; the object URL is revoked right away.
  */
-export async function apiFile(path: string): Promise<{ blob: Blob; filename: string | null }> {
+export async function apiFile(
+  path: string,
+  /** POSTs this JSON body (with the staff CSRF token) instead of a GET, e.g. a PDF preview. */
+  body?: unknown,
+): Promise<{ blob: Blob; filename: string | null }> {
   let response: Response;
   try {
-    response = await fetch(buildUrl(path), { credentials: 'same-origin', cache: 'no-store' });
+    response = await fetch(
+      buildUrl(path),
+      body === undefined
+        ? { credentials: 'same-origin', cache: 'no-store' }
+        : {
+            method: 'POST',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-Token': await getCsrfToken('staff', false),
+            },
+            body: JSON.stringify(body),
+          },
+    );
   } catch {
     throw new ApiError(
       0,

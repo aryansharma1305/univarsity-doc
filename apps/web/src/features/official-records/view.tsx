@@ -27,6 +27,7 @@ import { useProgramOptions } from '@/features/programs/api';
 import { certificateRequestsApi } from '@/features/certificate-requests/api';
 import { resultReviewApi } from '@/features/result-review/api';
 import { officialApi as api } from './api';
+import { AdmissionLetterIssue, StepTracker } from './admission-letter-issue';
 import { VerificationQRCode } from '@/features/public-verification/verification-result';
 import { useListParams } from '@/hooks/use-list-params';
 const listKeys = ['tab', 'service', 'type'] as const;
@@ -658,6 +659,34 @@ function TemplatePanel() {
     </>
   );
 }
+/** Says who acts next, instead of showing a disabled button with no reason. */
+function NextStep({
+  status,
+  mine,
+  canApprove,
+  canIssue,
+}: {
+  status: string;
+  mine: boolean;
+  canApprove: boolean;
+  canIssue: boolean;
+}) {
+  const message =
+    status === 'PENDING_APPROVAL'
+      ? mine
+        ? 'Waiting for approval. You prepared this document, so another staff member must approve it.'
+        : canApprove
+          ? 'Next: review the PDF and approve.'
+          : 'Waiting for approval by a staff member with approval access.'
+      : status === 'APPROVED'
+        ? mine
+          ? 'Approved. You prepared this document, so another staff member must issue it.'
+          : canIssue
+            ? 'Next: issue the approved document.'
+            : 'Approved. Waiting for a staff member with issue access.'
+        : '';
+  return message ? <p className="mt-3 text-sm text-muted-foreground">{message}</p> : null;
+}
 function DocumentPanel({ initialRequest }: { initialRequest: string }) {
   const user = useSessionUser(),
     generate = useCan(PERMISSIONS.certificatesGenerate),
@@ -671,7 +700,9 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
     [registration, setRegistration] = useState<Registration | null>(null),
     [typeOverride, setType] = useState<string>(),
     [revoking, setRevoking] = useState(''),
-    [verificationUrl, setVerificationUrl] = useState('');
+    [verificationUrl, setVerificationUrl] = useState(''),
+    [prepared, setPrepared] = useState(''),
+    [draftStep, setDraftStep] = useState(0);
   const operation = useAction();
   const request = useQuery({
     queryKey: ['official', 'request', initialRequest],
@@ -680,6 +711,7 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
   });
   const requestOwner = request.data?.student;
   const documentType = prepareOfficialDocumentSchema.shape.documentType.safeParse(values.type).data;
+  const admission = documentType === 'ADMISSION_LETTER';
   const type =
     typeOverride ??
     documentType ??
@@ -739,8 +771,34 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
   });
   return (
     <>
-      <h2 className="text-lg font-semibold">Issue and revoke official documents</h2>
-      {documentType && (
+      {admission ? (
+        <>
+          <h2 className="text-lg font-semibold">Issue Admission Letter</h2>
+          <div className="mt-4">
+            <StepTracker
+              current={(() => {
+                const status = query.data?.data.find((d) => d.id === prepared)?.status;
+                return status === 'ISSUED' ? 5 : status === 'APPROVED' ? 4 : status ? 3 : draftStep;
+              })()}
+            />
+          </div>
+          <div className="mt-6">
+            <AdmissionLetterIssue
+              onPrepared={(id) => {
+                setPrepared(id);
+                setDraftStep(0);
+              }}
+              onStep={(step) => {
+                setPrepared('');
+                setDraftStep(step);
+              }}
+            />
+          </div>
+        </>
+      ) : (
+        <h2 className="text-lg font-semibold">Issue and revoke official documents</h2>
+      )}
+      {documentType && !admission && (
         <p className="mt-2 text-sm">
           Showing {label(documentType).toLowerCase()} records.{' '}
           <Link href="/admin/official-records" className="text-brand underline">
@@ -750,10 +808,7 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
       )}
       {verificationUrl && (
         <div role="status" className="my-4 rounded-xl border border-border bg-card p-5 text-sm">
-          <p>
-            The issued document’s secure verification link is ready. Print this QR code on or with
-            the document; anyone holding it can verify the document.
-          </p>
+          <p>Print this QR code on or with the document. Anyone holding it can verify it.</p>
           <VerificationQRCode url={verificationUrl} caption="Official verification QR code" />
           <a
             href={verificationUrl}
@@ -763,12 +818,16 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
           </a>
         </div>
       )}
-      <p className="mt-2 max-w-prose text-sm text-muted-foreground">
-        Use the university’s approved PDF and document number. Registration imports do not create
-        admission letters. Certificate preparation also requires the matching reviewed application
-        and its current approved policy.
-      </p>
-      {generate && (
+      {!admission && (
+        <p className="mt-2 max-w-prose text-sm text-muted-foreground">
+          Use the university’s approved PDF and document number. Certificate preparation also
+          requires the matching reviewed application and its current approved policy.
+        </p>
+      )}
+      {admission && (
+        <h3 className="mt-8 text-base font-semibold">4–5. Review, approve and issue</h3>
+      )}
+      {generate && !admission && (
         <section
           className="my-6 rounded-xl border border-border bg-card p-5"
           aria-label="Prepare official document"
@@ -1031,32 +1090,40 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
                         className="inline-flex min-h-11 h-auto whitespace-normal items-center rounded-md border border-border px-4 text-sm font-medium text-brand"
                         href={`/api/v1/official-documents/${d.id}/file`}
                       >
-                        Review private PDF
+                        {d.documentType === 'ADMISSION_LETTER'
+                          ? 'Download PDF'
+                          : 'Review private PDF'}
                       </a>
                     )}
-                    {approve && d.status === 'PENDING_APPROVAL' && (
+                    {approve &&
+                      d.status === 'PENDING_APPROVAL' &&
+                      d.generatedByUserId !== user.id && (
+                        <Button
+                          className="min-h-11 h-auto whitespace-normal"
+                          disabled={operation.action.isPending}
+                          onClick={() => {
+                            setPrepared(d.id);
+                            operation.action.mutate(() => api.documentAction(d.id, 'approve'));
+                          }}
+                        >
+                          {d.documentType === 'ADMISSION_LETTER' ? 'Approve' : 'Approve document'}
+                        </Button>
+                      )}
+                    {issue && d.status === 'APPROVED' && d.generatedByUserId !== user.id && (
                       <Button
                         className="min-h-11 h-auto whitespace-normal"
-                        disabled={d.generatedByUserId === user.id || operation.action.isPending}
+                        disabled={operation.action.isPending}
                         onClick={() => {
-                          operation.action.mutate(() => api.documentAction(d.id, 'approve'));
-                        }}
-                      >
-                        Approve document
-                      </Button>
-                    )}
-                    {issue && d.status === 'APPROVED' && (
-                      <Button
-                        className="min-h-11 h-auto whitespace-normal"
-                        disabled={d.generatedByUserId === user.id || operation.action.isPending}
-                        onClick={() => {
+                          setPrepared(d.id);
                           operation.action.mutate(async () => {
                             const receipt = await api.documentAction(d.id, 'issue');
                             setVerificationUrl(receipt.verificationUrl ?? '');
                           });
                         }}
                       >
-                        Issue approved document
+                        {d.documentType === 'ADMISSION_LETTER'
+                          ? 'Issue Letter'
+                          : 'Issue approved document'}
                       </Button>
                     )}
                     {issue && d.status === 'ISSUED' && (
@@ -1071,8 +1138,16 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
                           });
                         }}
                       >
-                        Show QR code
+                        Show QR Code
                       </Button>
+                    )}
+                    {d.status === 'ISSUED' && d.documentType === 'ADMISSION_LETTER' && (
+                      <Link
+                        href="/verify/admission-letter"
+                        className="inline-flex min-h-11 h-auto items-center rounded-md border border-border px-4 text-sm font-medium text-brand"
+                      >
+                        Verify Letter
+                      </Link>
                     )}
                     {revoke && d.status === 'ISSUED' && (
                       <Button
@@ -1086,6 +1161,12 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
                       </Button>
                     )}
                   </div>
+                  <NextStep
+                    status={d.status}
+                    mine={d.generatedByUserId === user.id}
+                    canApprove={approve}
+                    canIssue={issue}
+                  />
                   {revoking === d.id && (
                     <form
                       className="mt-4 flex flex-col gap-3 sm:flex-row"
@@ -1403,10 +1484,11 @@ export function OfficialRecords({
         title="Official records"
         description="Controlled university policies, document issuance and private result publication."
       />
-      <p className="mb-6 max-w-prose text-sm text-muted-foreground">
-        Real disclosure stays disabled until the university approves its legal issuer, public fields
-        and authorities. Draft proposals, templates and applications are never public proof.
-      </p>
+      {values.type !== 'ADMISSION_LETTER' && (
+        <p className="mb-6 max-w-prose text-sm text-muted-foreground">
+          Draft proposals, templates and applications are never public proof.
+        </p>
+      )}
       <Tabs
         value={values.tab || (initialResult ? 'results' : 'documents')}
         onValueChange={(tab) => {

@@ -445,6 +445,9 @@ model Student {
   /// Optional. NOT a public lookup factor — the second lookup identifier is unconfirmed.
   dateOfBirth     DateTime? @map("date_of_birth") @db.Date
   gender          String?   @db.VarChar(32)
+  /// Optional, staff-recorded. Private document content (admission letters); never a public
+  /// verification field.
+  nationality     String?   @db.VarChar(80)
   photoStorageKey String?   @map("photo_storage_key") @db.VarChar(512)
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)

@@ -88,6 +88,7 @@ interface Learner {
 let alice: Learner, bob: Learner;
 const docs = {
   admission: { id: '', number: '', token: '' },
+  generated: { id: '' },
   transcript: { id: '', number: '', token: '' },
 };
 let resultId = '';
@@ -419,6 +420,88 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     );
   });
 
+  it('A4b generated admission letter: records only, nationality required, unique number, same two-person issue', async () => {
+    const templateId = await template('ADMISSION_LETTER', s.policies['admission-letter']);
+    const number = `ACC-GEN-${randomBytes(4).toString('hex').toUpperCase()}`;
+    const preview = {
+      registrationId: alice.registrationId,
+      policyId: s.policies['admission-letter'],
+      templateId,
+      certificateNumber: number,
+      issueDate: '2026-11-02',
+      authorityReference: 'Local acceptance admission authority',
+    };
+    const studentId = (
+      await testDb().studentRegistration.findUniqueOrThrow({ where: { id: alice.registrationId } })
+    ).studentId;
+    await people.viewer.post('official-documents/admission-letter/preview', preview).expect(403);
+    // No nationality on record: generation refuses instead of inventing one.
+    const missing = await people.certAdmin.post(
+      'official-documents/admission-letter/preview',
+      preview,
+    );
+    expect(missing.status).toBe(400);
+    expect(JSON.stringify(missing.body)).toMatch(/nationality/);
+    await people.registrar.patch(`students/${studentId}`, { nationality: 'Testland' }).expect(200);
+    // A number already used by another document is refused before anything is prepared.
+    const duplicate = await people.certAdmin.post('official-documents/admission-letter/preview', {
+      ...preview,
+      certificateNumber: docs.admission.number,
+    });
+    expect(duplicate.status).toBe(400);
+    expect(JSON.stringify(duplicate.body)).toMatch(/already used/);
+    const pdf = await people.certAdmin.agent
+      .post('/api/v1/official-documents/admission-letter/preview')
+      .set('X-CSRF-Token', people.certAdmin.csrf)
+      .send(preview)
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      });
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect(pdf.headers['cache-control']).toBe('no-store');
+    const bytes = pdf.body as Buffer;
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(bytes.toString('latin1').match(/\/Type \/Page[^s]/g)).toHaveLength(1);
+    // Nothing was stored by the preview.
+    expect(await testDb().certificate.count({ where: { certificateNumber: number } })).toBe(0);
+
+    const metadata = { ...preview, documentType: 'ADMISSION_LETTER', generate: true };
+    // Exactly one source: generated or uploaded, never both; only admission letters generate.
+    expect((await upload(people.certAdmin, metadata)).status).toBe(400);
+    expect(
+      (
+        await people.certAdmin.agent
+          .post('/api/v1/official-documents')
+          .set('X-CSRF-Token', people.certAdmin.csrf)
+          .field('metadata', JSON.stringify({ ...metadata, documentType: 'TRANSCRIPT' }))
+      ).status,
+    ).toBe(400);
+    const prepared = await people.certAdmin.agent
+      .post('/api/v1/official-documents')
+      .set('X-CSRF-Token', people.certAdmin.csrf)
+      .field('metadata', JSON.stringify(metadata));
+    expect(prepared.status, JSON.stringify(prepared.body)).toBe(201);
+    const id = officialDocumentReceiptSchema.parse(prepared.body).id;
+    docs.generated.id = id;
+    const stored = await testDb().certificate.findUniqueOrThrow({ where: { id } });
+    expect(stored.status).toBe('PENDING_APPROVAL');
+    expect(stored.pdfHash).toMatch(/^[0-9a-f]{64}$/);
+    await people.certAdmin.post(`official-documents/${id}/approve`).expect(403);
+    await people.approver.post(`official-documents/${id}/approve`).expect(200);
+    const issued = officialDocumentReceiptSchema.parse(
+      (await people.approver.post(`official-documents/${id}/issue`).expect(200)).body,
+    );
+    expect(issued.verificationUrl).toMatch(/\/verify\/admission-letter#token=[A-Za-z0-9_-]{43}$/);
+    const byNumber = await verify('admission-letter', { reference: number });
+    expect(byNumber.body).toMatchObject({ status: 'VALID', documentType: 'ADMISSION_LETTER' });
+    // Nationality is letter content, never a public verification field.
+    expect(JSON.stringify(byNumber.body)).not.toMatch(/Testland|nationality/i);
+  });
+
   it('A5 certificate (TRANSCRIPT): student request -> review -> prepare -> approve -> issue -> ISSUED by number and QR', async () => {
     const templateId = await template('TRANSCRIPT', s.policies.certificate);
     const csrf = await studentCsrf(alice.agent);
@@ -513,7 +596,9 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     const list = studentIssuedDocumentsSchema.parse(
       (await alice.agent.get('/api/v1/student/official-documents').expect(200)).body,
     );
-    expect(list.map((d) => d.id).sort()).toEqual([docs.admission.id, docs.transcript.id].sort());
+    expect(list.map((d) => d.id).sort()).toEqual(
+      [docs.admission.id, docs.generated.id, docs.transcript.id].sort(),
+    );
     expect(
       studentIssuedDocumentsSchema.parse(
         (await bob.agent.get('/api/v1/student/official-documents').expect(200)).body,

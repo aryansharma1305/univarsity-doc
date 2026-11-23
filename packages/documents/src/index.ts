@@ -8,3 +8,4 @@ export * from './student-certificate-sample.js';
 export * from './academic-templates.js';
 export * from './academic-renderer.js';
 export * from './academic-certificate-samples.js';
+export * from './admission-letter.js';

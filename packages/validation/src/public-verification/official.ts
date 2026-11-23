@@ -264,8 +264,14 @@ export const prepareOfficialDocumentSchema = z
       .refine((v) => !/sample|synthetic|draft/i.test(v)),
     issueDate: z.iso.date(),
     authorityReference: text(200),
+    /** Admission letters only: the server generates the PDF from records instead of an upload. */
+    generate: z.literal(true).optional(),
   })
-  .strict();
+  .strict()
+  .refine((v) => !v.generate || v.documentType === 'ADMISSION_LETTER', {
+    path: ['generate'],
+    message: 'Only admission letters can be generated.',
+  });
 export const officialDocumentSnapshotSchema = z
   .object({
     usage: z.literal('OFFICIAL'),
