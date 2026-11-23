@@ -22,3 +22,7 @@ Reviewed GitHub main at `93f2bd958da162cbf9a2a64e71914baef6647c6b`, including me
 - The normal web access-reset flow reports an error if the post-commit Redis cleanup for MFA enrollment or lockout fails. At that point the password, reset audit and database changes have already committed. Re-enablement in PR #61 uses pre-commit MFA cleanup and does not have that failure order.
 - Web access reset still accepts a policy-compliant temporary password that matches the current password. The emergency CLI still leaves transient MFA enrollment and lockout keys to the existing expiry and enrollment cleanup paths. The credential check prevents stale enrollment confirmation.
 - Staff role checks remain on the server. The last-active-Super-Admin demotion and disable protections still use a shared transaction lock. Emergency reset does not write status or role assignments.
+
+Support note: while an account has a pending temporary password (`passwordChangeRequired`), the email
+reset flow answers with the usual generic message but issues no link. Staff in that state recover through
+another administrator's access reset or the emergency CLI reset, never by email.
