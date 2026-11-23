@@ -71,6 +71,23 @@ export class PasswordResetStore {
     return typeof userId === 'string' ? userId : null;
   }
 
+  /** Invalidates the user's outstanding reset token, if any (disable, re-enable, access reset). */
+  async revokeForUser(userId: string): Promise<void> {
+    await this.op((redis) =>
+      redis.eval(
+        `
+      local previous = redis.call('GET', KEYS[1])
+      if previous then redis.call('DEL', ARGV[1] .. previous) end
+      redis.call('DEL', KEYS[1])
+      return 1
+    `,
+        1,
+        this.userKey(userId),
+        this.tokenKey(''),
+      ),
+    );
+  }
+
   private tokenKey(tokenHash: string): string {
     return `${this.config.REDIS_KEY_PREFIX}pwreset:${tokenHash}`;
   }

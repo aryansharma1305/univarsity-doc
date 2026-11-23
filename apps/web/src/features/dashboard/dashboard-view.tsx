@@ -12,8 +12,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@docversity/ui/components/button';
 import { PERMISSIONS } from '@docversity/types';
+import { useState } from 'react';
 import { WorkspaceNavigator } from './workspace-navigator';
-import { PendingWork } from './pending-work';
+import { PendingWork, visibleQueues } from './pending-work';
+import { Enrolment, RecordsStrip } from './enrolment';
 import { Skeleton } from '@docversity/ui/components/skeleton';
 import { dashboardSchema } from '@docversity/validation';
 import { PageHeader } from '@/components/data/page-header';
@@ -69,15 +71,17 @@ export function DashboardView() {
   const client = useQueryClient();
   const can = (permission: (typeof PERMISSIONS)[keyof typeof PERMISSIONS]) =>
     user.permissions.includes(permission);
-  const hasPending = [
-    PERMISSIONS.studentProfileRequestsRead,
-    PERMISSIONS.reExamApplicationsRead,
-    PERMISSIONS.reExamPaymentsRead,
-  ].some(can);
+  const [academicSessionId, setAcademicSessionId] = useState('');
   const query = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: () => apiRequest('GET', 'dashboard', dashboardSchema),
+    queryKey: ['dashboard', academicSessionId],
+    queryFn: () =>
+      apiRequest('GET', 'dashboard', dashboardSchema, {
+        query: academicSessionId ? { academicSessionId } : {},
+      }),
+    placeholderData: (previous) => previous,
   });
+  const workload = query.data?.workload;
+  const hasPending = workload !== undefined && visibleQueues(workload, user.permissions).length > 0;
   const counts = query.data?.counts;
 
   return (
@@ -91,8 +95,7 @@ export function DashboardView() {
             size="sm"
             disabled={query.isFetching}
             onClick={() => {
-              void query.refetch();
-              void client.invalidateQueries({ queryKey: ['dashboard-pending'] });
+              void client.invalidateQueries({ queryKey: ['dashboard'] });
             }}
           >
             <RefreshCwIcon
@@ -137,13 +140,21 @@ export function DashboardView() {
               href={can(PERMISSIONS.academicSessionsRead) ? '/admin/academic-sessions' : undefined}
             />
           </section>
+          {workload && <RecordsStrip workload={workload} />}
+          {query.data?.enrolment && (
+            <Enrolment
+              enrolment={query.data.enrolment}
+              academicSessionId={academicSessionId}
+              onSessionChange={setAcademicSessionId}
+            />
+          )}
           <div className="mt-6">
             <WorkspaceNavigator />
           </div>
           <div className={hasPending ? 'mt-6 grid items-start gap-6 xl:grid-cols-5' : 'mt-6'}>
             {hasPending && (
               <div className="xl:col-span-2">
-                <PendingWork />
+                <PendingWork workload={workload} />
               </div>
             )}
             {query.data?.recentActivity !== null && (

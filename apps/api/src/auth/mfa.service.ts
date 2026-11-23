@@ -404,6 +404,13 @@ export class MfaService {
     await this.redisOp((redis) => redis.del(this.enrollmentKey(userId)));
   }
 
+  /** Removes stale enrollment and lockout state together before a disabled account becomes active. */
+  async clearEnrollmentAndLockout(userId: string): Promise<void> {
+    await this.redisOp((redis) =>
+      redis.del(this.enrollmentKey(userId), this.lockKey(userId), this.failureKey(userId)),
+    );
+  }
+
   /** The AuthUser view of a user (with the step their session still has to complete). */
   async currentUser(userId: string, record: { stage?: 'mfa' } | null): Promise<AuthUser> {
     const user = await this.users.findForAuthById(userId);

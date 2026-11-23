@@ -38,6 +38,10 @@ export const AUDIT_ACTIONS = {
   mfaEnrollmentCleanupIncomplete: 'MFA_ENROLLMENT_CLEANUP_INCOMPLETE',
   mfaRecoveryCodeUsed: 'MFA_RECOVERY_CODE_USED',
   staffAccessReset: 'STAFF_ACCESS_RESET',
+  /** A SUPER_ADMIN replaced another staff member's roles. Metadata: role names before/after. */
+  staffRolesChanged: 'STAFF_ROLES_CHANGED',
+  /** A SUPER_ADMIN re-enabled a disabled staff account (a new password is required). */
+  userEnabled: 'USER_ENABLED',
   adminCreated: 'ADMIN_CREATED',
   departmentCreated: 'DEPARTMENT_CREATED',
   departmentUpdated: 'DEPARTMENT_UPDATED',
@@ -110,6 +114,10 @@ export const AUDIT_ACTIONS = {
   examinationArchived: 'EXAMINATION_ARCHIVED',
   examinationReExamApplicationsOpened: 'EXAMINATION_RE_EXAM_APPLICATIONS_OPENED',
   examinationReExamApplicationsClosed: 'EXAMINATION_RE_EXAM_APPLICATIONS_CLOSED',
+  /** Timetable replaced. Metadata: item count and whether it was published at the time. */
+  examinationScheduleUpdated: 'EXAMINATION_SCHEDULE_UPDATED',
+  examinationSchedulePublished: 'EXAMINATION_SCHEDULE_PUBLISHED',
+  examinationScheduleUnpublished: 'EXAMINATION_SCHEDULE_UNPUBLISHED',
   reExamFeeRuleCreated: 'RE_EXAM_FEE_RULE_CREATED',
   reExamFeeRuleActivated: 'RE_EXAM_FEE_RULE_ACTIVATED',
   reExamFeeRuleRetired: 'RE_EXAM_FEE_RULE_RETIRED',

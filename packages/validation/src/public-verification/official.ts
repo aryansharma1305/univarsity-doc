@@ -19,7 +19,7 @@ export const approvedCertificateApplicationSchema = certificateApplicationPolicy
     actions: true,
   })
   .extend({
-    certificateType: z.enum(['PROVISIONAL', 'TRANSCRIPT', 'CHARACTER']),
+    certificateType: z.enum(['PROVISIONAL', 'TRANSCRIPT', 'CHARACTER', 'MIGRATION']),
     reviewAuthorityReference: text(200),
   })
   .strict();
@@ -247,7 +247,13 @@ export const prepareOfficialDocumentSchema = z
     registrationId: z.uuid(),
     policyId: z.uuid(),
     templateId: z.uuid(),
-    documentType: z.enum(['ADMISSION_LETTER', 'PROVISIONAL', 'TRANSCRIPT', 'CHARACTER']),
+    documentType: z.enum([
+      'ADMISSION_LETTER',
+      'PROVISIONAL',
+      'TRANSCRIPT',
+      'CHARACTER',
+      'MIGRATION',
+    ]),
     requestId: z.uuid().optional(),
     certificateNumber: z
       .string()

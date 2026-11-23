@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Prisma } from '@docversity/database';
 import { PrismaService } from '../database/prisma.service.js';
+import { courseTypeApproved } from '../certificate-eligibility/course-type-approval.js';
 import { VerificationPoliciesService } from '../public-verification/verification-policies.service.js';
 import { Inject, Injectable } from '@nestjs/common';
 import {
@@ -48,6 +49,9 @@ export class CertificatePoliciesService {
       select: { programId: true },
     });
     for (const r of registrations) {
+      // Migration certificates also need the course's approved eligibility (ADR-0018).
+      if (type === 'MIGRATION' && !(await courseTypeApproved(tx, 'MIGRATION', r.programId)))
+        continue;
       const p = await this.authority.application(type, r.programId, tx, policyId);
       if (p) return p;
     }

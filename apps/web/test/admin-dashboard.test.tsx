@@ -7,7 +7,7 @@ import { ADMIN_NAV, NAV_GROUPS, visibleAdminNav } from '@/components/admin/nav';
 import { activeNavHref } from '@/components/admin/nav-groups';
 import { DashboardView } from '@/features/dashboard/dashboard-view';
 import { resetApiClient } from '@/lib/api';
-import { EMPTY_PAGE, mockFetch, renderWithProviders, VIEWER } from './render';
+import { mockFetch, renderWithProviders, VIEWER } from './render';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/admin/results/import',
@@ -32,6 +32,39 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+const NO_WORKLOAD = {
+  profileRequestsPending: null,
+  certificateRequestsAwaitingStaff: null,
+  reExamApplicationsPending: null,
+  reExamPaymentsPending: null,
+  resultsDraft: null,
+  resultsUnderReview: null,
+  resultsPublished: null,
+  resultsWithheld: null,
+  documentsAwaitingApproval: null,
+  documentsIssued: null,
+  admissionLettersIssued: null,
+  messagesAwaitingReply: null,
+  verificationQueriesOpen: null,
+  unreadNotifications: 0,
+};
+
+/** A dashboard response: queues the account may not read are null, as the API returns them. */
+function dashboard(
+  overrides: {
+    recentActivity?: unknown[] | null;
+    workload?: Partial<Record<keyof typeof NO_WORKLOAD, number | null>>;
+    enrolment?: unknown;
+  } = {},
+) {
+  return {
+    counts: { students: 123, activeRegistrations: 99, programs: 4, academicSessions: 2 },
+    recentActivity: overrides.recentActivity ?? null,
+    workload: { ...NO_WORKLOAD, ...overrides.workload },
+    enrolment: overrides.enrolment ?? null,
+  };
+}
 
 describe('UI-02 navigation and dashboard', () => {
   it('selects the most specific route or matching workspace filter', () => {
@@ -97,58 +130,85 @@ describe('UI-02 navigation and dashboard', () => {
     expect(localStorage.getItem('docversity.admin.sidebarCollapsed')).toBe('0');
   });
 
-  it('renders API totals without fetching unauthorized pending queues', async () => {
-    const fetch = mockFetch(() => ({
-      body: {
-        counts: { students: 123, activeRegistrations: 99, programs: 4, academicSessions: 2 },
-        recentActivity: null,
-      },
-    }));
+  it('renders API totals and hides queues the account may not read', async () => {
+    const fetch = mockFetch(() => ({ body: dashboard() }));
     renderWithProviders(<DashboardView />, VIEWER);
     expect(await screen.findByText('123')).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Pending work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Records' })).not.toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('tab', { name: 'Examination' })).not.toBeInTheDocument();
   });
 
-  it('shows a real pending total only for an authorized queue', async () => {
-    mockFetch((_method, path) => ({
-      body:
-        path === 'dashboard'
-          ? {
-              counts: { students: 5, activeRegistrations: 5, programs: 2, academicSessions: 1 },
-              recentActivity: [],
-            }
-          : { ...EMPTY_PAGE, meta: { ...EMPTY_PAGE.meta, total: 7 } },
+  it('shows only the authorized queues with their real totals', async () => {
+    mockFetch(() => ({
+      body: dashboard({
+        recentActivity: [],
+        workload: { profileRequestsPending: 7, messagesAwaitingReply: 0 },
+      }),
     }));
     renderWithProviders(<DashboardView />, {
       ...VIEWER,
-      permissions: [...VIEWER.permissions, 'studentProfileRequests.read'],
+      permissions: [...VIEWER.permissions, 'studentProfileRequests.review'],
     });
     expect(await screen.findByLabelText('7 pending profile requests')).toBeVisible();
+    // Readable but not actionable for this account (no studentMessages.respond): not its work.
+    expect(screen.queryByLabelText('0 pending student messages')).not.toBeInTheDocument();
     expect(screen.queryByText('Payment submissions')).not.toBeInTheDocument();
     expect(screen.getByText('No activity yet')).toBeVisible();
   });
 
-  it('offers recovery for a failed pending queue without fabricating a zero', async () => {
-    mockFetch((_method, path) =>
-      path === 'dashboard'
-        ? {
-            body: {
-              counts: { students: 5, activeRegistrations: 5, programs: 2, academicSessions: 1 },
-              recentActivity: null,
+  it('shows record totals and enrolment by course and session, and filters by session', async () => {
+    mockFetch(() => ({
+      body: dashboard({
+        workload: { resultsPublished: 3, documentsIssued: 2 },
+        enrolment: {
+          academicSessionId: null,
+          byProgram: [
+            {
+              id: '00000000-0000-4000-8000-000000000001',
+              code: 'BSC',
+              name: 'B.Sc',
+              activeRegistrations: 40,
             },
-          }
-        : {
-            status: 503,
-            body: { error: { code: 'UNAVAILABLE', message: 'Try again', requestId: 'test' } },
-          },
-    );
-    renderWithProviders(<DashboardView />, {
-      ...VIEWER,
-      permissions: [...VIEWER.permissions, 'studentProfileRequests.read'],
-    });
-    expect(await screen.findByRole('button', { name: 'Retry profile requests' })).toBeVisible();
-    expect(screen.queryByLabelText('0 pending profile requests')).not.toBeInTheDocument();
+            {
+              id: '00000000-0000-4000-8000-000000000002',
+              code: 'MBA',
+              name: 'MBA',
+              activeRegistrations: 10,
+            },
+          ],
+          bySession: [
+            {
+              id: '00000000-0000-4000-8000-000000000003',
+              code: '2026',
+              name: '2026',
+              activeRegistrations: 50,
+            },
+          ],
+        },
+      }),
+    }));
+    renderWithProviders(<DashboardView />, VIEWER);
+    const records = await screen.findByRole('region', { name: 'Records' });
+    expect(records).toHaveTextContent('Published results3');
+    expect(records).toHaveTextContent('Documents issued2');
+    expect(records).not.toHaveTextContent('Draft results');
+    const byCourse = screen.getByRole('list', { name: 'Active registrations by course' });
+    expect(byCourse).toHaveTextContent('BSC');
+    expect(byCourse).toHaveTextContent('40');
+    expect(
+      screen.getByRole('list', { name: 'Active registrations by academic session' }),
+    ).toHaveTextContent('50');
+  });
+
+  it('offers a retry when the dashboard cannot load, without fabricating zeros', async () => {
+    mockFetch(() => ({
+      status: 503,
+      body: { error: { code: 'UNAVAILABLE', message: 'Try again', requestId: 'test' } },
+    }));
+    renderWithProviders(<DashboardView />, VIEWER);
+    expect(await screen.findByRole('button', { name: /retry|try again/i })).toBeVisible();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
 });
