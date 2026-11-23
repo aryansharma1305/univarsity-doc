@@ -30,8 +30,14 @@ export function useDepartments(query: Partial<DepartmentQuery>) {
 }
 
 /** Active departments for select boxes. */
-export function useActiveDepartmentOptions() {
-  const query = useDepartments({ status: 'ACTIVE', pageSize: 100, sortBy: 'code' });
+/** Active departments (first 100, by code); `search` narrows by code or name on the server. */
+export function useActiveDepartmentOptions(search?: string) {
+  const query = useDepartments({
+    status: 'ACTIVE',
+    pageSize: 100,
+    sortBy: 'code',
+    ...(search ? { search } : {}),
+  });
   return {
     ...query,
     options: (query.data?.data ?? []).map((d) => ({ value: d.id, label: `${d.code} — ${d.name}` })),
