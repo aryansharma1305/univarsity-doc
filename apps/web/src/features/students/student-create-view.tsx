@@ -24,7 +24,14 @@ import { PersonalFields } from './personal-fields';
 import { RegistrationFields } from './registration-fields';
 
 const EMPTY: CreateStudentInput = {
-  student: { fullName: '', fatherName: '', motherName: '', dateOfBirth: '', gender: '', nationality: '' },
+  student: {
+    fullName: '',
+    fatherName: '',
+    motherName: '',
+    dateOfBirth: '',
+    gender: '',
+    nationality: '',
+  },
   registration: {
     registrationNumber: '',
     rollReferenceNumber: '',
