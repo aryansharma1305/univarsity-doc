@@ -147,7 +147,9 @@ test('unauthorized staff have no queue access or navigation', async ({ page }) =
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await expect(
-    page.getByRole('dialog').getByRole('link', { name: 'Certificate Requests', exact: true }),
+    page
+      .getByRole('dialog')
+      .getByRole('link', { name: 'Certificate Requests', exact: true, includeHidden: true }),
   ).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expectNoSeriousA11yViolations(page);
