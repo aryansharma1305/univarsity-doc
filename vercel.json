@@ -1,7 +1,0 @@
-{
-  "git": {
-    "deploymentEnabled": {
-      "security/emergency-access-reset-hardening": false
-    }
-  }
-}
