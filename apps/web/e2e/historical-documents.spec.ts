@@ -293,7 +293,7 @@ test('unsafe uploads are refused, and read-only staff and students cannot manage
   await expect(
     reader
       .getByRole('complementary', { name: 'Admin navigation' })
-      .getByRole('link', { name: 'Historical Certificates' }),
+      .getByRole('link', { name: 'Historical Certificates', includeHidden: true }),
   ).toHaveCount(0);
   const { csrfToken } = (await (await reader.request.get('/api/v1/auth/csrf')).json()) as {
     csrfToken: string;

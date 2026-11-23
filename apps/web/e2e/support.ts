@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
-import { type Page, expect } from '@playwright/test';
+import { type Locator, type Page, expect } from '@playwright/test';
 
 export interface Account {
   email: string;
@@ -111,12 +111,24 @@ export async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(overflow).toBeLessThanOrEqual(1);
 }
 
+/** A desktop sidebar link (exact name), expanding its collapsed group first. */
+export async function sidebarLink(page: Page, name: string): Promise<Locator> {
+  const nav = page.getByRole('complementary', { name: 'Admin navigation' });
+  const any = page.getByRole('link', { name, exact: true, includeHidden: true });
+  await nav
+    .getByRole('link', { name, exact: true, includeHidden: true })
+    .waitFor({ state: 'attached' });
+  const toggle = nav
+    .locator('section')
+    .filter({ has: any })
+    .getByRole('button', { expanded: false });
+  if (await toggle.count()) await toggle.click();
+  return nav.getByRole('link', { name, exact: true });
+}
+
 /** Clicks an admin section in the desktop sidebar (exact name, scoped to the sidebar). */
 export async function openSection(page: Page, name: string, heading = name): Promise<void> {
-  await page
-    .getByRole('complementary', { name: 'Admin navigation' })
-    .getByRole('link', { name, exact: true })
-    .click();
+  await (await sidebarLink(page, name)).click();
   await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
 }
 

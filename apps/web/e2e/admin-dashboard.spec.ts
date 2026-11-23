@@ -4,6 +4,7 @@ import {
   expectNoHorizontalOverflow,
   expectNoSeriousA11yViolations,
   fixtures,
+  sidebarLink,
   signIn,
 } from './support';
 
@@ -40,6 +41,11 @@ test('admin dashboard and responsive navigation acceptance', async ({ page }) =>
       await expect(page.getByRole('dialog', { name: 'Navigation' })).toBeVisible();
       await expectNoSeriousA11yViolations(page);
       await page.screenshot({ path: `test-results/screenshots/${prefix}-drawer-${name}.png` });
+      const settings = page
+        .getByRole('dialog', { name: 'Navigation' })
+        .getByRole('button', { name: 'Settings & Administration' });
+      await settings.click();
+      await expect(settings).toHaveAttribute('aria-expanded', 'true');
       await page
         .getByRole('dialog', { name: 'Navigation' })
         .getByRole('link', { name: 'Payment Settings', exact: true })
@@ -64,17 +70,24 @@ test('workspace keyboard, role visibility and reduced motion', async ({ page }) 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await signIn(page, fixtures().viewer);
   await expect(page.getByRole('heading', { name: 'Pending work' })).toHaveCount(0);
-  const academic = page.getByRole('tab', { name: 'Subject Management', exact: true });
-  await academic.focus();
+  // Arrow keys move along the tabs: from the tab before Results onto Results.
+  const names = await page
+    .getByRole('tablist', { name: 'Workspace categories' })
+    .getByRole('tab')
+    .allInnerTexts();
+  const before = names[names.findIndex((name) => name.trim() === 'Results') - 1]?.trim() ?? '';
+  await page.getByRole('tab', { name: before, exact: true }).focus();
   await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Examination', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('tab', { name: 'Results', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await expect(
     page.getByRole('tabpanel').getByRole('link', { name: 'Draft Results', exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Payment Settings', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('link', { name: 'Payment Settings', exact: true, includeHidden: true }),
+  ).toHaveCount(0);
   await expectNoSeriousA11yViolations(page);
   await capture(page, 'ui02-viewer-reduced-motion');
 });
@@ -83,8 +96,7 @@ test('workspace shortcuts open the selected policy and document type', async ({ 
   await page.setViewportSize({ width: 1440, height: 900 });
   await signIn(page, fixtures().admin);
 
-  const sidebar = page.getByRole('navigation', { name: 'Sections', exact: true });
-  await sidebar.getByRole('link', { name: 'Admission Letter Verification', exact: true }).click();
+  await (await sidebarLink(page, 'Admission Letter Verification')).click();
   await expect(page.getByRole('tab', { name: 'Policies', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
@@ -93,7 +105,7 @@ test('workspace shortcuts open the selected policy and document type', async ({ 
     'admission-letter',
   );
 
-  const transcript = sidebar.getByRole('link', { name: 'Transcript', exact: true });
+  const transcript = await sidebarLink(page, 'Transcript');
   await transcript.click();
   await expect(transcript).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('tab', { name: 'Documents', exact: true })).toHaveAttribute(

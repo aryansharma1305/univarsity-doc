@@ -85,10 +85,12 @@ describe('UI-02 navigation and dashboard', () => {
     expect(NAV_GROUPS).toEqual([
       'Workspace Navigation',
       'Admission',
+      'Requests',
       'Certificates',
+      'Results',
+      'Examination',
       'Course Management',
       'Subject Management',
-      'Examination',
       'Schools & Departments',
       'Imports & Reports',
       'Academic Session',
@@ -116,9 +118,21 @@ describe('UI-02 navigation and dashboard', () => {
       </AdminShell>,
       VIEWER,
     );
+    // Hidden (collapsed) links count too: permission filtering must remove them, not hide them.
+    expect(screen.queryByRole('link', { name: 'Payment Settings', hidden: true })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Draft Results', hidden: true })).toBeNull();
+    // Groups are an accordion: opening one closes the other.
+    const admission = screen.getByRole('button', { name: 'Admission' });
+    const courses = screen.getByRole('button', { name: 'Course Management' });
+    expect(admission).toHaveAttribute('aria-expanded', 'false');
+    await user.click(admission);
+    expect(admission).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('link', { name: /^Students$/ })).toBeVisible();
-    expect(screen.queryByRole('link', { name: 'Payment Settings' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Draft Results' })).not.toBeInTheDocument();
+    await user.click(courses);
+    expect(courses).toHaveAttribute('aria-expanded', 'true');
+    expect(admission).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('link', { name: /^Students$/ })).toBeNull();
+    await user.click(admission);
     await user.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
     expect(localStorage.getItem('docversity.admin.sidebarCollapsed')).toBe('1');
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute(
