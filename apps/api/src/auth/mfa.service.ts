@@ -133,6 +133,12 @@ export class MfaService {
 
     const user = await this.users.findForAuthById(userId);
     if (user?.status !== 'ACTIVE' || !user.passwordHash) throw Errors.sessionExpired();
+    if (
+      user.passwordChangeRequired ||
+      !this.sessions.matchesCredential(auth.session, user.passwordHash, user.mfaEnabledAt)
+    ) {
+      throw Errors.sessionExpired();
+    }
     if (!(await this.passwords.verifyPassword(user.passwordHash, input.currentPassword))) {
       await this.audit.writeAuditEvent({
         actorUserId: userId,
@@ -157,14 +163,33 @@ export class MfaService {
     const enabledAt = new Date();
     await this.prisma.client.$transaction(async (tx) => {
       const updated = await tx.user.updateMany({
-        where: { id: userId, status: 'ACTIVE', mfaEnabledAt: null },
+        where: {
+          id: userId,
+          status: 'ACTIVE',
+          mfaEnabledAt: null,
+          passwordHash: user.passwordHash,
+          passwordChangeRequired: false,
+        },
         data: {
           mfaTotpSecretEnc: crypto.encrypt(secret, userId, 'secret'),
           mfaTotpLastUsedStep: BigInt(step),
           mfaEnabledAt: enabledAt,
         },
       });
-      if (updated.count !== 1) throw mfaAlreadyEnabled();
+      if (updated.count !== 1) {
+        const current = await tx.user.findUnique({
+          where: { id: userId },
+          select: { passwordHash: true, passwordChangeRequired: true, status: true },
+        });
+        if (
+          current?.status !== 'ACTIVE' ||
+          current.passwordHash !== user.passwordHash ||
+          current.passwordChangeRequired
+        ) {
+          throw Errors.sessionExpired();
+        }
+        throw mfaAlreadyEnabled();
+      }
       await tx.staffMfaRecoveryCode.deleteMany({ where: { userId } });
       await tx.staffMfaRecoveryCode.createMany({
         data: recoveryCodes.map((item) => ({

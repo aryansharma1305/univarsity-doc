@@ -5,10 +5,16 @@ import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 import { RedisService } from '../redis/redis.service.js';
 import { randomToken, sha256 } from './identifier-hasher.js';
 
+interface ResetCredential {
+  userId: string;
+  credentialVersion: string;
+}
+
 /**
  * Single-use password-reset tokens in Redis. Only the SHA-256 of a token is stored:
- *   <prefix>pwreset:<sha256(token)>  → userId   (TTL = PASSWORD_RESET_TOKEN_TTL_SECONDS)
- *   <prefix>pwreset-user:<userId>    → sha256(token)   (a new request invalidates the previous token)
+ *   <prefix>pwreset-v2:<sha256(token)>  → user ID and keyed credential binding
+ *   <prefix>pwreset-v2-user:<userId>    → sha256(token)   (a new request invalidates the previous token)
+ * Old keys expire under their original TTL and are ignored by this version.
  */
 @Injectable()
 export class PasswordResetStore {
@@ -19,7 +25,7 @@ export class PasswordResetStore {
     private readonly redis: RedisService,
   ) {}
 
-  async issue(userId: string): Promise<{ token: string; expiresAt: Date }> {
+  async issue(credential: ResetCredential): Promise<{ token: string; expiresAt: Date }> {
     const token = randomToken(32);
     const tokenHash = sha256(token);
     const ttl = this.config.PASSWORD_RESET_TOKEN_TTL_SECONDS;
@@ -33,42 +39,44 @@ export class PasswordResetStore {
       return 1
     `,
         2,
-        this.userKey(userId),
+        this.userKey(credential.userId),
         this.tokenKey(tokenHash),
         this.tokenKey(''),
         tokenHash,
-        userId,
+        this.encode(credential),
         ttl,
       ),
     );
     return { token, expiresAt: new Date(Date.now() + ttl * 1000) };
   }
 
-  /** The user a token belongs to, without consuming it. */
-  peek(token: string): Promise<string | null> {
-    return this.op((redis) => redis.get(this.tokenKey(sha256(token))));
+  /** The user and credential a token was issued for, without consuming it. */
+  async peek(token: string): Promise<ResetCredential | null> {
+    const value = await this.op((redis) => redis.get(this.tokenKey(sha256(token))));
+    if (!value) return null;
+    const [userId, credentialVersion] = value.split(':');
+    return userId && credentialVersion ? { userId, credentialVersion } : null;
   }
 
-  /** Atomically consumes the token. Returns the user ID, or null if it was already used/expired. */
-  async consume(token: string): Promise<string | null> {
+  /** Atomically consumes the current token only if it still matches the observed credential. */
+  async consume(token: string, credential: ResetCredential): Promise<boolean> {
     const tokenHash = sha256(token);
-    const userId = await this.op((redis) =>
+    const consumed = await this.op((redis) =>
       redis.eval(
         `
-      local user = redis.call('GETDEL', KEYS[1])
-      if not user then return false end
-      local userKey = ARGV[1] .. user
-      if redis.call('GET', userKey) ~= ARGV[2] then return false end
-      redis.call('DEL', userKey)
-      return user
+      if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+      if redis.call('GET', KEYS[2]) ~= ARGV[2] then return 0 end
+      redis.call('DEL', KEYS[1], KEYS[2])
+      return 1
     `,
-        1,
+        2,
         this.tokenKey(tokenHash),
-        this.userKey(''),
+        this.userKey(credential.userId),
+        this.encode(credential),
         tokenHash,
       ),
     );
-    return typeof userId === 'string' ? userId : null;
+    return consumed === 1;
   }
 
   /** Invalidates the user's outstanding reset token, if any (disable, re-enable, access reset). */
@@ -89,11 +97,15 @@ export class PasswordResetStore {
   }
 
   private tokenKey(tokenHash: string): string {
-    return `${this.config.REDIS_KEY_PREFIX}pwreset:${tokenHash}`;
+    return `${this.config.REDIS_KEY_PREFIX}pwreset-v2:${tokenHash}`;
   }
 
   private userKey(userId: string): string {
-    return `${this.config.REDIS_KEY_PREFIX}pwreset-user:${userId}`;
+    return `${this.config.REDIS_KEY_PREFIX}pwreset-v2-user:${userId}`;
+  }
+
+  private encode({ userId, credentialVersion }: ResetCredential): string {
+    return `${userId}:${credentialVersion}`;
   }
 
   private async op<T>(operation: (redis: RedisService['client']) => Promise<T>): Promise<T> {

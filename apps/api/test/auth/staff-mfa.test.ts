@@ -1606,6 +1606,10 @@ describe('break-glass CLI reset (pnpm staff:reset-access)', () => {
     await post(agent, 'auth/mfa/verify', { code: codeFor(secret, 1) }).expect(200);
 
     const temporaryPassword = 'operator break glass phrase 4471';
+    await expect(
+      resetStaffAccess(testDb(), { email: user.email, temporaryPassword: user.password }),
+    ).rejects.toThrow(/different from the current password/);
+    await agent.get('/api/v1/auth/me').expect(200);
     const result = await resetStaffAccess(testDb(), { email: user.email, temporaryPassword });
     expect(result).toMatchObject({ id: user.id, mfaWasEnabled: true });
     await agent.get('/api/v1/auth/me').expect(401);
@@ -1615,12 +1619,104 @@ describe('break-glass CLI reset (pnpm staff:reset-access)', () => {
       where: { action: 'STAFF_ACCESS_RESET', entityId: user.id },
     });
     expect(audit.metadata).toMatchObject({ via: 'cli', mfaWasEnabled: true });
+    expect(JSON.stringify(audit.metadata)).not.toContain(temporaryPassword);
+    expect(JSON.stringify(audit.metadata)).not.toContain(user.email);
+    const db = testDb();
+    expect(await db.staffMfaRecoveryCode.count({ where: { userId: user.id } })).toBe(0);
+    expect(
+      await db.userRole.findMany({
+        where: { userId: user.id },
+        select: { role: { select: { name: true } } },
+      }),
+    ).toEqual([{ role: { name: 'SUPER_ADMIN' } }]);
     await expect(
       resetStaffAccess(testDb(), { email: user.email, temporaryPassword: 'password1234' }),
     ).rejects.toThrow(/Temporary password rejected/);
     await expect(resetStaffAccess(testDb(), { email: email(), temporaryPassword })).rejects.toThrow(
       /No staff account/,
     );
+
+    const enforced = await createTestApp(realConfig({ STAFF_MFA_ENFORCED: true }));
+    try {
+      const recovery = browser(enforced);
+      const first = await login(recovery, { email: user.email, password: temporaryPassword });
+      expect(userOf(first).nextStep).toBe('PASSWORD_CHANGE');
+      await recovery.get('/api/v1/departments').expect(403);
+      await post(recovery, 'auth/password', {
+        currentPassword: temporaryPassword,
+        newPassword: NEW_PASSWORD,
+      }).expect(200);
+      const state = await recovery.get('/api/v1/auth/me').expect(200);
+      expect(userOf(state).nextStep).toBe('MFA_ENROLL');
+      await recovery.get('/api/v1/departments').expect(403);
+      await enroll(recovery, NEW_PASSWORD);
+      await recovery.get('/api/v1/departments').expect(200);
+    } finally {
+      await enforced.close();
+    }
+  });
+
+  it('does not overwrite the first of two emergency resets for the same credential', async () => {
+    const user = await createTestUser({ status: 'DISABLED' });
+    const db = testDb();
+    const passwords = new PasswordService();
+    const hash = passwords.hashPassword.bind(passwords);
+    const firstPassword = 'first operator handover phrase 28';
+    const secondPassword = 'second operator handover phrase 42';
+    const interleave = vi.spyOn(passwords, 'hashPassword').mockImplementationOnce(async (input) => {
+      await resetStaffAccess(
+        db,
+        { email: user.email, temporaryPassword: firstPassword },
+        passwords,
+      );
+      return hash(input);
+    });
+    try {
+      await expect(
+        resetStaffAccess(db, { email: user.email, temporaryPassword: secondPassword }, passwords),
+      ).rejects.toThrow(/account changed during the reset/);
+    } finally {
+      interleave.mockRestore();
+    }
+    const row = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(row.status).toBe('DISABLED');
+    expect(await passwords.verifyPassword(row.passwordHash ?? '', firstPassword)).toBe(true);
+    expect(
+      await db.auditLog.count({ where: { action: 'STAFF_ACCESS_RESET', entityId: user.id } }),
+    ).toBe(1);
+  });
+
+  it('keeps authenticator enrollment from committing against credentials already reset', async () => {
+    const user = await createTestUser();
+    const agent = browser(app);
+    await signIn(agent, user);
+    const started = await post(agent, 'auth/mfa/enrollment').expect(200);
+    const { secret } = mfaEnrollmentStartResponseSchema.parse(started.body);
+    const passwords = app.get(PasswordService);
+    const verify = passwords.verifyPassword.bind(passwords);
+    const interleave = vi
+      .spyOn(passwords, 'verifyPassword')
+      .mockImplementationOnce(async (...args) => {
+        const valid = await verify(...args);
+        await resetStaffAccess(testDb(), {
+          email: user.email,
+          temporaryPassword: TEMPORARY_PASSWORD,
+        });
+        return valid;
+      });
+    try {
+      const response = await post(agent, 'auth/mfa/enrollment/confirm', {
+        currentPassword: user.password,
+        code: codeFor(secret),
+      }).expect(401);
+      expect(errorOf(response).code).toBe('AUTH_SESSION_EXPIRED');
+    } finally {
+      interleave.mockRestore();
+    }
+    const db = testDb();
+    const row = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(row).toMatchObject({ mfaEnabledAt: null, passwordChangeRequired: true });
+    expect(await db.staffMfaRecoveryCode.count({ where: { userId: user.id } })).toBe(0);
   });
 });
 

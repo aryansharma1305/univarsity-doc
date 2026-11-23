@@ -326,7 +326,7 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Enrollment expired', ...errorResponse })
   @ApiResponse({
     status: 401,
-    description: 'Current password incorrect or invalid code',
+    description: 'Current password incorrect, invalid code or session expired',
     ...errorResponse,
   })
   @ApiResponse({ status: 429, description: 'Too many attempts', ...errorResponse })
