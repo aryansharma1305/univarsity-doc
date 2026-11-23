@@ -177,6 +177,13 @@ describe('verification activity', () => {
   });
 });
 
+interface DashboardBody {
+  academicSession: { id: string; name: string } | null;
+  counts: { students: number; activeRegistrations: number; programs: number };
+  workload: Record<string, number | null>;
+  enrolment: { byProgram: { id: string; activeRegistrations: number }[] };
+}
+
 describe('dashboard workload', () => {
   it('returns each queue only with its read permission, and real enrolment counts', async () => {
     const before = await testDb().studentProfileChangeRequest.count({
@@ -230,14 +237,9 @@ describe('dashboard workload', () => {
       },
     });
     expect(created.status).toBe(201);
-    type Body = {
-      academicSession: { id: string; name: string } | null;
-      counts: { students: number; activeRegistrations: number; programs: number };
-      workload: Record<string, number | null>;
-      enrolment: { byProgram: { id: string; activeRegistrations: number }[] };
-    };
+
     const get = async (id: string) =>
-      (await admin.get(`dashboard?academicSessionId=${id}`).expect(200)).body as Body;
+      (await admin.get(`dashboard?academicSessionId=${id}`).expect(200)).body as DashboardBody;
     const first = await get(fixture.sessionId);
     const second = await get(other.id);
     expect(first.academicSession).toMatchObject({ id: fixture.sessionId, name: 'Report session' });
@@ -250,7 +252,7 @@ describe('dashboard workload', () => {
     expect(second.enrolment.byProgram).toEqual([
       expect.objectContaining({ id: fixture.programId, activeRegistrations: 1 }),
     ]);
-    const all = (await admin.get('dashboard').expect(200)).body as Body;
+    const all = (await admin.get('dashboard').expect(200)).body as DashboardBody;
     expect(all.academicSession).toBeNull();
     expect(all.counts.activeRegistrations).toBeGreaterThanOrEqual(3);
     // An unknown session is refused rather than shown as empty totals.
