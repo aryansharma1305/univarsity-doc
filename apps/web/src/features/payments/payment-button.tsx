@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
+  FEE_SCHEDULE,
+  formatFee,
   PAYMENT_BUTTON_STATE_LABELS,
   RAZORPAY_BUTTONS,
   paymentButtonViewSchema,
@@ -90,6 +92,15 @@ export function PaymentButtonPanel({
       <h3 id={id} className="text-sm font-semibold text-navy-950">
         {RAZORPAY_BUTTONS[service].label}
       </h3>
+      {/* The re-exam amount is the application's assessed fee (shown with the application). */}
+      {service !== 'RE_EXAM' && (
+        <p className="mt-1 text-sm text-navy-950">
+          {FEE_SCHEDULE[service].label}:{' '}
+          <span className="font-semibold tabular-nums">
+            {formatFee(FEE_SCHEDULE[service].amountMinor)}
+          </span>
+        </p>
+      )}
       <p className="mt-2 text-sm font-medium text-navy-950">
         {!view || (view.status === 'UNAVAILABLE' && !view.checkout)
           ? 'Online payment not yet available'

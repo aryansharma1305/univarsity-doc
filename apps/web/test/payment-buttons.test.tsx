@@ -3,7 +3,7 @@ import { StrictMode } from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PaymentButtonPanel, RazorpayTestEmbed } from '@/features/payments/payment-button';
-import { RAZORPAY_BUTTONS } from '@docversity/validation';
+import { FEE_SCHEDULE, formatFee, RAZORPAY_BUTTONS } from '@docversity/validation';
 import { mockFetch } from './render';
 const id = '01900000-0000-7000-8000-000000000001';
 const view = {
@@ -66,3 +66,18 @@ it.each(Object.values(RAZORPAY_BUTTONS).map((button) => button.id))(
     expect(document.querySelector('script')).toBeNull();
   },
 );
+
+it('shows the university fee schedule in en-IN rupees without making anything payable', async () => {
+  expect(formatFee(FEE_SCHEDULE.CERTIFICATE_HARD_COPY.amountMinor)).toBe('₹3,500');
+  expect(formatFee(FEE_SCHEDULE.RE_EXAM.amountMinor)).toBe('₹2,500');
+  expect(formatFee(FEE_SCHEDULE.EXAM.amountMinor)).toBe('₹1,500');
+  mockFetch(() => ({ body: { ...view, service: 'EXAM', status: 'UNAVAILABLE' } }));
+  const exam = render(<PaymentButtonPanel service="EXAM" path={`exam/${id}/${id}`} />);
+  expect(screen.getByText('Examination Fee:')).toHaveTextContent('Examination Fee: ₹1,500');
+  exam.unmount();
+  mockFetch(() => ({ body: { ...view, service: 'CERTIFICATE_HARD_COPY', status: 'UNAVAILABLE' } }));
+  render(<PaymentButtonPanel service="CERTIFICATE_HARD_COPY" path={`certificate/${id}`} />);
+  expect(screen.getByText('Certificate Fee:')).toHaveTextContent('Certificate Fee: ₹3,500');
+  await screen.findByText('Online payment not yet available');
+  expect(document.querySelectorAll('script')).toHaveLength(0);
+});
