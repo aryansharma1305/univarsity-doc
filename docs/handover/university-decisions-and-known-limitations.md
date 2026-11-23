@@ -55,8 +55,8 @@ questions), ADR-0014 to ADR-0018, ADR-0023, ADR-0024.
 
 ## Security follow-ups (technical, not blocking)
 
-- **Break-glass CLI access reset** (`pnpm staff:reset-access`, `apps/api/src/cli/reset-staff-access-core.ts`)
-  does not revoke an outstanding password-reset link, because the CLI connects only to PostgreSQL. The
-  Admin Panel disable, re-enable and access reset (PR #61) do revoke it. Until the CLI also revokes it,
-  follow a CLI reset with a re-enable or Admin Panel access reset, or wait out
-  `PASSWORD_RESET_TOKEN_TTL_SECONDS`. It matters only when a reset notifier is configured (this release ships no email delivery). **A fix is required before this CLI flow is used in any email-enabled environment.**
+- **Break-glass CLI access reset** (`pnpm staff:reset-access`): resolved by PR #65. Reset links are now
+  bound to the account's current credentials (password hash and MFA state). Any reset, including the
+  CLI, which connects only to PostgreSQL, therefore invalidates outstanding links. Admin Panel disable,
+  re-enable and access reset also revoke them directly (PR #61). See
+  [docs/security/emergency-staff-reset.md](../security/emergency-staff-reset.md).
