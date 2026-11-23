@@ -19,6 +19,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { OBJECT_STORAGE } from '../storage/storage.module.js';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
 import { AppError, Errors } from '../common/app-error.js';
+import { courseTypeApproved } from '../certificate-eligibility/course-type-approval.js';
 import { assertStaticPdf, sniffContentType } from '../historical-documents/document-file.js';
 import { VerificationPoliciesService } from './verification-policies.service.js';
 const conflict = () =>
@@ -282,6 +283,12 @@ export class OfficialDocumentsService {
             )
               throw conflict();
             await this.requestAuthority(tx, request, r.programId, policy.id);
+            // Migration certificates also need this registration's course to be approved for them.
+            if (
+              body.documentType === 'MIGRATION' &&
+              !(await courseTypeApproved(tx, 'MIGRATION', r.programId))
+            )
+              throw conflict();
             requestVersion = request.version;
             if (
               await tx.certificate.findFirst({

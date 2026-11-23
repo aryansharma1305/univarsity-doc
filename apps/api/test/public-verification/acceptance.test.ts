@@ -176,7 +176,7 @@ async function upload(by: Staff, metadata: Record<string, unknown>, file = pdf) 
     .field('metadata', JSON.stringify(metadata))
     .attach('file', file, { filename: 'document.pdf', contentType: 'application/pdf' });
 }
-async function template(type: 'ADMISSION_LETTER' | 'TRANSCRIPT', policyId: string) {
+async function template(type: 'ADMISSION_LETTER' | 'TRANSCRIPT' | 'MIGRATION', policyId: string) {
   const t = (
     await people.certAdmin
       .post('official-documents/templates', {
@@ -1209,7 +1209,20 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
   });
 
   it('A16 result withdrawal returns UNPUBLISHED; re-publication after withdrawal has no API path', async () => {
+    const workload = async () =>
+      (
+        (await people.proposer.get('dashboard').expect(200)).body as {
+          workload: { resultsPublished: number; resultsWithheld: number };
+        }
+      ).workload;
+    const before = await workload();
     await people.approver.post(`official-results/${resultId}/withdraw`).expect(200);
+    // The dashboard stops counting it as published and counts it as withdrawn.
+    const after = await workload();
+    expect([after.resultsPublished, after.resultsWithheld]).toEqual([
+      before.resultsPublished - 1,
+      before.resultsWithheld + 1,
+    ]);
     expect(
       (await verify('result', { reference: alice.registrationNumber }, { as: alice.agent })).body
         ?.status,
@@ -1286,5 +1299,135 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
       { as: alice.agent },
     );
     expect(own.body?.status).toBe('ACTIVE');
+  });
+
+  it('A18 migration certificate: its own application policy -> request -> review -> issue -> ISSUED', async () => {
+    const policy = (
+      await people.proposer
+        .post('verification-policies', {
+          service: 'certificate',
+          programId: s.programId,
+          definition: {
+            ...DEFINITION,
+            application: { ...APPLICATION, certificateType: 'MIGRATION' },
+          },
+        })
+        .expect(201)
+    ).body as { id: string };
+    await people.policyApprover.post(`verification-policies/${policy.id}/approve`).expect(200);
+    const templateId = await template('MIGRATION', policy.id);
+    const csrf = await studentCsrf(alice.agent);
+    const apply = () =>
+      alice.agent
+        .post('/api/v1/student/certificate-requests')
+        .set('X-CSRF-Token', csrf)
+        .send({ certificateType: 'MIGRATION', purpose: 'Transfer', submissionKey: randomUUID() });
+    const offered = async () =>
+      (
+        (await alice.agent.get('/api/v1/student/certificate-services').expect(200)).body as {
+          data: { certificateType: string; available: boolean }[];
+        }
+      ).data.find((d) => d.certificateType === 'MIGRATION')?.available;
+    // An application policy alone is not enough: the course must be approved for migration
+    // certificates (ADR-0018: more than 24 months, and an independently approved course set).
+    expect(await offered()).toBe(false);
+    expect((await apply()).status).toBe(409);
+    await people.registrar
+      .patch(`programs/${s.programId}`, { durationValue: 3, durationUnit: 'YEARS' })
+      .expect(200);
+    expect((await apply()).status).toBe(409);
+    // Synthetic course set, proposed and decided by two different people (DB-enforced).
+    const eligibility = async (revision: number) => {
+      const row = await testDb().programCertificateEligibility.create({
+        data: {
+          programId: s.programId,
+          revision,
+          certificateTypes: ['TRANSCRIPT', 'PROVISIONAL', 'CHARACTER', 'MIGRATION'],
+          policyId: 'UNIVERSITY_COURSE_DURATION_CERTIFICATES',
+          policyVersion: 1,
+          durationMonths: 36,
+          tier: 'MORE_THAN_TWO_YEARS',
+          authorityReference: 'SYNTHETIC TEST ONLY',
+          proposedByUserId: people.registrar.user.id,
+        },
+      });
+      return testDb().programCertificateEligibility.update({
+        where: { id: row.id },
+        data: {
+          status: 'APPROVED',
+          version: 2,
+          decidedByUserId: people.proposer.user.id,
+          decidedAt: new Date(),
+        },
+      });
+    };
+    const approvedSet = await eligibility(1);
+    expect(await offered()).toBe(true);
+    const request = certificateRequestSchema.parse(
+      (
+        await alice.agent
+          .post('/api/v1/student/certificate-requests')
+          .set('X-CSRF-Token', csrf)
+          .send({ certificateType: 'MIGRATION', purpose: 'Transfer', submissionKey: randomUUID() })
+          .expect(201)
+      ).body,
+    );
+    await people.certAdmin
+      .post(`certificate-requests/${request.id}/record-review`, {
+        version: 1,
+        privateNote: 'Review',
+      })
+      .expect(200);
+    await people.certAdmin
+      .post(`certificate-requests/${request.id}/complete-review`, { version: 2 })
+      .expect(200);
+    const number = `ACC-MG-${randomBytes(4).toString('hex').toUpperCase()}`;
+    const base = {
+      registrationId: alice.registrationId,
+      policyId: policy.id,
+      templateId,
+      documentType: 'MIGRATION',
+      certificateNumber: number,
+      issueDate: '2026-11-03',
+      authorityReference: 'Local acceptance migration authority',
+    };
+    // The request must be the same type: a migration request cannot back a transcript.
+    expect(
+      (
+        await upload(people.certAdmin, {
+          ...base,
+          documentType: 'TRANSCRIPT',
+          requestId: request.id,
+        })
+      ).status,
+    ).toBe(409);
+    // Preparation re-checks the course approval: once the set is superseded it is refused.
+    await testDb().programCertificateEligibility.update({
+      where: { id: approvedSet.id },
+      data: { status: 'SUPERSEDED', version: 3, supersededAt: new Date() },
+    });
+    expect((await upload(people.certAdmin, { ...base, requestId: request.id })).status).toBe(409);
+    await eligibility(2);
+    const prepared = await upload(people.certAdmin, { ...base, requestId: request.id });
+    expect(prepared.status, JSON.stringify(prepared.body)).toBe(201);
+    const id = officialDocumentReceiptSchema.parse(prepared.body).id;
+    await people.certAdmin.post(`official-documents/${id}/approve`).expect(403);
+    await people.approver.post(`official-documents/${id}/approve`).expect(200);
+    const issued = officialDocumentReceiptSchema.parse(
+      (await people.approver.post(`official-documents/${id}/issue`).expect(200)).body,
+    );
+    const byQr = await verify('certificate', { token: tokenOf(issued.verificationUrl) });
+    expect(byQr.body).toMatchObject({ status: 'ISSUED', documentType: 'MIGRATION' });
+    expect((await verify('certificate', { reference: number })).body?.status).toBe('ISSUED');
+    // Course-completion applications stay closed until the university authorizes them.
+    const completion = await alice.agent
+      .post('/api/v1/student/certificate-requests')
+      .set('X-CSRF-Token', csrf)
+      .send({
+        certificateType: 'COURSE_COMPLETION',
+        purpose: 'Completion',
+        submissionKey: randomUUID(),
+      });
+    expect(completion.status).not.toBe(201);
   });
 });

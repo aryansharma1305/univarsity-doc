@@ -110,12 +110,29 @@ test('dashboard loading and empty states remain honest', async ({ page }) => {
   const wait = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route('**/api/v1/dashboard', async (route) => {
+  await page.route('**/api/v1/dashboard**', async (route) => {
     await wait;
     await route.fulfill({
       json: {
         counts: { students: 0, activeRegistrations: 0, programs: 0, academicSessions: 0 },
         recentActivity: [],
+        workload: {
+          profileRequestsPending: 0,
+          certificateRequestsAwaitingStaff: 0,
+          reExamApplicationsPending: 0,
+          reExamPaymentsPending: 0,
+          resultsDraft: 0,
+          resultsUnderReview: 0,
+          resultsPublished: 0,
+          resultsWithheld: 0,
+          documentsAwaitingApproval: 0,
+          documentsIssued: 0,
+          admissionLettersIssued: 0,
+          messagesAwaitingReply: 0,
+          verificationQueriesOpen: 0,
+          unreadNotifications: 0,
+        },
+        enrolment: { academicSessionId: null, byProgram: [], bySession: [] },
       },
     });
   });

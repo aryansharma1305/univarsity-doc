@@ -3,6 +3,7 @@
 Onboarding guide for contributors and Claude Code. It summarises what **exists in the code today**;
 `docs/` holds the detail. Source code, Prisma migrations, tests and ADRs are authoritative — this file,
 `README.md` and the graph in `graphify-out/` are navigation aids.
+University handover (user guides, roles, runbooks, decisions, UAT): [docs/handover/](docs/handover/README.md).
 
 ## 1. Product and status
 
@@ -25,10 +26,13 @@ certificate data.
 | 8     | Staff-managed historical certificates and the student document library                      | ✅ merged (PR #4)             |
 | 9     | External examination links/records, re-exam applications, regional QR payments (9A/9B/9C)   | merged (PR #5, #7, #8)        |
 
-**Not built yet** (do not describe as working): examination-taking (done in the university's separate app), grading, policy-enabled result approval/publication, certificate generation
-(PDF/QR), legacy QR mapping and bulk migration of historic documents, public verification (the `/verify/*` and `/results` pages are honest
-"not available yet" placeholders), legacy WordPress migration, retention cleanup jobs, email delivery
-(password reset refuses with 503 when no notifier is configured). Plan: [docs/roadmap.md](docs/roadmap.md).
+**Not built yet** (do not describe as working): examination-taking (done in the university's separate app),
+grading/GPA calculation, legacy QR mapping and bulk migration of historic documents, legacy WordPress
+migration, retention cleanup jobs, email/SMS delivery (password reset refuses with 503 when no notifier is
+configured). Built but **policy-gated** (works only after university approval through the two-person
+workflows): result review/approval and publication, official document issuance with QR, public
+verification and anonymous disclosure. Plan: [docs/roadmap.md](docs/roadmap.md); handover:
+[docs/handover/](docs/handover/README.md).
 
 Phase 6.5 delivery and screenshot evidence: [docs/development/phase-6.5-student-portal.md](docs/development/phase-6.5-student-portal.md).
 
@@ -159,7 +163,9 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261122090000_student_uploads` (student-uploaded academic/identity files; ADR-0023),
   `20261128090000_communication` (student messages, verification queries, notifications; ADR-0025),
   `20261129090000_result_verification_token` (marksheet QR credential per publication; ADR-0024),
-  `20261201090000_examination_schedule` (subject-wise examination timetable + publication time).
+  `20261201090000_examination_schedule` (subject-wise examination timetable + publication time),
+  `20261202090000_migration_certificate_type` (`DocumentType.MIGRATION` for official issuance;
+  COURSE_COMPLETION stays non-issuable until the university authorizes its application policy).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with

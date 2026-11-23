@@ -10,7 +10,6 @@ import {
   STUDENT_CERTIFICATE_ELIGIBILITY_CONTRACT_VERSION,
   certificateEligibilityApprovalAuthoritySchema,
   certificateEligibilityConfigSchema,
-  certificateTypeSchema,
   configMatchesCourse,
   describeCertificateDurationPolicy,
   durationEvaluationView,
@@ -30,6 +29,7 @@ import { AuditService } from '../audit/audit.service.js';
 import { AppError, Errors } from '../common/app-error.js';
 import { RateLimiter } from '../auth/rate-limiter.js';
 import { API_CONFIG, type ApiConfig } from '../config/api-config.js';
+import { approvedEligibilityInput } from './course-type-approval.js';
 import { CertificatePoliciesService } from '../certificate-requests/certificate-policies.service.js';
 
 const conflict = (message: string) =>
@@ -181,14 +181,7 @@ export class CertificateEligibilityService {
     policyVersion: number;
     durationMonths: number;
   }) {
-    return {
-      certificateTypes: row.certificateTypes.flatMap((t) => {
-        const parsed = certificateTypeSchema.safeParse(t);
-        return parsed.success ? [parsed.data] : [];
-      }),
-      policyVersion: row.policyVersion,
-      durationMonths: row.durationMonths,
-    };
+    return approvedEligibilityInput(row);
   }
 
   // ------------------------------------------------------------------------------------------

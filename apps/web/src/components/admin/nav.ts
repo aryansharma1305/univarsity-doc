@@ -2,6 +2,7 @@ import type { Route } from 'next';
 import type { Permission } from '@docversity/types';
 import { PERMISSIONS } from '@docversity/types';
 import {
+  BarChart3Icon,
   BellIcon,
   BuildingIcon,
   MessagesSquareIcon,
@@ -128,6 +129,14 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     group: 'Certificates',
     href: '/admin/official-records?tab=documents&type=CHARACTER',
     label: 'Character Certificate',
+    subsection: 'Generate Certificates',
+    icon: FileBadgeIcon,
+    permissions: [p.certificatesRead, p.certificatesGenerate],
+  },
+  {
+    group: 'Certificates',
+    href: '/admin/official-records?tab=documents&type=MIGRATION',
+    label: 'Migration Certificate',
     subsection: 'Generate Certificates',
     icon: FileBadgeIcon,
     permissions: [p.certificatesRead, p.certificatesGenerate],
@@ -263,6 +272,13 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: FileSpreadsheetIcon,
     permissions: [p.importsRead],
   },
+  {
+    // Every staff role may open it; the page lists only the reports the account can read.
+    group: 'Imports & Reports',
+    href: '/admin/reports',
+    label: 'Reports',
+    icon: BarChart3Icon,
+  },
 
   {
     group: 'Academic Session',
@@ -363,6 +379,7 @@ export const SEGMENT_LABELS: Record<string, string> = {
   'verification-queries': 'Verification Queries',
   'verification-queries/*': 'Query',
   notifications: 'Notifications',
+  reports: 'Reports',
   'historical-documents': 'Historical Certificates',
   'historical-documents/new': 'Upload',
   examinations: 'Examinations',
