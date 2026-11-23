@@ -108,7 +108,7 @@ Release-specific cautions recorded in the repository:
 - After admission-letter enum values or publication receipts exist, an application-only downgrade
   across `20261114090000_official_verification` is not claimed compatible.
 
-## Pending (not yet released)
+## Merged, deploys with the next release
 
 Two open PRs add migrations: #62 `20261201090000_examination_schedule` and #63
 `20261202090000_migration_certificate_type` (production would go from 27 migrations to 28 or 29).

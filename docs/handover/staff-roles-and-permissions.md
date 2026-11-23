@@ -133,7 +133,7 @@ confirm who holds each account (see decisions: "Admin2 account holder identity")
 | Any OFFICIAL policy approval or use            | `OFFICIAL_VERIFICATION_ENABLED=true` on the API.                                         |
 | Live payments (Razorpay)                       | Not enabled in code; `PaymentButtonPolicyService.definition()` returns `null`.           |
 
-## Pending (not yet released)
+## Merged, deploys with the next release
 
 PR #61 adds role assignment through the Admin Panel (`PATCH /staff-users/:id/roles`): your own
 account is refused, and removing `SUPER_ADMIN` from the last active Super Admin is refused. Until it

@@ -8,7 +8,7 @@
 
 Everything here is checked against the code, tests, ADRs and existing docs in this repository. Where
 a statement could not be checked in the repository it says **not verified**. Work in open pull
-requests #60–#63 is described only in sections labelled **Pending (not yet released)**.
+requests #60–#63 is described only in sections labelled **Merged, deploys with the next release**.
 
 | Document                                                                                             | Purpose                                                                     |
 | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |

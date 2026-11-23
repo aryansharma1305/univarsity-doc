@@ -150,7 +150,7 @@ public verification.
   code. Students therefore see "pending course approval" or "not offered" labels.
 - Eligibility is never completion, application availability, payment, Rector approval or issuance.
 
-## Pending (not yet released)
+## Merged, deploys with the next release
 
 - **PR #62:** subject-wise examination timetable (migration `20261201090000_examination_schedule`),
   publish/unpublish to students, clash checks. Exam Form (regular applications) remains blocked.

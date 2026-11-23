@@ -39,8 +39,8 @@ questions), ADR-0014 to ADR-0018, ADR-0023, ADR-0024.
   XMP metadata and embedded image EXIF (open question 21, ADR-0023).
 - **Student password change** from Account Settings is not available; recovery is a new activation
   code.
-- **Staff account creation and role changes** are CLI-only in this release (PR #61 pending).
-- **Examination timetable** is not available (PR #62 pending). Docversity never runs, schedules or
+- **Staff account creation and role changes** are CLI-only in this release until the next release is deployed (PR #61 is merged).
+- **Examination timetable** is not available until the next release is deployed (PR #62 is merged). Docversity never runs, schedules or
   marks examinations.
 - **Result withdrawal** has no re-publication or correction API.
 - **Revoked documents** cannot be re-issued; prepare a new document.
@@ -51,7 +51,7 @@ questions), ADR-0014 to ADR-0018, ADR-0023, ADR-0024.
 - **Redis is not in backups**; queue recovery beyond the readiness refusal gate is not designed for
   real-data operation (Hostinger runbook).
 - **Legacy WordPress records and legacy QR links** are not migrated.
-- **Dashboard workload counts and reports** are limited in this release (PR #60 pending).
+- **Dashboard workload counts and reports** are limited in this release until the next release is deployed (PR #60 is merged).
 
 ## Security follow-ups (technical, not blocking)
 
@@ -59,4 +59,4 @@ questions), ADR-0014 to ADR-0018, ADR-0023, ADR-0024.
   does not revoke an outstanding password-reset link, because the CLI connects only to PostgreSQL. The
   Admin Panel disable, re-enable and access reset (PR #61) do revoke it. Until the CLI also revokes it,
   follow a CLI reset with a re-enable or Admin Panel access reset, or wait out
-  `PASSWORD_RESET_TOKEN_TTL_SECONDS`. It matters only when a reset notifier is configured (this release ships no email delivery).
+  `PASSWORD_RESET_TOKEN_TTL_SECONDS`. It matters only when a reset notifier is configured (this release ships no email delivery). **A fix is required before this CLI flow is used in any email-enabled environment.**

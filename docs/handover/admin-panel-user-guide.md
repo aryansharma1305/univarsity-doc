@@ -36,7 +36,7 @@ Admin resets access (see Staff Users & Roles), or the operator uses the break-gl
 | -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Dashboard (`/admin`) | any staff  | Workspace navigator, pending-work cards (profile requests, re-exam applications, payment submissions) and recent activity |
 
-Pending (not yet released): PR #60 adds workload counts, enrolment by course/session and a Reports
+Merged, deploys with the next release: PR #60 adds workload counts, enrolment by course/session and a Reports
 page with eight aggregate reports and CSV export.
 
 ## Admission
@@ -132,7 +132,7 @@ Tasks (Registrar):
 - **Exam Form** configures the https links of the university's **separate** examination application
   that students open from the portal. Docversity does not run, schedule or mark examinations.
 - **Exam Schedule** lists examination records (DRAFT → OPEN → ARCHIVED) tied to a curriculum
-  period. It is not a timetable. Pending (not yet released): PR #62 adds a subject-wise timetable.
+  period. It is not a timetable. Merged, deploys with the next release: PR #62 adds a subject-wise timetable.
 - **Re-exam Applications:** approve or reject (`reExamApplications.decide`, Exam Admin). Fee rules are
   under `/admin/re-exam-applications/fees` (`reExamFees.manage`, Super Admin only).
 - **Re-exam Payments:** confirm or reject a submitted payment after checking the university's own
@@ -193,5 +193,5 @@ Procedures: [registration-and-result-import-guide.md](registration-and-result-im
 - **Payment Settings:** versioned payment details per country/region group; a **different** person
   from the preparer and last editor approves; approved versions are frozen.
 
-Pending (not yet released): PR #61 adds Add staff account, Change roles (last-Super-Admin guard),
+Merged, deploys with the next release: PR #61 adds Add staff account, Change roles (last-Super-Admin guard),
 Reset access, Disable and Re-enable dialogs, and an unread-notification badge in the header.

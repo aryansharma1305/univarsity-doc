@@ -51,7 +51,7 @@ Merged 22 November 2026 (00:32 IST). 25 migrations at this commit.
 - **#53 Student portal sub-navigation.** Course Details, Update My Details, Apply for Exam, Apply for
   Re-exam, Login to Exam Panel, View Result.
 
-## Pending (not yet released)
+## Merged, deploys with the next release
 
 | PR  | Title                                                 | Migration                                   | Notes                                                                                                                                                                                                                                               |
 | --- | ----------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
