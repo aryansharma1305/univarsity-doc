@@ -27,10 +27,12 @@ import {
 export const NAV_GROUPS = [
   'Workspace Navigation',
   'Admission',
+  'Requests',
   'Certificates',
+  'Results',
+  'Examination',
   'Course Management',
   'Subject Management',
-  'Examination',
   'Schools & Departments',
   'Imports & Reports',
   'Academic Session',
@@ -51,7 +53,6 @@ const p = PERMISSIONS;
 
 export const ADMIN_NAV: readonly AdminNavItem[] = [
   { group: 'Workspace Navigation', href: '/admin', label: 'Dashboard', icon: LayoutDashboardIcon },
-
   {
     group: 'Admission',
     href: '/admin/students/new',
@@ -75,13 +76,6 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   },
   {
     group: 'Admission',
-    href: '/admin/official-records?tab=policies&service=admission-letter',
-    label: 'Admission Letter Verification',
-    icon: ShieldCheckIcon,
-    permissions: [p.certificatesRead],
-  },
-  {
-    group: 'Admission',
     href: '/admin/official-records?tab=documents&type=ADMISSION_LETTER',
     label: 'Issue Admission Letters',
     icon: FileBadgeIcon,
@@ -89,18 +83,31 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   },
   {
     group: 'Admission',
+    href: '/admin/official-records?tab=policies&service=admission-letter',
+    label: 'Admission Letter Verification',
+    icon: ShieldCheckIcon,
+    permissions: [p.certificatesRead],
+  },
+  {
+    group: 'Requests',
     href: '/admin/profile-requests',
     label: 'Profile Update Requests',
     icon: UserRoundPenIcon,
     permissions: [p.studentProfileRequestsRead],
   },
-
   {
-    group: 'Certificates',
+    group: 'Requests',
     href: '/admin/certificate-requests',
     label: 'Certificate Requests',
     icon: ClipboardCheckIcon,
     permissions: [p.certificateRequestsRead],
+  },
+  {
+    group: 'Requests',
+    href: '/admin/re-exam-applications',
+    label: 'Re-exam Applications',
+    icon: ClipboardPenLineIcon,
+    permissions: [p.reExamApplicationsRead],
   },
   {
     group: 'Certificates',
@@ -162,7 +169,62 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: FileBadgeIcon,
     permissions: [p.templatesWrite],
   },
-
+  {
+    group: 'Results',
+    href: '/admin/results/review',
+    label: 'Result Management',
+    icon: ClipboardCheckIcon,
+    permissions: [p.resultsRead],
+  },
+  {
+    group: 'Results',
+    href: '/admin/results/new',
+    label: 'Marks Entry',
+    icon: ClipboardPenLineIcon,
+    permissions: [p.resultsRead, p.resultsWrite],
+  },
+  {
+    group: 'Results',
+    href: '/admin/results',
+    label: 'Draft Results',
+    icon: ClipboardPenLineIcon,
+    permissions: [p.resultsRead],
+  },
+  {
+    group: 'Results',
+    href: '/admin/results/import',
+    label: 'Result Import',
+    icon: FileSpreadsheetIcon,
+    permissions: [p.importsResultsRun],
+  },
+  {
+    group: 'Results',
+    href: '/admin/marksheet-templates',
+    label: 'Marksheet Templates',
+    icon: FileBadgeIcon,
+    permissions: [p.templatesWrite],
+  },
+  {
+    group: 'Examination',
+    href: '/admin/examinations/application',
+    label: 'Exam Form',
+    icon: ClipboardPenLineIcon,
+    permissions: [p.examinationsManage],
+  },
+  {
+    group: 'Examination',
+    href: '/admin/examinations',
+    label: 'Exam Schedule',
+    icon: CalendarRangeIcon,
+    permissions: [p.examinationsRead],
+  },
+  {
+    group: 'Examination',
+    href: '/admin/re-exam-payments',
+    label: 'Re-exam Payments',
+    icon: WalletIcon,
+    permissions: [p.reExamPaymentsRead],
+  },
   {
     group: 'Course Management',
     href: '/admin/programs',
@@ -170,7 +232,6 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: GraduationCapIcon,
     permissions: [p.programsRead],
   },
-
   {
     group: 'Subject Management',
     href: '/admin/subjects',
@@ -185,78 +246,12 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: GraduationCapIcon,
     permissions: [p.programsRead],
   },
-
-  {
-    group: 'Examination',
-    href: '/admin/examinations/application',
-    label: 'Exam Form',
-    icon: ClipboardPenLineIcon,
-    permissions: [p.examinationsManage],
-  },
-  {
-    group: 'Examination',
-    href: '/admin/re-exam-applications',
-    label: 'Re-exam Applications',
-    icon: ClipboardPenLineIcon,
-    permissions: [p.reExamApplicationsRead],
-  },
-  {
-    group: 'Examination',
-    href: '/admin/re-exam-payments',
-    label: 'Re-exam Payments',
-    icon: WalletIcon,
-    permissions: [p.reExamPaymentsRead],
-  },
-  {
-    group: 'Examination',
-    href: '/admin/examinations',
-    label: 'Exam Schedule',
-    icon: CalendarRangeIcon,
-    permissions: [p.examinationsRead],
-  },
-  {
-    group: 'Examination',
-    href: '/admin/results/review',
-    label: 'Result Management',
-    icon: ClipboardCheckIcon,
-    permissions: [p.resultsRead],
-  },
-  {
-    group: 'Examination',
-    href: '/admin/results/new',
-    label: 'Marks Entry',
-    icon: ClipboardPenLineIcon,
-    permissions: [p.resultsRead, p.resultsWrite],
-  },
-  {
-    group: 'Examination',
-    href: '/admin/results',
-    label: 'Draft Results',
-    icon: ClipboardPenLineIcon,
-    permissions: [p.resultsRead],
-  },
-  {
-    group: 'Examination',
-    href: '/admin/marksheet-templates',
-    label: 'Marksheet Templates',
-    icon: FileBadgeIcon,
-    permissions: [p.templatesWrite],
-  },
-
   {
     group: 'Schools & Departments',
     href: '/admin/departments',
     label: 'Manage Departments',
     icon: BuildingIcon,
     permissions: [p.departmentsRead],
-  },
-
-  {
-    group: 'Imports & Reports',
-    href: '/admin/results/import',
-    label: 'Result Import',
-    icon: FileSpreadsheetIcon,
-    permissions: [p.importsResultsRun],
   },
   {
     group: 'Imports & Reports',
@@ -279,7 +274,6 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     label: 'Reports',
     icon: BarChart3Icon,
   },
-
   {
     group: 'Academic Session',
     href: '/admin/academic-sessions',
@@ -294,7 +288,6 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: UsersIcon,
     permissions: [p.studentsRead, p.academicSessionsRead],
   },
-
   {
     group: 'Chat & Communication',
     href: '/admin/messages',
@@ -322,7 +315,6 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     icon: ShieldCheckIcon,
     permissions: [p.certificatesRead, p.auditRead],
   },
-
   {
     group: 'Settings & Administration',
     href: '/admin/settings/profile',

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
-import { ChevronsLeftIcon, ChevronsRightIcon, MenuIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronsLeftIcon, ChevronsRightIcon, MenuIcon } from 'lucide-react';
 import { Fragment, type ReactNode, useId, useState, useSyncExternalStore } from 'react';
 import { cn } from '@docversity/ui';
 import { Button } from '@docversity/ui/components/button';
@@ -77,77 +77,100 @@ function NavLinks({
   const reduce = useReducedMotion();
   const items = visibleAdminNav(user.permissions);
   const activeHref = activeNavHref(pathname, items, new URLSearchParams(searchParams.toString()));
+  const activeGroup = items.find((item) => item.href === activeHref)?.group;
+  // One group open at a time: the current page's group, until the user opens another.
+  const [chosen, setChosen] = useState<{ group: string | null; from?: string }>({ group: null });
+  const openGroup = chosen.from === activeGroup ? chosen.group : activeGroup;
   return (
     <LayoutGroup id={groupId}>
-      <div className="space-y-5">
+      <div className={collapsed ? 'space-y-5' : 'space-y-1'}>
         {NAV_GROUPS.map((group) => {
           const links = items.filter((item) => item.group === group);
-          if (!links.length && group !== 'Chat & Communication') return null;
+          if (!links.length) return null;
+          // The icon rail and the single-link Dashboard group stay flat.
+          const flat = collapsed || group === 'Workspace Navigation';
+          const open = flat || openGroup === group;
+          const listId = `${groupId}-${group.replace(/\W+/g, '-')}`;
           return (
             <section key={group}>
-              <h2
-                className={cn(
-                  'mb-2 px-3 text-xs font-medium text-white/65',
-                  collapsed && 'sr-only',
-                )}
-              >
-                {group}
-              </h2>
-              {!!links.length && (
-                <ul className="space-y-1">
-                  {links.map((item, index) => {
-                    const active = item.href === activeHref;
-                    const link = (
-                      <Link
-                        href={item.href}
-                        onClick={onNavigate}
-                        aria-current={active ? 'page' : undefined}
-                        className={cn(
-                          'relative flex min-h-10 items-center gap-3 rounded-md px-3 text-[13px] font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent',
-                          active && 'text-white',
-                          collapsed ? 'justify-center px-0' : item.subsection && 'pl-6',
-                        )}
-                      >
-                        {active && (
-                          <motion.span
-                            aria-hidden="true"
-                            layoutId="current-section"
-                            initial={false}
-                            transition={{ duration: reduce ? 0 : 0.22, ease: [0.16, 1, 0.3, 1] }}
-                            className="absolute inset-0 rounded-md bg-brand"
-                          />
-                        )}
-                        <item.icon aria-hidden="true" className="relative size-[18px] shrink-0" />
-                        <span className={cn('relative', collapsed && 'sr-only')}>{item.label}</span>
-                      </Link>
-                    );
-                    return (
-                      <Fragment key={item.href}>
-                        {item.subsection && item.subsection !== links[index - 1]?.subsection && (
-                          <li
-                            className={cn(
-                              'px-3 pt-2 text-xs text-white/65',
-                              collapsed && 'sr-only',
-                            )}
-                          >
-                            <h3>{item.subsection}</h3>
-                          </li>
-                        )}
-                        <li>
-                          {collapsed ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>{link}</TooltipTrigger>
-                              <TooltipContent side="right">{item.label}</TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            link
-                          )}
-                        </li>
-                      </Fragment>
-                    );
-                  })}
-                </ul>
+              {flat ? (
+                <h2
+                  className={cn(
+                    'mb-2 px-3 text-xs font-medium text-white/65',
+                    collapsed && 'sr-only',
+                  )}
+                >
+                  {group}
+                </h2>
+              ) : (
+                <h2>
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    aria-controls={listId}
+                    onClick={() => {
+                      setChosen({ group: open ? null : group, from: activeGroup });
+                    }}
+                    className="flex min-h-9 w-full items-center justify-between rounded-md px-3 text-xs font-semibold text-white/70 hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
+                  >
+                    {group}
+                    <ChevronDownIcon
+                      aria-hidden="true"
+                      className={cn('size-4 transition-transform', open && 'rotate-180')}
+                    />
+                  </button>
+                </h2>
               )}
+              <ul id={listId} hidden={!open} className={cn('space-y-1', !flat && 'pb-2')}>
+                {links.map((item, index) => {
+                  const active = item.href === activeHref;
+                  const link = (
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      aria-current={active ? 'page' : undefined}
+                      className={cn(
+                        'relative flex min-h-10 items-center gap-3 rounded-md px-3 text-[13px] font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent',
+                        active && 'text-white',
+                        collapsed ? 'justify-center px-0' : item.subsection && 'pl-6',
+                      )}
+                    >
+                      {active && (
+                        <motion.span
+                          aria-hidden="true"
+                          layoutId="current-section"
+                          initial={false}
+                          transition={{ duration: reduce ? 0 : 0.22, ease: [0.16, 1, 0.3, 1] }}
+                          className="absolute inset-0 rounded-md bg-brand"
+                        />
+                      )}
+                      <item.icon aria-hidden="true" className="relative size-[18px] shrink-0" />
+                      <span className={cn('relative', collapsed && 'sr-only')}>{item.label}</span>
+                    </Link>
+                  );
+                  return (
+                    <Fragment key={item.href}>
+                      {item.subsection && item.subsection !== links[index - 1]?.subsection && (
+                        <li
+                          className={cn('px-3 pt-2 text-xs text-white/65', collapsed && 'sr-only')}
+                        >
+                          <h3>{item.subsection}</h3>
+                        </li>
+                      )}
+                      <li>
+                        {collapsed ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>{link}</TooltipTrigger>
+                            <TooltipContent side="right">{item.label}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          link
+                        )}
+                      </li>
+                    </Fragment>
+                  );
+                })}
+              </ul>
             </section>
           );
         })}

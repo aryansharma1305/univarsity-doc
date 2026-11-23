@@ -1,12 +1,13 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
 import {
   type Account,
-  type StudentAccount,
   capture,
   expectNoHorizontalOverflow,
   expectNoSeriousA11yViolations,
   fixtures,
+  sidebarLink,
   signIn,
+  type StudentAccount,
   studentSignIn,
   syntheticPng,
 } from './support';
@@ -49,10 +50,7 @@ test('India payment details: prepared, approved by a second person, paid by the 
 
   // Before anything is configured, all eight choices are honestly "not configured".
   const maker = await staffPage(browser, admin);
-  await maker
-    .getByRole('complementary', { name: 'Admin navigation' })
-    .getByRole('link', { name: 'Payment Settings', exact: true })
-    .click();
+  await (await sidebarLink(maker, 'Payment Settings')).click();
   await expect(
     maker.getByRole('heading', { level: 1, name: 'Re-exam payment settings' }),
   ).toBeVisible();
@@ -136,10 +134,7 @@ test('India payment details: prepared, approved by a second person, paid by the 
 
   // The APPROVER reviews: unverified until explicitly confirmed against the university account.
   const reviewer = await staffPage(browser, approver);
-  await reviewer
-    .getByRole('complementary', { name: 'Admin navigation' })
-    .getByRole('link', { name: 'Re-exam Payments', exact: true })
-    .click();
+  await (await sidebarLink(reviewer, 'Re-exam Payments')).click();
   await reviewer
     .getByLabel(/Search by student, registration number/)
     .fill(alpha.registrationNumber);

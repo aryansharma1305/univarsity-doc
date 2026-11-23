@@ -14,6 +14,8 @@ test('admin shell works at 390px: drawer navigation, student list cards and deta
 
   await page.getByRole('button', { name: 'Open navigation' }).click();
   const drawer = page.getByRole('dialog');
+  // Sidebar groups are collapsible; open Admission to reach Students.
+  await drawer.getByRole('button', { name: 'Admission' }).click();
   await expect(drawer.getByRole('link', { name: 'Students' })).toBeVisible();
   await drawer.getByRole('link', { name: 'Students' }).click();
   await expect(drawer).toBeHidden();

@@ -1,12 +1,13 @@
 import { type Browser, type Page, expect, test } from '@playwright/test';
 import {
   type Account,
-  type StudentAccount,
   capture,
   expectNoHorizontalOverflow,
   expectNoSeriousA11yViolations,
   fixtures,
+  sidebarLink,
   signIn,
+  type StudentAccount,
   studentSignIn,
 } from './support';
 
@@ -101,10 +102,7 @@ test('examination application links and year-wise examination records reach the 
 
   // EXAM_ADMIN configures the external examination application (https only).
   const staff = await staffPage(browser, examAdmin);
-  await staff
-    .getByRole('complementary', { name: 'Admin navigation' })
-    .getByRole('link', { name: 'Exam Schedule', exact: true })
-    .click();
+  await (await sidebarLink(staff, 'Exam Schedule')).click();
   await expect(staff.getByRole('heading', { level: 1, name: 'Examinations' })).toBeVisible();
   await staff.getByRole('link', { name: 'Examination application' }).click();
   await staff.getByRole('button', { name: 'Add application' }).click();
