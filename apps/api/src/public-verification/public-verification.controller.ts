@@ -232,7 +232,7 @@ export class PublicVerificationController {
         {
           path: 'request',
           message:
-            'Use contract version 1 and a valid reference only. Query parameters are not accepted.',
+            'Use contract version 1 or 2 and a valid reference only. Query parameters are not accepted.',
         },
       ]);
     return this.service.check(service, parsed.data, req.ip ?? 'unknown');

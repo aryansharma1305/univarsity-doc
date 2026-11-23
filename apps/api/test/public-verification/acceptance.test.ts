@@ -846,6 +846,8 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
         [
           'STUDENT_NAME',
           'REGISTRATION_NUMBER',
+          // Allowed by policy, but no authoritative registration date is stored: never returned.
+          'REGISTRATION_DATE',
           'PROGRAM',
           'COURSE_LEVEL',
           'COURSE_DURATION',
