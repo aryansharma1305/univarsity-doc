@@ -458,7 +458,9 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
       .parse((res, done) => {
         const chunks: Buffer[] = [];
         res.on('data', (c: Buffer) => chunks.push(c));
-        res.on('end', () => done(null, Buffer.concat(chunks)));
+        res.on('end', () => {
+          done(null, Buffer.concat(chunks));
+        });
       });
     expect(pdf.status).toBe(200);
     expect(pdf.headers['content-type']).toBe('application/pdf');
