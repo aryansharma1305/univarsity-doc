@@ -1,7 +1,6 @@
 'use client';
 
 import type { Dashboard } from '@docversity/validation';
-import { FilterSelect } from '@/components/data/filter-select';
 
 type Row = NonNullable<Dashboard['enrolment']>['byProgram'][number];
 
@@ -34,15 +33,13 @@ function BarList({ label, rows, empty }: { label: string; rows: Row[]; empty: st
   );
 }
 
-/** Active registrations per course (optionally one session) and per session. */
+/** Active registrations per course (in the selected session) and per session. */
 export function Enrolment({
   enrolment,
-  academicSessionId,
-  onSessionChange,
+  session,
 }: {
   enrolment: NonNullable<Dashboard['enrolment']>;
-  academicSessionId: string;
-  onSessionChange: (value: string) => void;
+  session: Dashboard['academicSession'];
 }) {
   return (
     <section
@@ -50,17 +47,13 @@ export function Enrolment({
       className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-2"
     >
       <div className="min-w-0 rounded-xl border border-border bg-card">
-        <div className="flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="border-b border-border px-5 py-4">
           <h2 id="enrolment-heading" className="text-section-title text-navy-950">
             Active registrations by course
           </h2>
-          <FilterSelect
-            label="Academic session"
-            allLabel="All sessions"
-            value={academicSessionId}
-            onChange={onSessionChange}
-            options={enrolment.bySession.map((row) => ({ value: row.id, label: row.code }))}
-          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            {session ? `${session.code} — ${session.name}` : 'All sessions'}
+          </p>
         </div>
         <BarList
           label="Active registrations by course"

@@ -15,7 +15,7 @@ import {
   WalletIcon,
 } from 'lucide-react';
 import { PERMISSIONS, type Permission } from '@docversity/types';
-import type { Dashboard } from '@docversity/validation';
+import { DASHBOARD_GLOBAL_WORKLOAD, type Dashboard } from '@docversity/validation';
 import { useSessionUser } from '@/components/providers/session-context';
 
 type Workload = Dashboard['workload'];
@@ -103,7 +103,16 @@ export function visibleQueues(workload: Workload, permissions: readonly string[]
   });
 }
 
-export function PendingWork({ workload }: { workload: Workload }) {
+const GLOBAL: readonly string[] = DASHBOARD_GLOBAL_WORKLOAD;
+
+/** `filtered`: a session is selected, so queues without a session link are labelled as global. */
+export function PendingWork({
+  workload,
+  filtered = false,
+}: {
+  workload: Workload;
+  filtered?: boolean;
+}) {
   const user = useSessionUser();
   const queues = visibleQueues(workload, user.permissions);
   if (!queues.length) return null;
@@ -126,7 +135,10 @@ export function PendingWork({ workload }: { workload: Workload }) {
               >
                 {queue.label}
               </Link>
-              <p className="mt-1 text-xs text-muted-foreground">{queue.description}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {queue.description}
+                {filtered && GLOBAL.includes(queue.key) && ' · All sessions'}
+              </p>
             </div>
             <span
               aria-label={`${queue.value} pending ${queue.label.toLowerCase()}`}
