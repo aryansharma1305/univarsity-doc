@@ -126,6 +126,7 @@ test('dashboard loading and empty states remain honest', async ({ page }) => {
     await wait;
     await route.fulfill({
       json: {
+        academicSession: null,
         counts: { students: 0, activeRegistrations: 0, programs: 0, academicSessions: 0 },
         recentActivity: [],
         workload: {
@@ -158,4 +159,29 @@ test('dashboard loading and empty states remain honest', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Totals' })).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByText('No activity yet')).toBeVisible();
   await capture(page, 'ui02-empty-desktop');
+});
+
+test('dashboard session selector scopes the overview and persists in the URL', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await signIn(page, fixtures().admin);
+  const all = page.getByRole('region', { name: 'Totals' });
+  await expect(all).toContainText('Total students');
+  await page.getByRole('combobox', { name: 'Academic session' }).click();
+  await page.getByRole('option', { name: /^E2E-SESSION/ }).click();
+  await expect(page).toHaveURL(/\/admin\?session=[0-9a-f-]{36}$/);
+  await expect(page.getByRole('status').filter({ hasText: 'Showing records for' })).toContainText(
+    'E2E-SESSION',
+  );
+  await expect(page.getByRole('link', { name: /Total students/ })).toHaveAttribute(
+    'href',
+    /\/admin\/students\?session=/,
+  );
+  await expectNoSeriousA11yViolations(page);
+  await capture(page, 'dashboard-session-selected');
+  await page.reload();
+  await expect(page.getByRole('status').filter({ hasText: 'Showing records for' })).toBeVisible();
+  await page.getByRole('button', { name: 'Show all sessions' }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
 });

@@ -9,13 +9,16 @@ import { DashboardView } from '@/features/dashboard/dashboard-view';
 import { resetApiClient } from '@/lib/api';
 import { mockFetch, renderWithProviders, VIEWER } from './render';
 
+const navigation = vi.hoisted(() => ({ search: '', replace: vi.fn() }));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/admin/results/import',
-  useSearchParams: () => new URLSearchParams(),
-  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(navigation.search),
+  useRouter: () => ({ replace: navigation.replace, refresh: vi.fn() }),
 }));
 
 beforeEach(() => {
+  navigation.search = '';
+  navigation.replace.mockReset();
   localStorage.clear();
   resetApiClient();
   vi.stubGlobal(
@@ -50,15 +53,35 @@ const NO_WORKLOAD = {
   unreadNotifications: 0,
 };
 
+const SESSION_ID = '00000000-0000-4000-8000-000000000003';
+const SESSIONS = {
+  data: [
+    {
+      id: SESSION_ID,
+      code: '2026',
+      name: 'Session 2026',
+      startsOn: null,
+      endsOn: null,
+      status: 'ACTIVE',
+      registrationCount: 50,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ],
+  meta: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+};
+
 /** A dashboard response: queues the account may not read are null, as the API returns them. */
 function dashboard(
   overrides: {
     recentActivity?: unknown[] | null;
     workload?: Partial<Record<keyof typeof NO_WORKLOAD, number | null>>;
     enrolment?: unknown;
+    academicSession?: unknown;
   } = {},
 ) {
   return {
+    academicSession: overrides.academicSession ?? null,
     counts: { students: 123, activeRegistrations: 99, programs: 4, academicSessions: 2 },
     recentActivity: overrides.recentActivity ?? null,
     workload: { ...NO_WORKLOAD, ...overrides.workload },
@@ -145,12 +168,16 @@ describe('UI-02 navigation and dashboard', () => {
   });
 
   it('renders API totals and hides queues the account may not read', async () => {
-    const fetch = mockFetch(() => ({ body: dashboard() }));
+    const paths: string[] = [];
+    mockFetch((_method, path) => {
+      paths.push(path);
+      return { body: path === 'dashboard' ? dashboard() : SESSIONS };
+    });
     renderWithProviders(<DashboardView />, VIEWER);
     expect(await screen.findByText('123')).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Pending work' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Records' })).not.toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(paths.filter((path) => path === 'dashboard')).toHaveLength(1);
     expect(screen.queryByRole('tab', { name: 'Examination' })).not.toBeInTheDocument();
   });
 
@@ -214,6 +241,56 @@ describe('UI-02 navigation and dashboard', () => {
     expect(
       screen.getByRole('list', { name: 'Active registrations by academic session' }),
     ).toHaveTextContent('50');
+  });
+
+  it('scopes the whole dashboard to the session in the URL and labels global queues', async () => {
+    navigation.search = `session=${SESSION_ID}`;
+    const queries: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string) => {
+        const url = new URL(input, 'http://localhost');
+        if (url.pathname.endsWith('/dashboard')) queries.push(url.search);
+        return Promise.resolve(
+          Response.json(
+            url.pathname.endsWith('/dashboard')
+              ? dashboard({
+                  academicSession: {
+                    id: SESSION_ID,
+                    code: '2026',
+                    name: 'Session 2026',
+                    status: 'ACTIVE',
+                  },
+                  recentActivity: [],
+                  workload: { profileRequestsPending: 2, reExamApplicationsPending: 1 },
+                })
+              : SESSIONS,
+          ),
+        );
+      }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<DashboardView />, {
+      ...VIEWER,
+      permissions: [
+        ...VIEWER.permissions,
+        'studentProfileRequests.review',
+        'reExamApplications.decide',
+      ],
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Showing records for2026 — Session 2026',
+    );
+    expect(queries).toEqual([`?academicSessionId=${SESSION_ID}`]);
+    // Session-linked queues carry no label; queues without a session link say they are global.
+    expect(screen.getByText(/Changes awaiting a staff decision · All sessions/)).toBeVisible();
+    expect(screen.getByText('Applications awaiting a staff decision')).toBeVisible();
+    expect(screen.getByRole('link', { name: /Total students/ })).toHaveAttribute(
+      'href',
+      `/admin/students?session=${SESSION_ID}`,
+    );
+    await user.click(screen.getByRole('button', { name: 'Show all sessions' }));
+    expect(navigation.replace).toHaveBeenCalledWith('/admin/results/import', { scroll: false });
   });
 
   it('offers a retry when the dashboard cannot load, without fabricating zeros', async () => {

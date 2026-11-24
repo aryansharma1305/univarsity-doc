@@ -18,9 +18,25 @@ const enrolmentRowSchema = z.object({
   activeRegistrations: count,
 });
 
+/**
+ * Workload counts with no reliable academic-session link (student-level requests, inboxes,
+ * notifications). They are always totals across all sessions and the dashboard labels them so.
+ */
+export const DASHBOARD_GLOBAL_WORKLOAD = [
+  'profileRequestsPending',
+  'certificateRequestsAwaitingStaff',
+  'messagesAwaitingReply',
+  'verificationQueriesOpen',
+  'unreadNotifications',
+] as const;
+
 /** Admin dashboard: real counts only. `recentActivity` is null when the user may not read the audit log. */
 export const dashboardSchema = z
   .object({
+    /** The session every session-linked count is limited to; null = all sessions. */
+    academicSession: z
+      .object({ id: z.uuid(), code: z.string(), name: z.string(), status: z.string() })
+      .nullable(),
     counts: z.object({
       students: z.number().int(),
       activeRegistrations: z.number().int(),
