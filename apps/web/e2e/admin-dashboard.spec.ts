@@ -112,7 +112,9 @@ test('workspace shortcuts open the selected policy and document type', async ({ 
     'aria-selected',
     'true',
   );
-  await expect(page.getByText('Showing transcript records.', { exact: false })).toBeVisible();
+  // Certificate types open the guided issuance view for that type.
+  await expect(page.getByRole('heading', { name: 'Issue Certificate' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: /^Certificate Type/ })).toHaveCount(0);
 });
 
 test('dashboard loading and empty states remain honest', async ({ page }) => {

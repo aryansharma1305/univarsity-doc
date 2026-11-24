@@ -25,10 +25,18 @@ export const ADMISSION_STEPS = [
 ] as const;
 
 /** Step tracker: completed steps are ticked, the current one is marked for assistive technology. */
-export function StepTracker({ current }: { current: number }) {
+export function StepTracker({
+  current,
+  steps = ADMISSION_STEPS,
+  label = 'Admission letter steps',
+}: {
+  current: number;
+  steps?: readonly string[];
+  label?: string;
+}) {
   return (
-    <ol aria-label="Admission letter steps" className="grid gap-2 sm:grid-cols-5">
-      {ADMISSION_STEPS.map((step, index) => {
+    <ol aria-label={label} className="grid gap-2 sm:grid-cols-5">
+      {steps.map((step, index) => {
         const done = index < current;
         const active = index === current;
         return (
@@ -61,7 +69,15 @@ export function StepTracker({ current }: { current: number }) {
   );
 }
 
-function Row({ label, value, action }: { label: string; value: ReactNode; action?: ReactNode }) {
+export function Row({
+  label,
+  value,
+  action,
+}: {
+  label: string;
+  value: ReactNode;
+  action?: ReactNode;
+}) {
   return (
     <div className="grid gap-1 border-b border-border py-2.5 last:border-0 sm:grid-cols-[12rem_1fr]">
       <dt className="text-sm text-muted-foreground">{label}</dt>
@@ -73,10 +89,10 @@ function Row({ label, value, action }: { label: string; value: ReactNode; action
   );
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+export const today = () => new Date().toISOString().slice(0, 10);
 
 /** Field-level reasons (e.g. missing nationality, used letter number) instead of a generic error. */
-function Problem({ error }: { error: unknown }) {
+export function Problem({ error }: { error: unknown }) {
   const details = error instanceof ApiError ? error.details.map((d) => d.message) : [];
   if (!details.length) return <ErrorState error={error} />;
   return (

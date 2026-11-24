@@ -28,6 +28,12 @@ import { certificateRequestsApi } from '@/features/certificate-requests/api';
 import { resultReviewApi } from '@/features/result-review/api';
 import { officialApi as api } from './api';
 import { AdmissionLetterIssue, StepTracker } from './admission-letter-issue';
+import {
+  CERTIFICATE_STEPS,
+  CERTIFICATE_TYPES,
+  CertificateIssue,
+  type IssuableCertificate,
+} from './certificate-issue';
 import { VerificationQRCode } from '@/features/public-verification/verification-result';
 import { useListParams } from '@/hooks/use-list-params';
 const listKeys = ['tab', 'service', 'type'] as const;
@@ -712,6 +718,10 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
   const requestOwner = request.data?.student;
   const documentType = prepareOfficialDocumentSchema.shape.documentType.safeParse(values.type).data;
   const admission = documentType === 'ADMISSION_LETTER';
+  const certificate = (CERTIFICATE_TYPES as readonly string[]).includes(documentType ?? '')
+    ? (documentType as IssuableCertificate)
+    : undefined;
+  const guided = admission || !!certificate;
   const type =
     typeOverride ??
     documentType ??
@@ -795,10 +805,38 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
             />
           </div>
         </>
+      ) : certificate ? (
+        <>
+          <h2 className="text-lg font-semibold">Issue Certificate</h2>
+          <div className="mt-4">
+            <StepTracker
+              steps={CERTIFICATE_STEPS}
+              label="Certificate steps"
+              current={(() => {
+                const status = query.data?.data.find((d) => d.id === prepared)?.status;
+                return status === 'ISSUED' ? 5 : status === 'APPROVED' ? 4 : status ? 3 : draftStep;
+              })()}
+            />
+          </div>
+          <div className="mt-6">
+            <CertificateIssue
+              initialType={certificate}
+              initialRequest={initialRequest}
+              onPrepared={(id) => {
+                setPrepared(id);
+                setDraftStep(0);
+              }}
+              onStep={(step) => {
+                setPrepared('');
+                setDraftStep(step);
+              }}
+            />
+          </div>
+        </>
       ) : (
         <h2 className="text-lg font-semibold">Issue and revoke official documents</h2>
       )}
-      {documentType && !admission && (
+      {documentType && !guided && (
         <p className="mt-2 text-sm">
           Showing {label(documentType).toLowerCase()} records.{' '}
           <Link href="/admin/official-records" className="text-brand underline">
@@ -818,16 +856,14 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
           </a>
         </div>
       )}
-      {!admission && (
+      {!guided && (
         <p className="mt-2 max-w-prose text-sm text-muted-foreground">
           Use the university’s approved PDF and document number. Certificate preparation also
           requires the matching reviewed application and its current approved policy.
         </p>
       )}
-      {admission && (
-        <h3 className="mt-8 text-base font-semibold">4–5. Review, approve and issue</h3>
-      )}
-      {generate && !admission && (
+      {guided && <h3 className="mt-8 text-base font-semibold">4–5. Review, approve and issue</h3>}
+      {generate && !guided && (
         <section
           className="my-6 rounded-xl border border-border bg-card p-5"
           aria-label="Prepare official document"
@@ -1114,7 +1150,7 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
                             operation.action.mutate(() => api.documentAction(d.id, 'approve'));
                           }}
                         >
-                          {d.documentType === 'ADMISSION_LETTER' ? 'Approve' : 'Approve document'}
+                          Approve
                         </Button>
                       )}
                     {issue && d.status === 'APPROVED' && d.generatedByUserId !== user.id && (
@@ -1131,7 +1167,7 @@ function DocumentPanel({ initialRequest }: { initialRequest: string }) {
                       >
                         {d.documentType === 'ADMISSION_LETTER'
                           ? 'Issue Letter'
-                          : 'Issue approved document'}
+                          : 'Issue Certificate'}
                       </Button>
                     )}
                     {issue && d.status === 'ISSUED' && (

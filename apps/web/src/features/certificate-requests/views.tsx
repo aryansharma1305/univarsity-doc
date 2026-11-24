@@ -562,7 +562,11 @@ function RequestDetailView({
           )}
           {!student && r.status === 'REVIEW_COMPLETED' && (
             <Link
-              href={`/admin/official-records?requestId=${r.id}`}
+              href={
+                r.certificateType === 'COURSE_COMPLETION'
+                  ? `/admin/official-records?requestId=${r.id}`
+                  : `/admin/official-records?tab=documents&type=${r.certificateType}&requestId=${r.id}`
+              }
               className="inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-medium text-brand"
             >
               Prepare official document
