@@ -366,37 +366,44 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     });
     await post(checker, `official-documents/templates/${certTemplate.id}/approve`);
     const certNumber = `CERT-${Date.now()}`.padEnd(64, '1');
-    await makerPage.goto(`/admin/official-records?requestId=${requestId}`);
+    // Guided certificate issuance, opened from the reviewed application.
+    await makerPage.goto(
+      `/admin/official-records?tab=documents&type=TRANSCRIPT&requestId=${requestId}`,
+    );
+    await expect(makerPage.getByRole('heading', { name: 'Issue Certificate' })).toBeVisible();
     await makerPage
-      .getByRole('button', { name: 'Find registration for this reviewed application', exact: true })
+      .getByRole('button', { name: /Use the applicant of the reviewed application/ })
       .click();
-    await makerPage.getByRole('button', { name: 'Use registration', exact: true }).click();
-    await makerPage
-      .getByLabel('Official document type', { exact: true })
-      .selectOption('TRANSCRIPT');
-    await makerPage
-      .getByLabel('Reviewed certificate application', { exact: true })
-      .selectOption(requestId);
-    await makerPage
-      .getByLabel('Active official template', { exact: true })
-      .selectOption(certTemplate.id);
-    await makerPage.getByLabel('Official document number', { exact: true }).fill(certNumber);
-    await makerPage.getByLabel('Approved issue date', { exact: true }).fill('2026-11-01');
+    await makerPage.getByRole('button', { name: new RegExp(`^Select .*, ${number}$`) }).click();
+    await expect(
+      makerPage.getByRole('listitem').filter({ hasText: 'Select Certificate Type' }),
+    ).toHaveAttribute('aria-current', 'step');
+    await expect(makerPage.getByRole('combobox', { name: /^Certificate Type/ })).toHaveValue(
+      'TRANSCRIPT',
+    );
+    await expect(makerPage.getByRole('radio', { name: 'Generate PDF' })).toBeDisabled();
+    await makerPage.getByLabel('Certificate Number', { exact: true }).fill(certNumber);
+    await makerPage.getByLabel('Issue Date', { exact: true }).fill('2026-11-01');
+    await makerPage.getByText('Advanced details').click();
     await makerPage
       .getByLabel('Issuance authority reference', { exact: true })
       .fill('Synthetic E2E certificate authority');
     await makerPage
-      .getByLabel('University-approved PDF', { exact: true })
+      .getByLabel('Signed PDF (max 10 MB)')
       .setInputFiles({ name: 'synthetic.pdf', mimeType: 'application/pdf', buffer: pdf });
+    await makerPage.getByRole('button', { name: 'Preview Certificate' }).click();
+    await expectNoSeriousA11yViolations(makerPage);
+    await capture(makerPage, 'certificate-issue-desktop');
     const certUploading = makerPage.waitForResponse(
       (r) => r.url().endsWith('/official-documents') && r.request().method() === 'POST',
     );
-    await makerPage
-      .getByRole('button', { name: 'Prepare for independent approval', exact: true })
-      .click();
+    await makerPage.getByRole('button', { name: 'Submit for Approval' }).click();
     const certUpload = await certUploading;
     expect(certUpload.status(), await certUpload.text()).toBe(201);
     const cert = (await certUpload.json()) as { id: string };
+    await expect(
+      makerPage.getByRole('article').filter({ hasText: certNumber.slice(0, 20) }),
+    ).toContainText('another staff member must approve it');
     await makerBrowser.close();
     await checkerBrowser.close();
     await post(checker, `official-documents/${cert.id}/approve`);
