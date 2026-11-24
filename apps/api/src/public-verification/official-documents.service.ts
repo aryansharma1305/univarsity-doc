@@ -30,6 +30,8 @@ const conflict = () =>
     'CONFLICT',
     'The document authority or lifecycle has changed. Reload before acting.',
   );
+/** A 43-character URL-safe random QR credential. */
+export const newCredential = () => randomBytes(32).toString('base64url');
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 @Injectable()
 export class OfficialDocumentsService {
@@ -69,7 +71,11 @@ export class OfficialDocumentsService {
    * student, course, department and session, the current approved policy and an active template
    * mapped to the course. Staff supply only the letter number, issue date and authority reference.
    */
-  async generateAdmissionLetter(body: AdmissionLetterPreview): Promise<Buffer> {
+  async generateAdmissionLetter(
+    body: AdmissionLetterPreview,
+    /** The letter's QR credential, printed inside it; null for a preview (empty QR area). */
+    token: string | null = null,
+  ): Promise<Buffer> {
     const db = this.prisma.client;
     const r = await db.studentRegistration.findUnique({
       where: { id: body.registrationId },
@@ -136,6 +142,7 @@ export class OfficialDocumentsService {
       templateName: template.name,
       templateVersion: template.version,
       verifyUrl: new URL('/verify/admission-letter', this.config.WEB_URL).href,
+      credentialUrl: token ? this.verificationUrl('ADMISSION_LETTER', token) : null,
     });
   }
   async prepareTemplate(
@@ -316,6 +323,11 @@ export class OfficialDocumentsService {
     bytes: Buffer,
     actor: string,
     pdfSource: 'GENERATED' | 'UPLOADED' = 'UPLOADED',
+    /**
+     * A credential already printed inside the PDF (generated letters). It is stored now so the
+     * approver approves the exact QR; public checks answer only once the document is issued.
+     */
+    verificationToken?: string,
   ): Promise<z.infer<typeof officialDocumentReceiptSchema>> {
     if (bytes.length > 10 * 1024 * 1024 || sniffContentType(bytes) !== 'application/pdf')
       throw Errors.validation([{ path: 'file', message: 'Upload a static PDF up to 10 MB.' }]);
@@ -401,6 +413,7 @@ export class OfficialDocumentsService {
               sourceSnapshot: snapshot,
               pdfHash,
               generatedByUserId: actor,
+              ...(verificationToken ? { verificationToken } : {}),
             },
           });
           id = c.id;
@@ -526,7 +539,8 @@ export class OfficialDocumentsService {
                 status: 'ISSUED',
                 issuedByUserId: actor,
                 issuedAt: new Date(),
-                verificationToken: randomBytes(32).toString('base64url'),
+                // Keep a credential printed in the PDF at preparation; otherwise create one now.
+                verificationToken: c.verificationToken ?? randomBytes(32).toString('base64url'),
               },
             });
           } else throw conflict();

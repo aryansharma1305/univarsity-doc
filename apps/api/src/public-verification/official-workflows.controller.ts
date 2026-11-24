@@ -62,7 +62,7 @@ import { UuidParamPipe } from '../common/uuid-param.pipe.js';
 import { openApiRequestSchema } from '../common/openapi.js';
 import { Errors } from '../common/app-error.js';
 import { VerificationPoliciesService } from './verification-policies.service.js';
-import { OfficialDocumentsService } from './official-documents.service.js';
+import { OfficialDocumentsService, newCredential } from './official-documents.service.js';
 import { OfficialResultsService } from './official-results.service.js';
 import type { z } from 'zod';
 @ApiTags('verification-policies')
@@ -203,21 +203,32 @@ export class OfficialDocumentsController {
         { path: 'metadata', message: 'Provide valid authority metadata and a PDF.' },
       ]);
     const { generate, ...metadata } = parsed.data;
-    const bytes = generate
-      ? await this.service.generateAdmissionLetter({
-          registrationId: metadata.registrationId,
-          policyId: metadata.policyId,
-          templateId: metadata.templateId,
-          certificateNumber: metadata.certificateNumber,
-          issueDate: metadata.issueDate,
-          authorityReference: metadata.authorityReference,
-        })
+    // Generated letters carry their QR inside the PDF, so the credential exists before hashing.
+    const token = generate ? newCredential() : undefined;
+    const bytes = token
+      ? await this.service.generateAdmissionLetter(
+          {
+            registrationId: metadata.registrationId,
+            policyId: metadata.policyId,
+            templateId: metadata.templateId,
+            certificateNumber: metadata.certificateNumber,
+            issueDate: metadata.issueDate,
+            authorityReference: metadata.authorityReference,
+          },
+          token,
+        )
       : file?.buffer;
     if (!bytes)
       throw Errors.validation([
         { path: 'file', message: 'Provide valid authority metadata and a PDF.' },
       ]);
-    return this.service.prepare(metadata, bytes, auth.user.id, generate ? 'GENERATED' : 'UPLOADED');
+    return this.service.prepare(
+      metadata,
+      bytes,
+      auth.user.id,
+      generate ? 'GENERATED' : 'UPLOADED',
+      token,
+    );
   }
   @Post('admission-letter/preview')
   @HttpCode(200)
