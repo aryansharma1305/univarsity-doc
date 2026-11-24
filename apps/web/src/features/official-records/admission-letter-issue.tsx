@@ -521,7 +521,7 @@ function LetterDetails({
         </fieldset>
         <p className="mt-2 text-sm text-muted-foreground">
           {mode === 'generate'
-            ? 'Generated letters are unsigned: print the issued letter for the university’s signature and seal, or upload the already signed PDF instead.'
+            ? 'The letter is generated in the university’s format with its verification QR printed inside (the preview shows an empty QR area; the QR is added on Submit for Approval and works once the letter is issued). Generated letters are unsigned: print the issued letter for the signature and seal, or upload the already signed PDF instead.'
             : 'Upload the university’s signed PDF. It is stored unchanged with its checksum.'}
         </p>
         {mode === 'upload' && (

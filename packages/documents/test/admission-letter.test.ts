@@ -18,6 +18,8 @@ const input = {
   templateName: 'Synthetic Admission Letter',
   templateVersion: 1,
   verifyUrl: 'https://verify.example.test/verify/admission-letter',
+  credentialUrl:
+    'https://verify.example.test/verify/admission-letter#token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
 };
 const pages = (bytes: Buffer) => bytes.toString('latin1').match(/\/Type \/Page[^s]/g)?.length;
 
@@ -37,6 +39,12 @@ describe('admission letter', () => {
       admissionDate: null,
     });
     expect(pages(sparse)).toBe(1);
+    // Previews have no credential yet: same letter with an empty QR area.
+    const preview = await renderAdmissionLetter({ ...input, credentialUrl: null });
+    expect(pages(preview)).toBe(1);
+    expect(Buffer.compare(preview, first)).not.toBe(0);
+    // Names outside Latin-1 still render (embedded Noto Sans).
+    expect(pages(await renderAdmissionLetter({ ...input, studentName: 'Тест Ученик' }))).toBe(1);
   });
 
   it('refuses missing or unsafe values instead of printing them', async () => {
@@ -45,6 +53,9 @@ describe('admission letter', () => {
     await expect(renderAdmissionLetter({ ...input, signature: 'x' })).rejects.toThrow();
     await expect(
       renderAdmissionLetter({ ...input, verifyUrl: 'javascript:alert(1)' }),
+    ).rejects.toThrow();
+    await expect(
+      renderAdmissionLetter({ ...input, credentialUrl: 'javascript:alert(1)' }),
     ).rejects.toThrow();
   });
 });

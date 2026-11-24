@@ -493,6 +493,12 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
     expect(stored.status).toBe('PENDING_APPROVAL');
     expect(stored.pdfHash).toMatch(/^[0-9a-f]{64}$/);
     expect(stored.sourceSnapshot).toMatchObject({ pdfSource: 'GENERATED' });
+    // The QR printed in the letter exists from preparation, so approval covers it; it answers
+    // nothing until the letter is issued.
+    expect(stored.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const early = stored.verificationToken ?? '';
+    expect((await verify('admission-letter', { token: early })).body?.status).toBe('NOT_FOUND');
+    await people.approver.post(`official-documents/${id}/verification-link`).expect(404);
     expect(
       (await testDb().certificate.findUniqueOrThrow({ where: { id: docs.admission.id } }))
         .sourceSnapshot,
@@ -509,6 +515,9 @@ describe('public verification acceptance (OFFICIAL_VERIFICATION_ENABLED=true)', 
       (await people.approver.post(`official-documents/${id}/issue`).expect(200)).body,
     );
     expect(issued.verificationUrl).toMatch(/\/verify\/admission-letter#token=[A-Za-z0-9_-]{43}$/);
+    // Issuing keeps the credential already printed in the PDF.
+    expect(tokenOf(issued.verificationUrl)).toBe(early);
+    expect((await verify('admission-letter', { token: early })).body?.status).toBe('VALID');
     const byNumber = await verify('admission-letter', { reference: number });
     expect(byNumber.body).toMatchObject({ status: 'VALID', documentType: 'ADMISSION_LETTER' });
     // Nationality is letter content, never a public verification field.

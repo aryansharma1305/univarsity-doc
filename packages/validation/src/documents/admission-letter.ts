@@ -32,6 +32,11 @@ export const admissionLetterInputSchema = z
     templateVersion: z.number().int().positive(),
     /** Public verification page (production domain), printed so readers can check the number. */
     verifyUrl: z.url({ protocol: /^https?$/ }),
+    /**
+     * The letter's QR credential link (verification page + #token). Null in previews, which show
+     * an empty QR area: the credential exists only once the letter is prepared.
+     */
+    credentialUrl: z.url({ protocol: /^https?$/ }).nullable(),
   })
   .strict();
 export type AdmissionLetterInput = z.infer<typeof admissionLetterInputSchema>;
