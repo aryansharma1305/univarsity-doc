@@ -42,6 +42,14 @@ export function PersonalFields<T extends FieldValues>({
       >
         {(aria) => <Input {...aria} autoComplete="off" {...register(name('gender'))} />}
       </Field>
+      <Field
+        control={control}
+        name={name('nationality')}
+        label="Nationality"
+        hint="As recorded by the university. Printed on admission letters."
+      >
+        {(aria) => <Input {...aria} autoComplete="off" {...register(name('nationality'))} />}
+      </Field>
     </div>
   );
 }

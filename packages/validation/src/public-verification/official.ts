@@ -264,8 +264,14 @@ export const prepareOfficialDocumentSchema = z
       .refine((v) => !/sample|synthetic|draft/i.test(v)),
     issueDate: z.iso.date(),
     authorityReference: text(200),
+    /** Admission letters only: the server generates the PDF from records instead of an upload. */
+    generate: z.literal(true).optional(),
   })
-  .strict();
+  .strict()
+  .refine((v) => !v.generate || v.documentType === 'ADMISSION_LETTER', {
+    path: ['generate'],
+    message: 'Only admission letters can be generated.',
+  });
 export const officialDocumentSnapshotSchema = z
   .object({
     usage: z.literal('OFFICIAL'),
@@ -277,6 +283,11 @@ export const officialDocumentSnapshotSchema = z
     authorityReference: text(200),
     requestId: z.uuid().nullable(),
     requestVersion: z.number().int().positive().nullable(),
+    /**
+     * Where the stored PDF came from. GENERATED letters carry no signature or seal; the university
+     * signs the printed copy. Absent on documents prepared before this was recorded.
+     */
+    pdfSource: z.enum(['GENERATED', 'UPLOADED']).optional(),
   })
   .strict();
 export const officialDocumentCommandSchema = z.object({ reason: text(500).optional() }).strict();
@@ -420,6 +431,7 @@ export const officialStaffDocumentSchema = z.object({
   authorityReference: z.string(),
   issueDate: z.string().nullable(),
   generatedByUserId: z.uuid().nullable(),
+  pdfSource: z.enum(['GENERATED', 'UPLOADED']).nullable(),
 });
 export const officialStaffDocumentListSchema = paginatedSchema(officialStaffDocumentSchema);
 export const officialTemplateListSchema = paginatedSchema(

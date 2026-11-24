@@ -42,6 +42,7 @@ import {
   officialActionReceiptSchema,
   officialDocumentCommandSchema,
   officialDocumentReceiptSchema,
+  admissionLetterPreviewSchema,
   officialDocumentUploadSchema,
   prepareOfficialDocumentSchema,
   prepareOfficialTemplateSchema,
@@ -181,7 +182,7 @@ export class OfficialDocumentsController {
       limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 1, fieldSize: 10000 },
     }),
   )
-  prepare(
+  async prepare(
     @Body() body: Record<string, unknown>,
     @UploadedFile() file: Express.Multer.File | undefined,
     @CurrentAuth() auth: AuthContext,
@@ -196,11 +197,45 @@ export class OfficialDocumentsController {
       ]);
     }
     const parsed = prepareOfficialDocumentSchema.safeParse(input);
-    if (!parsed.success || !file)
+    // Exactly one source: an uploaded PDF, or (admission letters) a server-generated one.
+    if (!parsed.success || !file === !parsed.data.generate)
       throw Errors.validation([
         { path: 'metadata', message: 'Provide valid authority metadata and a PDF.' },
       ]);
-    return this.service.prepare(parsed.data, file.buffer, auth.user.id);
+    const { generate, ...metadata } = parsed.data;
+    const bytes = generate
+      ? await this.service.generateAdmissionLetter({
+          registrationId: metadata.registrationId,
+          policyId: metadata.policyId,
+          templateId: metadata.templateId,
+          certificateNumber: metadata.certificateNumber,
+          issueDate: metadata.issueDate,
+          authorityReference: metadata.authorityReference,
+        })
+      : file?.buffer;
+    if (!bytes)
+      throw Errors.validation([
+        { path: 'file', message: 'Provide valid authority metadata and a PDF.' },
+      ]);
+    return this.service.prepare(metadata, bytes, auth.user.id, generate ? 'GENERATED' : 'UPLOADED');
+  }
+  @Post('admission-letter/preview')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.certificatesGenerate)
+  @Header('Cache-Control', 'no-store')
+  @ApiBody({ schema: openApiRequestSchema(admissionLetterPreviewSchema) })
+  @ApiProduces('application/pdf')
+  async previewAdmissionLetter(
+    @Body(new ZodValidationPipe(admissionLetterPreviewSchema))
+    body: z.infer<typeof admissionLetterPreviewSchema>,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    // Nothing is stored: the preview is rendered again when the letter is prepared.
+    const bytes = await this.service.generateAdmissionLetter(body);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="admission-letter-preview.pdf"');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return new StreamableFile(bytes);
   }
   @Get(':id/file')
   @RequirePermissions(PERMISSIONS.historicalDocumentsRead)

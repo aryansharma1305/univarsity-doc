@@ -39,6 +39,7 @@ const FIELD_LABELS: Record<string, string> = {
   motherName: "mother's name",
   dateOfBirth: 'date of birth',
   gender: 'gender',
+  nationality: 'nationality',
   registrationNumber: 'registration number',
   rollReferenceNumber: 'roll / reference number',
   programId: 'program',

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import {
   capture,
   expectNoHorizontalOverflow,
@@ -242,9 +242,11 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     expect(upload.status(), await upload.text()).toBe(201);
     const document = (await upload.json()) as { id: string };
     const makerDocument = makerPage.getByRole('article').filter({ hasText: documentNumber });
-    await expect(
-      makerDocument.getByRole('button', { name: 'Approve document', exact: true }),
-    ).toBeDisabled();
+    // The preparer sees why they cannot approve instead of a silent disabled button.
+    await expect(makerDocument.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(
+      0,
+    );
+    await expect(makerDocument).toContainText('another staff member must approve it');
     await expect(makerDocument).toContainText('Synthetic E2E authority only');
     await makerPage.setViewportSize({ width: 390, height: 844 });
     await expectNoHorizontalOverflow(makerPage);
@@ -256,13 +258,11 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await expect(page.getByRole('status')).toContainText('No verified record found');
     await checkerPage.getByRole('tab', { name: 'Documents', exact: true }).click();
     const checkerDocument = checkerPage.getByRole('article').filter({ hasText: documentNumber });
-    await checkerDocument.getByRole('button', { name: 'Approve document', exact: true }).click();
+    await checkerDocument.getByRole('button', { name: 'Approve', exact: true }).click();
     const issuing = checkerPage.waitForResponse((r) =>
       r.url().endsWith(`/official-documents/${document.id}/issue`),
     );
-    await checkerDocument
-      .getByRole('button', { name: 'Issue approved document', exact: true })
-      .click();
+    await checkerDocument.getByRole('button', { name: 'Issue Letter', exact: true }).click();
     const issuedResponse = await issuing;
     expect(issuedResponse.status()).toBe(200);
     const issued = (await issuedResponse.json()) as WorkflowResponse;
@@ -562,6 +562,187 @@ test('synthetic approved records: admission QR, certificate revocation, exact re
     await post(checker, `official-results/${draft.resultId}/withdraw`);
     await page.getByRole('button', { name: 'Show my results', exact: true }).click();
     await expect(page.getByRole('status')).toContainText('No published result');
+  } finally {
+    await maker.dispose();
+    await checker.dispose();
+  }
+});
+
+/**
+ * Guided admission-letter issuance with synthetic records only: one staff member selects the
+ * student and generates the letter from records; a second approves and issues it; the public
+ * verifies it by letter number and by QR.
+ */
+test('issue admission letter in five steps: generate, independent approval, issue, verify', async ({
+  browser,
+  page,
+  playwright,
+}, testInfo) => {
+  test.setTimeout(180000);
+  const f = fixtures(),
+    baseURL = testInfo.project.use.baseURL;
+  const maker = await playwright.request.newContext({ baseURL }),
+    checker = await playwright.request.newContext({ baseURL });
+  async function call(
+    client: APIRequestContext,
+    method: 'POST' | 'PATCH',
+    path: string,
+    data = {},
+  ) {
+    const csrf = ((await (await client.get('/api/v1/auth/csrf')).json()) as { csrfToken: string })
+      .csrfToken;
+    const r = await client.fetch(`/api/v1/${path}`, {
+      method,
+      headers: { 'X-CSRF-Token': csrf },
+      data,
+    });
+    expect(r.status(), await r.text()).toBeLessThan(300);
+    return (await r.json()) as { id: string; registrations: { id: string }[] };
+  }
+  const login = (client: APIRequestContext, account: typeof f.admin) =>
+    call(client, 'POST', 'auth/login', { email: account.email, password: account.password });
+  try {
+    await login(maker, f.admin);
+    await login(checker, f.paymentChecker);
+    const stamp = Date.now();
+    const course = await call(maker, 'POST', 'programs', {
+      code: `AL-${stamp}`,
+      name: 'Synthetic Admission Course',
+      level: 'CERTIFICATE',
+      durationValue: 6,
+      durationUnit: 'MONTHS',
+    });
+    const policy = await call(maker, 'POST', 'verification-policies', {
+      service: 'admission-letter',
+      programId: course.id,
+      definition: {
+        usage: 'OFFICIAL',
+        institutionName: 'Synthetic Test University',
+        authorizationReference: 'SYNTHETIC E2E DATABASE ONLY',
+        discloseProgram: true,
+        discloseIssueDate: true,
+        identityFactor: 'AUTHENTICATED_OWNER',
+        resultMode: 'REVIEWED_VALUES_ONLY',
+      },
+    });
+    await call(checker, 'POST', `verification-policies/${policy.id}/approve`);
+    const template = await call(maker, 'POST', 'official-documents/templates', {
+      policyId: policy.id,
+      programId: course.id,
+      documentType: 'ADMISSION_LETTER',
+      name: `Synthetic Admission Letter ${stamp}`,
+    });
+    await call(checker, 'POST', `official-documents/templates/${template.id}/approve`);
+    const number = `AL-REG-${stamp}`;
+    const student = await call(maker, 'POST', 'students', {
+      student: { fullName: 'Synthetic Admission Learner' },
+      registration: {
+        registrationNumber: number,
+        programId: course.id,
+        academicSessionId: f.examProgram.sessionId,
+      },
+    });
+
+    const makerPage = await (
+      await browser.newContext({ storageState: await maker.storageState() })
+    ).newPage();
+    await makerPage.setViewportSize({ width: 1440, height: 1000 });
+    await makerPage.goto('/admin/official-records?tab=documents&type=ADMISSION_LETTER');
+    await expect(makerPage.getByRole('heading', { name: 'Issue Admission Letter' })).toBeVisible();
+    await expect(
+      makerPage.getByRole('list', { name: 'Admission letter steps' }).getByRole('listitem'),
+    ).toHaveText([
+      /Select Student/,
+      /Confirm Letter Details/,
+      /Generate or Upload PDF/,
+      /Review and Approve/,
+      /Issue and Verify/,
+    ]);
+    await capture(makerPage, 'admission-letter-step1-desktop');
+
+    // Step 1: find the student by registration number.
+    await makerPage.getByLabel('Registration number or student name').fill(number);
+    await makerPage.getByRole('button', { name: 'Select Student', exact: true }).click();
+    await makerPage
+      .getByRole('button', { name: `Select Synthetic Admission Learner, ${number}` })
+      .click();
+
+    await expect(
+      makerPage.getByRole('listitem').filter({ hasText: 'Confirm Letter Details' }),
+    ).toHaveAttribute('aria-current', 'step');
+    // Step 2: authoritative details; nationality is missing, so generation explains the gap.
+    await expect(makerPage.getByText('Not recorded')).toBeVisible();
+    await makerPage.getByLabel('Letter Number').fill(`AL-${stamp}`);
+    await makerPage.getByText('Advanced details').click();
+    await makerPage.getByLabel('Issuance authority reference').fill('Synthetic E2E authority only');
+    await makerPage.getByRole('button', { name: 'Generate PDF', exact: true }).click();
+    await expect(makerPage.getByRole('alert').filter({ hasText: /nationality/ })).toBeVisible();
+    await call(maker, 'PATCH', `students/${student.id}`, { nationality: 'Testland' });
+    await makerPage.reload();
+    await makerPage.getByLabel('Registration number or student name').fill(number);
+    await makerPage.getByRole('button', { name: 'Select Student', exact: true }).click();
+    await makerPage
+      .getByRole('button', { name: `Select Synthetic Admission Learner, ${number}` })
+      .click();
+    await expect(makerPage.getByRole('definition').filter({ hasText: /^Testland$/ })).toBeVisible();
+    await expect(makerPage.getByText('Synthetic Admission Course').first()).toBeVisible();
+    await expect(
+      makerPage.getByRole('definition').filter({ hasText: /^CERTIFICATE$/ }),
+    ).toBeVisible();
+    await makerPage.getByLabel('Letter Number').fill(`AL-${stamp}`);
+    await makerPage.getByText('Advanced details').click();
+    await makerPage.getByLabel('Issuance authority reference').fill('Synthetic E2E authority only');
+
+    // Step 3: generate and preview, then submit for independent approval.
+    await expect(makerPage.getByRole('button', { name: 'Submit for Approval' })).toBeDisabled();
+    await makerPage.getByRole('button', { name: 'Generate PDF', exact: true }).click();
+    await expect(makerPage.getByTitle('Admission letter preview')).toBeVisible();
+    await expect(
+      makerPage.getByRole('listitem').filter({ hasText: 'Generate or Upload PDF' }),
+    ).toHaveAttribute('aria-current', 'step');
+    await expectNoSeriousA11yViolations(makerPage);
+    await capture(makerPage, 'admission-letter-preview-desktop');
+    const prepared = makerPage.waitForResponse(
+      (r) => r.url().endsWith('/official-documents') && r.request().method() === 'POST',
+    );
+    await makerPage.getByRole('button', { name: 'Submit for Approval' }).click();
+    expect((await prepared).status()).toBe(201);
+    const makerDocument = makerPage.getByRole('article').filter({ hasText: `AL-${stamp}` });
+    await expect(makerDocument).toContainText('another staff member must approve it');
+    await expect(
+      makerPage.getByRole('listitem').filter({ hasText: 'Review and Approve' }),
+    ).toHaveAttribute('aria-current', 'step');
+
+    // Steps 4–5: a different staff member approves and issues.
+    const checkerPage = await (
+      await browser.newContext({ storageState: await checker.storageState() })
+    ).newPage();
+    await checkerPage.goto('/admin/official-records?tab=documents&type=ADMISSION_LETTER');
+    const checkerDocument = checkerPage.getByRole('article').filter({ hasText: `AL-${stamp}` });
+    await expect(checkerDocument).toContainText('Next: review the PDF and approve.');
+    await checkerDocument.getByRole('button', { name: 'Approve', exact: true }).click();
+    const issuing = checkerPage.waitForResponse((r) => r.url().endsWith('/issue'));
+    await checkerDocument.getByRole('button', { name: 'Issue Letter', exact: true }).click();
+    const issued = (await (await issuing).json()) as { verificationUrl: string };
+    expect(new URL(issued.verificationUrl).pathname).toBe('/verify/admission-letter');
+    await expect(checkerPage.getByRole('img', { name: /QR/i }).first()).toBeVisible();
+    await expect(checkerDocument.getByRole('link', { name: 'Verify Letter' })).toBeVisible();
+    await capture(checkerPage, 'admission-letter-issued-desktop');
+
+    // Public verification by number (no sign-in) and by QR; nationality is never shown.
+    await page.goto('/verify/admission-letter');
+    await page.getByLabel('Admission letter number', { exact: true }).fill(`AL-${stamp}`);
+    await page.getByRole('button', { name: 'Verify Admission Letter', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Admission Letter Verified');
+    await expect(page.locator('main')).not.toContainText('Testland');
+    const qr = new URL(issued.verificationUrl);
+    await page.goto(qr.pathname + qr.hash);
+    await page.getByRole('button', { name: 'Verify Admission Letter', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('Admission Letter Verified');
+
+    await makerPage.setViewportSize({ width: 390, height: 844 });
+    await expectNoHorizontalOverflow(makerPage);
+    await capture(makerPage, 'admission-letter-mobile');
   } finally {
     await maker.dispose();
     await checker.dispose();

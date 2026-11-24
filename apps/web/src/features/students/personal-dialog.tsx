@@ -41,6 +41,7 @@ export function PersonalDialog({
         motherName: student.motherName ?? '',
         dateOfBirth: student.dateOfBirth ?? '',
         gender: student.gender ?? '',
+        nationality: student.nationality ?? '',
       });
   }, [open, student, form]);
 

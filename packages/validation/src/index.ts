@@ -29,6 +29,7 @@ export * from './documents/training-certificate.js';
 export * from './certificate-requests/schemas.js';
 export * from './documents/student-certificate-sample.js';
 export * from './documents/academic-certificates.js';
+export * from './documents/admission-letter.js';
 
 export * from './certificate-eligibility/policy.js';
 export * from './certificate-eligibility/contract.js';

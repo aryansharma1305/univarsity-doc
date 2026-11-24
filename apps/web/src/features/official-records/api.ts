@@ -12,7 +12,7 @@ import {
   type officialTemplateQuerySchema,
 } from '@docversity/validation';
 import type { z } from 'zod';
-import { apiRequest, apiUpload } from '@/lib/api';
+import { apiFile, apiRequest, apiUpload } from '@/lib/api';
 export const officialApi = {
   policies: (query: Partial<z.infer<typeof officialPolicyQuerySchema>>) =>
     apiRequest('GET', 'verification-policies', officialPolicyListSchema, { query }),
@@ -37,10 +37,11 @@ export const officialApi = {
         body: {},
       },
     ),
-  prepare: (body: unknown, file: File) => {
+  /** Without a file the body must ask the server to generate the PDF (admission letters). */
+  prepare: (body: unknown, file?: File) => {
     const form = new FormData();
     form.set('metadata', JSON.stringify(body));
-    form.set('file', file);
+    if (file) form.set('file', file);
     return apiUpload('official-documents', form, officialDocumentReceiptSchema);
   },
   templates: (query: Partial<z.infer<typeof officialTemplateQuerySchema>>) =>
@@ -55,6 +56,8 @@ export const officialApi = {
     apiRequest('GET', 'registrations', registrationListSchema, {
       query: { search, page, pageSize: 25, sortBy: 'registrationNumber' },
     }),
+  admissionLetterPreview: async (body: unknown) =>
+    (await apiFile('official-documents/admission-letter/preview', body)).blob,
   audit: (page: number) =>
     apiRequest('GET', 'verification-audit', verificationAuditListSchema, {
       query: { page, pageSize: 25, sortOrder: 'desc' },

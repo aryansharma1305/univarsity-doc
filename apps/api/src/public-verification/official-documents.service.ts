@@ -14,6 +14,8 @@ import {
   type PrepareOfficialDocument,
 } from '@docversity/validation';
 import { type ObjectStorage } from '@docversity/storage';
+import { renderAdmissionLetter } from '@docversity/documents';
+import type { AdmissionLetterPreview } from '@docversity/validation';
 import { PrismaService } from '../database/prisma.service.js';
 import { AuditService } from '../audit/audit.service.js';
 import { OBJECT_STORAGE } from '../storage/storage.module.js';
@@ -61,6 +63,80 @@ export class OfficialDocumentsService {
       canonicalJson(source.data) !== canonicalJson(current)
     )
       throw conflict();
+  }
+  /**
+   * A generated admission letter, built only from authoritative records: the registration's
+   * student, course, department and session, the current approved policy and an active template
+   * mapped to the course. Staff supply only the letter number, issue date and authority reference.
+   */
+  async generateAdmissionLetter(body: AdmissionLetterPreview): Promise<Buffer> {
+    const db = this.prisma.client;
+    const r = await db.studentRegistration.findUnique({
+      where: { id: body.registrationId },
+      include: {
+        student: { select: { fullName: true, nationality: true } },
+        program: { include: { department: { select: { name: true } } } },
+        department: { select: { name: true } },
+        academicSession: { select: { name: true } },
+      },
+    });
+    if (!r || !['ACTIVE', 'COMPLETED'].includes(r.status)) throw Errors.notFound();
+    const policy = await this.policies.current(
+      'admission-letter',
+      r.programId,
+      undefined,
+      body.policyId,
+    );
+    if (!policy) throw Errors.forbidden();
+    const template = await db.certificateTemplate.findFirst({
+      where: { id: body.templateId, documentType: 'ADMISSION_LETTER', status: 'ACTIVE' },
+    });
+    const mapped = await db.programDocumentTemplate.findFirst({
+      where: {
+        programId: r.programId,
+        certificateTemplateId: body.templateId,
+        documentType: 'ADMISSION_LETTER',
+      },
+    });
+    if (!template || !mapped) throw conflict();
+    if (await db.certificate.findUnique({ where: { certificateNumber: body.certificateNumber } }))
+      throw Errors.validation([
+        {
+          path: 'certificateNumber',
+          message: 'This letter number is already used. Use a new number.',
+        },
+      ]);
+    const nationality = r.student.nationality?.trim();
+    if (!nationality)
+      throw Errors.validation([
+        {
+          path: 'nationality',
+          message:
+            "Record the student's nationality on the student record before generating the letter.",
+        },
+      ]);
+    const p = r.program;
+    return renderAdmissionLetter({
+      institutionName: policy.definition.institutionName,
+      letterNumber: body.certificateNumber,
+      issueDate: body.issueDate,
+      authorityReference: body.authorityReference,
+      studentName: r.student.fullName,
+      nationality,
+      registrationNumber: r.registrationNumber,
+      courseName: p.name,
+      courseLevel: p.level ?? null,
+      courseDuration:
+        p.durationValue && p.durationUnit
+          ? `${p.durationValue} ${p.durationUnit.toLowerCase().replace(/s$/, p.durationValue === 1 ? '' : 's')}`
+          : null,
+      school: r.department?.name ?? p.department?.name ?? null,
+      academicSession: r.academicSession.name,
+      admissionDate: r.admissionDate ? r.admissionDate.toISOString().slice(0, 10) : null,
+      templateName: template.name,
+      templateVersion: template.version,
+      verifyUrl: new URL('/verify/admission-letter', this.config.WEB_URL).href,
+    });
   }
   async prepareTemplate(
     body: z.infer<typeof prepareOfficialTemplateSchema>,
@@ -239,6 +315,7 @@ export class OfficialDocumentsService {
     body: PrepareOfficialDocument,
     bytes: Buffer,
     actor: string,
+    pdfSource: 'GENERATED' | 'UPLOADED' = 'UPLOADED',
   ): Promise<z.infer<typeof officialDocumentReceiptSchema>> {
     if (bytes.length > 10 * 1024 * 1024 || sniffContentType(bytes) !== 'application/pdf')
       throw Errors.validation([{ path: 'file', message: 'Upload a static PDF up to 10 MB.' }]);
@@ -310,6 +387,7 @@ export class OfficialDocumentsService {
             authorityReference: body.authorityReference,
             requestId: body.requestId ?? null,
             requestVersion,
+            pdfSource,
           });
           const c = await tx.certificate.create({
             data: {

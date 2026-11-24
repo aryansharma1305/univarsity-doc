@@ -145,6 +145,8 @@ export const studentPersonalFields = {
   /** Optional. Not a lookup factor (the public second identifier is unconfirmed). */
   dateOfBirth: optionalDateSchema,
   gender: optionalText(32),
+  /** Optional, staff-recorded. Admission-letter content only; never a public verification field. */
+  nationality: optionalText(80),
 };
 
 export const studentPersonalSchema = z.object(studentPersonalFields).strict();
@@ -163,6 +165,7 @@ export const updateStudentSchema = atLeastOneField(
       motherName: studentPersonalFields.motherName,
       dateOfBirth: studentPersonalFields.dateOfBirth,
       gender: studentPersonalFields.gender,
+      nationality: studentPersonalFields.nationality,
     })
     .strict(),
 ).meta({ id: 'UpdateStudent' });
@@ -196,6 +199,7 @@ export const studentDetailSchema = z
     motherName: z.string().nullable(),
     dateOfBirth: z.iso.date().nullable(),
     gender: z.string().nullable(),
+    nationality: z.string().nullable(),
     hasPhoto: z.boolean(),
     registrations: z.array(registrationSchema),
     createdAt: z.iso.datetime(),

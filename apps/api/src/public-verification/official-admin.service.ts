@@ -99,6 +99,7 @@ export class OfficialAdminService {
           .authorityReference,
         issueDate: c.issueDate?.toISOString().slice(0, 10) ?? null,
         generatedByUserId: c.generatedByUserId,
+        pdfSource: officialDocumentSnapshotSchema.parse(c.sourceSnapshot).pdfSource ?? null,
       })),
       meta: meta({ page: q.page, pageSize: q.pageSize }, total),
     });

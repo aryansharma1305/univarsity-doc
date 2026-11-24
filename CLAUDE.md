@@ -165,7 +165,9 @@ totalPages } }`. Unknown query parameters are rejected.
   `20261129090000_result_verification_token` (marksheet QR credential per publication; ADR-0024),
   `20261201090000_examination_schedule` (subject-wise examination timetable + publication time),
   `20261202090000_migration_certificate_type` (`DocumentType.MIGRATION` for official issuance;
-  COURSE_COMPLETION stays non-issuable until the university authorizes its application policy).
+  COURSE_COMPLETION stays non-issuable until the university authorizes its application policy),
+  `20261203090000_student_nationality` (optional staff-recorded `students.nationality`, printed on
+  generated admission letters; never a public verification field).
 - **Never edit an applied/pushed migration.** Every change is a new, reviewed migration; hand-written
   CHECKs/triggers go at the end of the migration that introduces them. Generate SQL with
   `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, apply with
